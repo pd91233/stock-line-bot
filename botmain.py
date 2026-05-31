@@ -253,7 +253,7 @@ def handle_message(event):
             
             line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text=f"戰報：{stock_query}", contents=flex_content, quick_reply=quick_reply))
         else:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 報告統帥：AI 金鑰連線異常或彈匣已空！"))
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 警告：AI 金鑰連線異常或彈匣已空！請重新輸入"))
 
 if __name__ == "__main__":
     app.run(port=5000)
