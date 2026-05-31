@@ -79,17 +79,15 @@ def get_stock_dict():
     return global_stock_dict
 
 # ==========================================================
-# 📊 3. 戰場即時數據探測儀 (🚀 升級：直連底層 API，免套件)
+# 📊 3. 戰場即時數據探測儀 (直連底層 API)
 # ==========================================================
 def fetch_realtime_data(stock_code):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0"}
     try:
-        # 優先嘗試上市
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TW?range=2mo&interval=1d"
         res = requests.get(url, headers=headers, timeout=5)
         data = res.json()
         
-        # 若無資料則嘗試上櫃
         if not data.get('chart', {}).get('result'):
             url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TWO?range=2mo&interval=1d"
             res = requests.get(url, headers=headers, timeout=5)
@@ -99,7 +97,6 @@ def fetch_realtime_data(stock_code):
         closes = result['indicators']['quote'][0]['close']
         volumes = result['indicators']['quote'][0]['volume']
         
-        # 過濾掉未開盤的空值
         valid_closes = [c for c in closes if c is not None]
         valid_vols = [v for v in volumes if v is not None]
         
@@ -136,12 +133,18 @@ def callback():
 def handle_message(event):
     user_msg = event.message.text.strip()
     
-    if len(user_msg) > 10:
+    if len(user_msg) > 15:
         return
 
     is_stock_query = False
     stock_query = ""
     stock_code = ""
+    analysis_type = "綜合" # 🌟 新增：判斷使用者要看哪種分析
+
+    # 🌟 攔截戰術連擊指令 (例如：技術面 2330)
+    if user_msg.startswith("技術面 ") or user_msg.startswith("籌碼面 "):
+        analysis_type = user_msg[:3] # 取出 "技術面" 或 "籌碼面"
+        user_msg = user_msg[4:]      # 剩下的當作股票代號
 
     if re.fullmatch(r'\d{4,6}', user_msg):
         is_stock_query = True
@@ -179,20 +182,32 @@ def handle_message(event):
             try:
                 client = genai.Client(api_key=current_key)
                 
-                # 🌟 [究極武裝] 嚴格防幻覺裝甲！
-                prompt = f"""你是一位擁有十年實戰經驗的台股操盤手，請以冷靜、俐落的語氣回報。
-請根據我方雷達探測到的【{stock_query}】最新真實戰況：
-【{real_data}】
+                # 🌟 [動態大腦] 根據分析類型，給予不同的戰術指令
+                if analysis_type == "技術面":
+                    prompt = f"""你是一位台股操盤手。請根據真實數據：【{real_data}】
+分析【{stock_query}】的純技術面。請直接給出結論(150字內)：
+1. 均線排列與乖離狀況。
+2. 支撐壓力推演。
+3. 技術面短線進出建議。
+絕對不要有免責聲明與內心戲。"""
+                    card_title = "📈 技術面深度解析"
+                elif analysis_type == "籌碼面":
+                    prompt = f"""你是一位台股操盤手。請根據真實數據：【{real_data}】
+分析【{stock_query}】的籌碼與主力心理。請直接給出結論(150字內)：
+1. 根據目前價位與成交量，推測主力意圖(洗盤/出貨/吃貨)。
+2. 散戶目前可能的心理狀態。
+3. 籌碼面跟單建議。
+絕對不要有免責聲明與內心戲。"""
+                    card_title = "🕵️ 籌碼面深度解析"
+                else:
+                    prompt = f"""你是一位台股操盤手。請根據真實數據：【{real_data}】
+分析【{stock_query}】。請直接給出結論(150字內)：
+1. 📈 均線與趨勢。
+2. 🕵️ 籌碼與心理推測。
+3. ⚔️ 短線戰術建議。
+絕對不要有免責聲明與內心戲。"""
+                    card_title = "🎯 綜合戰術推演"
 
-🚨 統帥鐵律警告：
-1. 絕對不准輸出內心思考過程、推演邏輯！直接給出結論！
-2. 如果上方雷達數據顯示「無法取得」或「受阻」，你絕對不可以自己捏造任何價格，必須直接回答「雷達連線異常，無法提供精準分析」。
-
-請根據上述真實數字，提供以下精簡戰報 (150字內)：
-1. 📈 均線與趨勢：根據雷達提供的收盤價與均線(5/10/20MA)比對，判斷目前的支撐與壓力防線。
-2. 🕵️ 籌碼與心理：推測目前主力可能的控盤意圖。
-3. ⚔️ 短線戰術：給出明確的進出場觀察建議。"""
-                
                 response = client.models.generate_content(
                     model='gemini-2.5-flash',
                     contents=prompt
@@ -201,11 +216,7 @@ def handle_message(event):
                 success = True
                 break 
             except Exception as e:
-                error_str = str(e).lower()
-                if "429" in error_str or "quota" in error_str:
-                    attempts += 1
-                else:
-                    break 
+                attempts += 1
 
         if success:
             flex_content = {
@@ -218,7 +229,7 @@ def handle_message(event):
                     "type": "box",
                     "layout": "vertical",
                     "contents": [
-                        {"type": "text", "text": "🎯 戰術推演回報", "color": "#D69E2E", "weight": "bold", "size": "sm"},
+                        {"type": "text", "text": card_title, "color": "#D69E2E", "weight": "bold", "size": "sm"},
                         {"type": "text", "text": stock_query, "color": "#FFFFFF", "weight": "bold", "size": "xl", "margin": "md"}
                     ]
                 },
@@ -233,10 +244,11 @@ def handle_message(event):
                 }
             }
 
+            # 🌟 【戰術連擊選單實裝】底下浮出專屬這檔股票的深度挖掘按鈕！
             quick_reply = QuickReply(items=[
-                QuickReplyButton(action=MessageAction(label="📈 大盤", text="大盤")),
-                QuickReplyButton(action=MessageAction(label="🔥 台積電", text="2330")),
-                QuickReplyButton(action=MessageAction(label="🚢 長榮", text="2603"))
+                QuickReplyButton(action=MessageAction(label="📈 深挖技術面", text=f"技術面 {stock_code}")),
+                QuickReplyButton(action=MessageAction(label="🕵️ 深挖籌碼面", text=f"籌碼面 {stock_code}")),
+                QuickReplyButton(action=MessageAction(label="🔙 查詢大盤", text="大盤"))
             ])
             
             line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text=f"戰報：{stock_query}", contents=flex_content, quick_reply=quick_reply))
