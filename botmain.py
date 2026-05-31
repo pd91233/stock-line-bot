@@ -3,8 +3,7 @@ from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
-    MessageEvent, TextMessage, TextSendMessage, FlexSendMessage,
-    QuickReply, QuickReplyButton, MessageAction
+    MessageEvent, TextMessage, TextSendMessage, FlexSendMessage
 )
 from google import genai
 import requests
@@ -117,7 +116,6 @@ def fetch_realtime_data(stock_code):
         ma10 = round(sum(valid_closes[-10:]) / 10, 2)
         ma20 = round(sum(valid_closes[-20:]) / 20, 2)
         
-        # 大盤成交量以「億」為單位較易讀，這裡維持張數/金額混合通用格式
         return f"最新報價 {latest_close}，成交量 {latest_vol}。5MA={ma5}，10MA={ma10}，20MA={ma20}。"
     except Exception as e:
         return "⚠️ 雷達連線受阻，無法取得數字。"
@@ -215,7 +213,6 @@ def handle_message(event):
                 try:
                     client = genai.Client(api_key=current_key)
                     
-                    # 🌟 [動態大腦] 根據 6 種不同情境發布指令
                     if analysis_type == "大盤":
                         prompt = f"""你是一位台股操盤手。請根據真實數據：【{real_data}】
 分析【加權指數(大盤)】的整體盤勢。請直接給出客觀結論(150字內)：
@@ -291,11 +288,77 @@ def handle_message(event):
                     attempts += 1
 
             if success:
+                # 🌟 [全新戰略儀表板]：徹底廢棄 QuickReply，改用 Flex Footer 排列 3x2 對稱網格
+                footer_contents = []
+                
+                if analysis_type == "大盤":
+                    footer_contents = [
+                        {
+                            "type": "box",
+                            "layout": "horizontal",
+                            "spacing": "sm",
+                            "contents": [
+                                {"type": "button", "style": "primary", "color": "#2B6CB0", "height": "sm", "action": {"type": "message", "label": "🔥 查台積電", "text": "2330"}},
+                                {"type": "button", "style": "primary", "color": "#2B6CB0", "height": "sm", "action": {"type": "message", "label": "🚢 查長榮", "text": "2603"}}
+                            ]
+                        }
+                    ]
+                else:
+                    # 判斷目前在哪個分頁，點亮的給藍色(primary)，沒點的給淺灰(secondary)
+                    def get_style(target):
+                        return "primary" if analysis_type == target else "secondary"
+                    def get_color(target):
+                        return "#2B6CB0" if analysis_type == target else None
+
+                    def create_btn(label, target, cmd):
+                        btn = {
+                            "type": "button",
+                            "style": get_style(target),
+                            "height": "sm",
+                            "action": {"type": "message", "label": label, "text": cmd}
+                        }
+                        c = get_color(target)
+                        if c: btn["color"] = c
+                        return btn
+
+                    # 第一排：技術 / 籌碼 / 基本
+                    row1 = {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "spacing": "sm",
+                        "contents": [
+                            create_btn("📈 技術", "技術面", f"技術面 {stock_code}"),
+                            create_btn("🕵️ 籌碼", "籌碼面", f"籌碼面 {stock_code}"),
+                            create_btn("🏢 基本", "基本面", f"基本面 {stock_code}")
+                        ]
+                    }
+                    
+                    # 第二排：題材 / 族群 / 大盤 (大盤永遠深灰)
+                    row2 = {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "spacing": "sm",
+                        "margin": "sm",
+                        "contents": [
+                            create_btn("🔥 題材", "題材面", f"題材面 {stock_code}"),
+                            create_btn("🤝 族群", "同族群", f"同族群 {stock_code}"),
+                            {
+                                "type": "button",
+                                "style": "primary",
+                                "color": "#4A5568",
+                                "height": "sm",
+                                "action": {"type": "message", "label": "📉 大盤", "text": "大盤"}
+                            }
+                        ]
+                    }
+                    footer_contents = [row1, row2]
+
                 flex_content = {
                     "type": "bubble",
                     "styles": {
                         "header": {"backgroundColor": "#1A365D"}, 
-                        "body": {"backgroundColor": "#F7FAFC"}    
+                        "body": {"backgroundColor": "#F7FAFC"},
+                        "footer": {"backgroundColor": "#E2E8F0"} # 加上頁尾專屬背景色，將內文與按鈕區隔
                     },
                     "header": {
                         "type": "box",
@@ -313,34 +376,16 @@ def handle_message(event):
                             {"type": "separator", "margin": "md"},
                             {"type": "text", "text": ai_reply, "color": "#2D3748", "wrap": True, "size": "sm", "margin": "md"}
                         ]
+                    },
+                    "footer": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": footer_contents
                     }
                 }
-
-                # 🌟 [戰術連擊選單] 掛載五大武器庫 (如果查詢的是大盤則只顯示大盤特定按鈕)
-                btn_items = []
-                if analysis_type != "大盤":
-                    if analysis_type != "技術面":
-                        btn_items.append(QuickReplyButton(action=MessageAction(label="📈 技術", text=f"技術面 {stock_code}")))
-                    if analysis_type != "籌碼面":
-                        btn_items.append(QuickReplyButton(action=MessageAction(label="🕵️ 籌碼", text=f"籌碼面 {stock_code}")))
-                    if analysis_type != "基本面":
-                        btn_items.append(QuickReplyButton(action=MessageAction(label="🏢 基本", text=f"基本面 {stock_code}")))
-                    if analysis_type != "題材面":
-                        btn_items.append(QuickReplyButton(action=MessageAction(label="🔥 題材", text=f"題材面 {stock_code}")))
-                    if analysis_type != "同族群":
-                        btn_items.append(QuickReplyButton(action=MessageAction(label="🤝 族群", text=f"同族群 {stock_code}")))
                 
-                # 永遠提供回查大盤的退路，除非已經在大盤
-                if analysis_type != "大盤":
-                    btn_items.append(QuickReplyButton(action=MessageAction(label="📉 查大盤", text="大盤")))
-                else:
-                    # 如果在大盤畫面，可以給點熱門股當引導
-                    btn_items.append(QuickReplyButton(action=MessageAction(label="🔥 查台積電", text="2330")))
-                    btn_items.append(QuickReplyButton(action=MessageAction(label="🚢 查長榮", text="2603")))
-
-                quick_reply = QuickReply(items=btn_items)
-                
-                line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text=f"戰報：{stock_query}", contents=flex_content, quick_reply=quick_reply))
+                # 🌟 [發射端更新]：將原本的 quick_reply 參數徹底刪除，按鈕已全數整合進卡片本體！
+                line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text=f"戰報：{stock_query}", contents=flex_content))
             else:
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 報告統帥：AI 金鑰連線異常，或觸發金融防護限制！"))
     
