@@ -44,35 +44,32 @@ else:
     print("⚠️ 警告：雲端保險箱內未偵測到任何 GEMINI_API_KEY！")
 
 # ==========================================================
-# 📚 2. 台股標的庫與同步功能 (掛載瀏覽器偽裝裝甲)
+# 📚 2. 台股標的庫與同步功能 (啟動 FinMind 備用雷達)
 # ==========================================================
 global_stock_dict = {}
 
 def sync_stock_dict():
     global global_stock_dict
-    print("🔄 [雷達] 正在同步全台股標的庫...")
-    
-    # 🛡️ 偽裝成正常的 Google Chrome 瀏覽器，突破證交所防火牆
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    
+    print("🔄 [雷達] 啟動 FinMind 備用頻道，繞過證交所封鎖網...")
     try:
-        # 抓取上市名單
-        l_res = requests.get("https://openapi.twse.com.tw/v1/opendata/t187ap03_L", headers=headers, timeout=15, verify=False)
-        if l_res.status_code == 200:
-            for item in l_res.json():
-                global_stock_dict[item.get('公司簡稱', '').strip()] = item.get('公司代號', '').strip()
+        # 改用對雲端主機友善的 FinMind API
+        url = "https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo"
+        res = requests.get(url, timeout=15, verify=False)
+        data = res.json()
         
-        # 抓取上櫃名單
-        o_res = requests.get("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O", headers=headers, timeout=15, verify=False)
-        if o_res.status_code == 200:
-            for item in o_res.json():
-                global_stock_dict[item.get('公司簡稱', '').strip()] = item.get('公司代號', '').strip()
-                
-        print(f"✅ [雷達] 潛入成功！同步武裝 {len(global_stock_dict)} 檔標的。")
+        if data.get("msg") == "success":
+            for item in data.get("data", []):
+                stock_name = item.get("stock_name", "").strip()
+                stock_id = item.get("stock_id", "").strip()
+                # 排除空白並寫入字典
+                if stock_name and stock_id:
+                    global_stock_dict[stock_name] = stock_id
+                    
+            print(f"✅ [雷達] 突破封鎖！成功從備用頻道武裝 {len(global_stock_dict)} 檔標的。")
+        else:
+            print("⚠️ [雷達] 備用頻道資料異常")
     except Exception as e:
-        print(f"⚠️ [雷達] 同步失敗，防線無法突破: {e}")
+        print(f"⚠️ [雷達] 備用頻道連線失敗: {e}")
 
 # ==========================================================
 # 📡 3. Webhook 接收通道
