@@ -151,22 +151,22 @@ def handle_message(event):
 
         while attempts < max_attempts and gemini_keys:
             current_key = next(key_cycle)
-            genai.configure(api_key=current_key)
-            model = genai.GenerativeModel('gemini-2.5-flash')
-            sys_prompt = "你是一個台股助理，請用最簡短的白話文，分析這檔股票近期的市場概況。嚴禁長篇大論。"
             
+            # 🌟 [修復點] 改用新版 Client 語法初始化大腦
             try:
-             # 使用新版 Client 語法裝填金鑰
-             client = genai.Client(api_key=current_key)
-
-             # 發射指令略有不同
-             response = client.models.generate_content(
-                 model='gemini-2.5-flash',
-                 contents=[sys_prompt, f"股友詢問：{stock_query}"]
-             )
-             ai_reply = response.text.strip()
-             success = True
-             break 
+                client = genai.Client(api_key=current_key)
+                sys_prompt = "你是一個台股助理，請用最簡短的白話文，分析這檔股票近期的市場概況。嚴禁長篇大論。"
+                
+                # 🌟 [修復點] 改用新版 generate_content 語法
+                response = client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=[sys_prompt, f"股友詢問：{stock_query}"]
+                )
+                
+                ai_reply = response.text.strip()
+                success = True
+                break # 🎯 成功取得戰報，跳出重試迴圈
+                
             except Exception as e:
                 error_str = str(e).lower()
                 if "429" in error_str or "quota" in error_str:
