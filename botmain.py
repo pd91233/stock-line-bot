@@ -134,7 +134,7 @@ def callback():
     return 'OK'
 
 # ==========================================================
-# 🧠 5. 智慧過濾與戰略卡片發射 (全方位戰術武裝版)
+# 🧠 5. 智慧過濾與戰略卡片發射 (全方位極簡武裝版)
 # ==========================================================
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
@@ -218,7 +218,7 @@ def handle_message(event):
 分析【加權指數(大盤)】的整體盤勢。請直接給出客觀結論(150字內)：
 1. 大盤均線多空趨勢研判。
 2. 支撐與壓力防線。
-3. 統帥近期總體戰略建議(積極/防禦)。
+3. 近期總體戰略建議(積極/防禦)。
 絕對不要有免責聲明與內心戲。"""
                         card_title = "📉 大盤多空雷達"
                         
@@ -288,7 +288,7 @@ def handle_message(event):
                     attempts += 1
 
             if success:
-                # 🌟 [全新戰略儀表板]：徹底廢棄 QuickReply，改用 Flex Footer 排列 3x2 對稱網格
+                # 🌟 [全新戰略儀表板]：極簡美學內嵌網格
                 footer_contents = []
                 
                 if analysis_type == "大盤":
@@ -298,56 +298,52 @@ def handle_message(event):
                             "layout": "horizontal",
                             "spacing": "sm",
                             "contents": [
-                                {"type": "button", "style": "primary", "color": "#2B6CB0", "height": "sm", "action": {"type": "message", "label": "🔥 查台積電", "text": "2330"}},
-                                {"type": "button", "style": "primary", "color": "#2B6CB0", "height": "sm", "action": {"type": "message", "label": "🚢 查長榮", "text": "2603"}}
+                                {"type": "button", "style": "primary", "color": "#1E3A8A", "height": "sm", "action": {"type": "message", "label": "台積電", "text": "2330"}},
+                                {"type": "button", "style": "primary", "color": "#1E3A8A", "height": "sm", "action": {"type": "message", "label": "長榮", "text": "2603"}}
                             ]
                         }
                     ]
                 else:
-                    # 判斷目前在哪個分頁，點亮的給藍色(primary)，沒點的給淺灰(secondary)
-                    def get_style(target):
-                        return "primary" if analysis_type == target else "secondary"
+                    # 🎨 【極簡美學塗裝】點亮的給亮藍色，沒點的給沉穩鐵灰
                     def get_color(target):
-                        return "#2B6CB0" if analysis_type == target else None
+                        return "#2563EB" if analysis_type == target else "#475569"
 
                     def create_btn(label, target, cmd):
-                        btn = {
+                        return {
                             "type": "button",
-                            "style": get_style(target),
+                            "style": "primary", # 升級為 primary 以套用客製化深色
+                            "color": get_color(target),
                             "height": "sm",
                             "action": {"type": "message", "label": label, "text": cmd}
                         }
-                        c = get_color(target)
-                        if c: btn["color"] = c
-                        return btn
 
-                    # 第一排：技術 / 籌碼 / 基本
+                    # 第一排：拔除圖示，純粹文字，釋放空間
                     row1 = {
                         "type": "box",
                         "layout": "horizontal",
                         "spacing": "sm",
                         "contents": [
-                            create_btn("📈 技術", "技術面", f"技術面 {stock_code}"),
-                            create_btn("🕵️ 籌碼", "籌碼面", f"籌碼面 {stock_code}"),
-                            create_btn("🏢 基本", "基本面", f"基本面 {stock_code}")
+                            create_btn("技術", "技術面", f"技術面 {stock_code}"),
+                            create_btn("籌碼", "籌碼面", f"籌碼面 {stock_code}"),
+                            create_btn("基本", "基本面", f"基本面 {stock_code}")
                         ]
                     }
                     
-                    # 第二排：題材 / 族群 / 大盤 (大盤永遠深灰)
+                    # 第二排：拔除圖示，純粹文字
                     row2 = {
                         "type": "box",
                         "layout": "horizontal",
                         "spacing": "sm",
                         "margin": "sm",
                         "contents": [
-                            create_btn("🔥 題材", "題材面", f"題材面 {stock_code}"),
-                            create_btn("🤝 族群", "同族群", f"同族群 {stock_code}"),
+                            create_btn("題材", "題材面", f"題材面 {stock_code}"),
+                            create_btn("族群", "同族群", f"同族群 {stock_code}"),
                             {
                                 "type": "button",
                                 "style": "primary",
-                                "color": "#4A5568",
+                                "color": "#334155", # 大盤固定為最低調的深鐵灰
                                 "height": "sm",
-                                "action": {"type": "message", "label": "📉 大盤", "text": "大盤"}
+                                "action": {"type": "message", "label": "大盤", "text": "大盤"}
                             }
                         ]
                     }
@@ -358,7 +354,7 @@ def handle_message(event):
                     "styles": {
                         "header": {"backgroundColor": "#1A365D"}, 
                         "body": {"backgroundColor": "#F7FAFC"},
-                        "footer": {"backgroundColor": "#E2E8F0"} # 加上頁尾專屬背景色，將內文與按鈕區隔
+                        "footer": {"backgroundColor": "#0F172A"} # 🌟 底部背景改為深藍，與按鈕完美融合
                     },
                     "header": {
                         "type": "box",
@@ -380,11 +376,11 @@ def handle_message(event):
                     "footer": {
                         "type": "box",
                         "layout": "vertical",
+                        "paddingAll": "md",
                         "contents": footer_contents
                     }
                 }
                 
-                # 🌟 [發射端更新]：將原本的 quick_reply 參數徹底刪除，按鈕已全數整合進卡片本體！
                 line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text=f"戰報：{stock_query}", contents=flex_content))
             else:
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 報告統帥：AI 金鑰連線異常，或觸發金融防護限制！"))
