@@ -118,16 +118,37 @@ def handle_message(event):
     # 🚀 如果確認是股票查詢，發射給 Gemini 大腦
     if is_stock_query:
         print(f"🎯 [雷達截獲] 群組有人正在查詢：{stock_query}") 
-        try:
-            # 🔄 從彈匣中退出下一把鑰匙並重新裝填給大腦
+        
+        success = False
+        attempts = 0
+        max_attempts = len(gemini_keys)
+        ai_reply = ""
+
+        # 🔄 啟動智慧彈匣：如果失敗，自動切換下一把金鑰重試
+        while attempts < max_attempts:
             current_key = next(key_cycle)
             genai.configure(api_key=current_key)
             model = genai.GenerativeModel('gemini-2.5-flash')
-
             sys_prompt = "你是一個台股助理，請用最簡短的白話文，分析這檔股票近期的市場概況。嚴禁長篇大論。"
-            response = model.generate_content([sys_prompt, f"股友詢問：{stock_query}"])
-            ai_reply = response.text.strip()
             
+            try:
+                response = model.generate_content([sys_prompt, f"股友詢問：{stock_query}"])
+                ai_reply = response.text.strip()
+                success = True
+                break  # 🎯 成功取得戰報，跳出重試迴圈
+                
+            except Exception as e:
+                error_str = str(e).lower()
+                # 偵測到 429 或是 quota 額度耗盡錯誤
+                if "429" in error_str or "quota" in error_str:
+                    print(f"⚠️ [彈匣警告] 某把 API 金鑰額度耗盡，自動切換下一把...")
+                    attempts += 1
+                else:
+                    print(f"⚠️ [大腦異常] 非額度問題: {e}")
+                    break # 其他嚴重錯誤，直接放棄
+
+        # 判斷戰果並發射卡片
+        if success:
             # 🎨 建立 Flex Message 變形卡片
             flex_content = {
                 "type": "bubble",
@@ -159,17 +180,17 @@ def handle_message(event):
                 QuickReplyButton(action=MessageAction(label="🚢 長榮", text="2603"))
             ])
             
-            # 🚀 發射 Flex 卡片與快捷按鈕
+            # 🚀 發射
             line_bot_api.reply_message(
                 event.reply_token,
                 FlexSendMessage(alt_text=f"戰報：{stock_query}", contents=flex_content, quick_reply=quick_reply)
             )
-
-        except StopIteration:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 彈匣為空，請至 Render 保險箱裝填 API Key。"))
-        except Exception as e:
-            print(f"解析異常: {e}")
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 偵察兵大腦連線異常，請稍後再試。"))
+        else:
+            # 所有的鑰匙都試過了，全部乾涸
+            line_bot_api.reply_message(
+                event.reply_token, 
+                TextSendMessage(text="⚠️ 報告統帥：所有 AI 金鑰彈匣均已打空，請擴充保險箱或等待明日配額恢復！")
+            )
 
 if __name__ == "__main__":
     # 啟動前先同步字典
