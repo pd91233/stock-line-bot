@@ -8,6 +8,7 @@ from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
 import google.generativeai as genai
 import requests
+import os
 import re
 import threading
 
@@ -16,9 +17,9 @@ app = Flask(__name__)
 # ==========================================================
 # 🔑 1. 金鑰設定區 (請確認這裡的金鑰正確)
 # ==========================================================
-LINE_CHANNEL_ACCESS_TOKEN = 'SMvkBhzw64RpFhLGsaDRfzqPVPkxAk8HYLz+Pvy/kiVG/n3XkSNWOcPPyQkSpWrCcAj3+SmAaM1iopF9dz6TJdo6xyQwBv0soAzdn+Wdn3GC2YS+4m16cEzIW5pUTqO12JC6grdw6ktZ4wh3arR5+gdB04t89/1O/w1cDnyilFU='
-LINE_CHANNEL_SECRET = '9d160bd7696bc116bead171fffc7ddb7' # 在 LINE Developer 後台的 Basic settings 裡
-GEMINI_API_KEY = 'AIzaSyDGpHCEWUlWNcWPG6Td8tBzjPVz-n8erzQ'
+LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
+LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
