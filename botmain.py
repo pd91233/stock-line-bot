@@ -100,6 +100,7 @@ def handle_message(event):
 
     # 🚀 如果確認是股票查詢，發射給 Gemini 大腦
     if is_stock_query:
+        print(f"🎯 [雷達截獲] 群組有人正在查詢：{stock_query}") # 👉 加上這一行
         try:
             sys_prompt = "你是一個台股助理，請用最簡短的白話文，分析這檔股票近期的市場概況。嚴禁長篇大論。"
             response = model.generate_content([sys_prompt, f"股友詢問：{stock_query}"])
