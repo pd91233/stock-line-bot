@@ -11,8 +11,6 @@ import requests
 import os
 import re
 import itertools
-import yfinance as yf
-import pandas as pd
 
 app = Flask(__name__)
 
@@ -42,8 +40,6 @@ for i in range(1, 6):
 
 if gemini_keys:
     key_cycle = itertools.cycle(gemini_keys)
-else:
-    print("⚠️ 警告：雲端保險箱內未偵測到任何 GEMINI_API_KEY！")
 
 # ==========================================================
 # 📚 2. 台股標的庫 (動態雙雷達系統)
@@ -83,31 +79,42 @@ def get_stock_dict():
     return global_stock_dict
 
 # ==========================================================
-# 📊 3. 戰場即時數據探測儀 (yfinance)
+# 📊 3. 戰場即時數據探測儀 (🚀 升級：直連底層 API，免套件)
 # ==========================================================
 def fetch_realtime_data(stock_code):
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0"}
     try:
-        # 嘗試上市代碼
-        tk = yf.Ticker(f"{stock_code}.TW")
-        hist = tk.history(period="2mo") # 抓兩個月來算 20MA
-        if hist.empty:
-            # 嘗試上櫃代碼
-            tk = yf.Ticker(f"{stock_code}.TWO")
-            hist = tk.history(period="2mo")
+        # 優先嘗試上市
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TW?range=2mo&interval=1d"
+        res = requests.get(url, headers=headers, timeout=5)
+        data = res.json()
+        
+        # 若無資料則嘗試上櫃
+        if not data.get('chart', {}).get('result'):
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TWO?range=2mo&interval=1d"
+            res = requests.get(url, headers=headers, timeout=5)
+            data = res.json()
+
+        result = data['chart']['result'][0]
+        closes = result['indicators']['quote'][0]['close']
+        volumes = result['indicators']['quote'][0]['volume']
+        
+        # 過濾掉未開盤的空值
+        valid_closes = [c for c in closes if c is not None]
+        valid_vols = [v for v in volumes if v is not None]
+        
+        if len(valid_closes) < 20:
+            return "⚠️ 歷史數據不足，無法計算均線。"
             
-        if hist.empty:
-            return "⚠️ 無法取得最新交易數據。"
-            
-        # 計算均線與最新戰況
-        latest_close = round(hist['Close'].iloc[-1], 2)
-        latest_vol = int(hist['Volume'].iloc[-1] / 1000)
-        ma5 = round(hist['Close'].rolling(window=5).mean().iloc[-1], 2)
-        ma10 = round(hist['Close'].rolling(window=10).mean().iloc[-1], 2)
-        ma20 = round(hist['Close'].rolling(window=20).mean().iloc[-1], 2)
+        latest_close = round(valid_closes[-1], 2)
+        latest_vol = int(valid_vols[-1] / 1000)
+        ma5 = round(sum(valid_closes[-5:]) / 5, 2)
+        ma10 = round(sum(valid_closes[-10:]) / 10, 2)
+        ma20 = round(sum(valid_closes[-20:]) / 20, 2)
         
         return f"收盤價 {latest_close}元，成交量 {latest_vol}張。5MA={ma5}，10MA={ma10}，20MA={ma20}。"
     except Exception as e:
-        return f"數據抓取異常"
+        return "⚠️ 雷達連線受阻，無法取得數字。"
 
 # ==========================================================
 # 📡 4. Webhook 接收通道
@@ -160,9 +167,6 @@ def handle_message(event):
             return
 
     if is_stock_query:
-        print(f"🎯 [雷達截獲] 群組查詢：{stock_query}") 
-        
-        # 🚀 呼叫探測儀，抓取真實數字
         real_data = fetch_realtime_data(stock_code)
         
         success = False
@@ -175,15 +179,18 @@ def handle_message(event):
             try:
                 client = genai.Client(api_key=current_key)
                 
-                # 🌟 [究極武裝] 將真實數據塞入戰術指令中！
+                # 🌟 [究極武裝] 嚴格防幻覺裝甲！
                 prompt = f"""你是一位擁有十年實戰經驗的台股操盤手，請以冷靜、俐落的語氣回報。
-嚴格遵守以下指令：絕對不要輸出任何內心思考過程、推演邏輯或免責聲明，直接給出結論。
 請根據我方雷達探測到的【{stock_query}】最新真實戰況：
 【{real_data}】
 
-請提供以下精簡戰報，用條列式排版，總字數控制在 150 字以內：
-1. 📈 均線與趨勢：根據我方提供的均線價格(5/10/20MA)與收盤價比對，判斷目前股價的支撐與壓力防線。
-2. 🕵️ 籌碼與心理：推測目前主力可能的洗盤或拉抬意圖。
+🚨 統帥鐵律警告：
+1. 絕對不准輸出內心思考過程、推演邏輯！直接給出結論！
+2. 如果上方雷達數據顯示「無法取得」或「受阻」，你絕對不可以自己捏造任何價格，必須直接回答「雷達連線異常，無法提供精準分析」。
+
+請根據上述真實數字，提供以下精簡戰報 (150字內)：
+1. 📈 均線與趨勢：根據雷達提供的收盤價與均線(5/10/20MA)比對，判斷目前的支撐與壓力防線。
+2. 🕵️ 籌碼與心理：推測目前主力可能的控盤意圖。
 3. ⚔️ 短線戰術：給出明確的進出場觀察建議。"""
                 
                 response = client.models.generate_content(
@@ -196,10 +203,8 @@ def handle_message(event):
             except Exception as e:
                 error_str = str(e).lower()
                 if "429" in error_str or "quota" in error_str:
-                    print(f"⚠️ [彈匣警告] 金鑰額度耗盡，自動切換...")
                     attempts += 1
                 else:
-                    print(f"⚠️ [大腦異常] 非額度問題: {e}")
                     break 
 
         if success:
