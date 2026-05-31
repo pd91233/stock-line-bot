@@ -1,31 +1,47 @@
 # -*- coding: utf-8 -*-
 # ==========================================================
-# 🎧 股海觀浪前線偵察兵：botmain.py (直覺查詢升級版)
+# 🎧 股海觀浪前線偵察兵：botmain.py (直覺查詢 + Flex卡片 + 金鑰輪轉)
 # ==========================================================
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
+from linebot.models import (
+    MessageEvent, TextMessage, TextSendMessage, FlexSendMessage,
+    QuickReply, QuickReplyButton, MessageAction
+)
 import google.generativeai as genai
 import requests
 import os
 import re
-import threading
+import itertools
 
 app = Flask(__name__)
 
 # ==========================================================
-# 🔑 1. 金鑰設定區 (請確認這裡的金鑰正確)
+# 🔑 1. 金鑰設定區 (支援單把或多把金鑰自動輪轉)
 # ==========================================================
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-2.5-flash')
+# 🔄 建立 API 金鑰輪轉彈匣
+gemini_keys = []
+# 保留您原本設定的主金鑰
+if os.environ.get('GEMINI_API_KEY'):
+    gemini_keys.append(os.environ.get('GEMINI_API_KEY'))
+# 自動尋找額外擴充的金鑰 (GEMINI_API_KEY_1 ~ 5)
+for i in range(1, 6):
+    k = os.environ.get(f'GEMINI_API_KEY_{i}')
+    if k:
+        gemini_keys.append(k)
+
+# 啟動無限輪迴，如果保險箱沒放半把鑰匙則防呆
+if gemini_keys:
+    key_cycle = itertools.cycle(gemini_keys)
+else:
+    print("⚠️ 警告：雲端保險箱內未偵測到任何 GEMINI_API_KEY！")
 
 # ==========================================================
 # 📚 2. 台股標的庫與同步功能 (移植舊系統邏輯)
@@ -62,7 +78,7 @@ def callback():
     return 'OK'
 
 # ==========================================================
-# 🧠 4. 智慧過濾與被動回覆
+# 🧠 4. 智慧過濾與 Flex 被動回覆
 # ==========================================================
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
@@ -101,22 +117,59 @@ def handle_message(event):
 
     # 🚀 如果確認是股票查詢，發射給 Gemini 大腦
     if is_stock_query:
-        print(f"🎯 [雷達截獲] 群組有人正在查詢：{stock_query}") # 👉 加上這一行
+        print(f"🎯 [雷達截獲] 群組有人正在查詢：{stock_query}") 
         try:
+            # 🔄 從彈匣中退出下一把鑰匙並重新裝填給大腦
+            current_key = next(key_cycle)
+            genai.configure(api_key=current_key)
+            model = genai.GenerativeModel('gemini-2.5-flash')
+
             sys_prompt = "你是一個台股助理，請用最簡短的白話文，分析這檔股票近期的市場概況。嚴禁長篇大論。"
             response = model.generate_content([sys_prompt, f"股友詢問：{stock_query}"])
             ai_reply = response.text.strip()
             
+            # 🎨 建立 Flex Message 變形卡片
+            flex_content = {
+                "type": "bubble",
+                "styles": {
+                    "header": {"backgroundColor": "#1A365D"}, # 深藍色裝甲
+                    "body": {"backgroundColor": "#F7FAFC"}    # 乾淨灰白底
+                },
+                "header": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {"type": "text", "text": "🎯 戰術推演回報", "color": "#D69E2E", "weight": "bold", "size": "sm"},
+                        {"type": "text", "text": stock_query, "color": "#FFFFFF", "weight": "bold", "size": "xl", "margin": "md"}
+                    ]
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {"type": "text", "text": ai_reply, "color": "#2D3748", "wrap": True, "size": "md"}
+                    ]
+                }
+            }
+
+            # 🔘 建立快速回覆按鈕 (Quick Reply)
+            quick_reply = QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="📈 大盤", text="大盤")),
+                QuickReplyButton(action=MessageAction(label="🔥 台積電", text="2330")),
+                QuickReplyButton(action=MessageAction(label="🚢 長榮", text="2603"))
+            ])
+            
+            # 🚀 發射 Flex 卡片與快捷按鈕
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text=f"🤖 偵察兵回報【{stock_query}】：\n{ai_reply}")
+                FlexSendMessage(alt_text=f"戰報：{stock_query}", contents=flex_content, quick_reply=quick_reply)
             )
+
+        except StopIteration:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 彈匣為空，請至 Render 保險箱裝填 API Key。"))
         except Exception as e:
             print(f"解析異常: {e}")
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text="⚠️ 偵察兵大腦連線異常，請稍後再試。")
-            )
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 偵察兵大腦連線異常，請稍後再試。"))
 
 if __name__ == "__main__":
     # 啟動前先同步字典
