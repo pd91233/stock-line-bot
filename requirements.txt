@@ -2,7 +2,4 @@ flask
 line-bot-sdk
 google-genai
 gunicorn
-aiohttp>=3.9.3
 requests
-yfinance
-pandas
