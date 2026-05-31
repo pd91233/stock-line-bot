@@ -311,7 +311,7 @@ def handle_message(event):
                     def create_btn(label, target, cmd):
                         return {
                             "type": "button",
-                            "style": "primary", # 升級為 primary 以套用客製化深色
+                            "style": "primary", 
                             "color": get_color(target),
                             "height": "sm",
                             "action": {"type": "message", "label": label, "text": cmd}
@@ -329,19 +329,19 @@ def handle_message(event):
                         ]
                     }
                     
-                    # 第二排：拔除圖示，純粹文字
+                    # 第二排：🌟 這裡將 margin 改為 md，製造完美的隔行呼吸感！
                     row2 = {
                         "type": "box",
                         "layout": "horizontal",
                         "spacing": "sm",
-                        "margin": "sm",
+                        "margin": "md", 
                         "contents": [
                             create_btn("題材", "題材面", f"題材面 {stock_code}"),
                             create_btn("族群", "同族群", f"同族群 {stock_code}"),
                             {
                                 "type": "button",
                                 "style": "primary",
-                                "color": "#334155", # 大盤固定為最低調的深鐵灰
+                                "color": "#334155", 
                                 "height": "sm",
                                 "action": {"type": "message", "label": "大盤", "text": "大盤"}
                             }
@@ -354,7 +354,7 @@ def handle_message(event):
                     "styles": {
                         "header": {"backgroundColor": "#1A365D"}, 
                         "body": {"backgroundColor": "#F7FAFC"},
-                        "footer": {"backgroundColor": "#0F172A"} # 🌟 底部背景改為深藍，與按鈕完美融合
+                        "footer": {"backgroundColor": "#0F172A"} 
                     },
                     "header": {
                         "type": "box",
