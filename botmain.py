@@ -9,7 +9,7 @@ from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage, FlexSendMessage,
     QuickReply, QuickReplyButton, MessageAction
 )
-import google.generativeai as genai
+from google import genai
 import requests
 import os
 import re
@@ -156,10 +156,17 @@ def handle_message(event):
             sys_prompt = "你是一個台股助理，請用最簡短的白話文，分析這檔股票近期的市場概況。嚴禁長篇大論。"
             
             try:
-                response = model.generate_content([sys_prompt, f"股友詢問：{stock_query}"])
-                ai_reply = response.text.strip()
-                success = True
-                break 
+             # 使用新版 Client 語法裝填金鑰
+             client = genai.Client(api_key=current_key)
+
+             # 發射指令略有不同
+             response = client.models.generate_content(
+                 model='gemini-2.5-flash',
+                 contents=[sys_prompt, f"股友詢問：{stock_query}"]
+             )
+             ai_reply = response.text.strip()
+             success = True
+             break 
             except Exception as e:
                 error_str = str(e).lower()
                 if "429" in error_str or "quota" in error_str:
