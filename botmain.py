@@ -86,14 +86,20 @@ def get_stock_dict():
 def fetch_realtime_data(stock_code):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0"}
     try:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TW?range=2mo&interval=1d"
-        res = requests.get(url, headers=headers, timeout=5)
-        data = res.json()
-        
-        if not data.get('chart', {}).get('result'):
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TWO?range=2mo&interval=1d"
+        # 🌟 專屬大盤通道：加權指數不加後綴
+        if stock_code == "^TWII":
+            url = "https://query1.finance.yahoo.com/v8/finance/chart/^TWII?range=2mo&interval=1d"
             res = requests.get(url, headers=headers, timeout=5)
             data = res.json()
+        else:
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TW?range=2mo&interval=1d"
+            res = requests.get(url, headers=headers, timeout=5)
+            data = res.json()
+            
+            if not data.get('chart', {}).get('result'):
+                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TWO?range=2mo&interval=1d"
+                res = requests.get(url, headers=headers, timeout=5)
+                data = res.json()
 
         result = data['chart']['result'][0]
         closes = result['indicators']['quote'][0]['close']
@@ -111,7 +117,8 @@ def fetch_realtime_data(stock_code):
         ma10 = round(sum(valid_closes[-10:]) / 10, 2)
         ma20 = round(sum(valid_closes[-20:]) / 20, 2)
         
-        return f"收盤價 {latest_close}元，成交量 {latest_vol}張。5MA={ma5}，10MA={ma10}，20MA={ma20}。"
+        # 大盤成交量以「億」為單位較易讀，這裡維持張數/金額混合通用格式
+        return f"最新報價 {latest_close}，成交量 {latest_vol}。5MA={ma5}，10MA={ma10}，20MA={ma20}。"
     except Exception as e:
         return "⚠️ 雷達連線受阻，無法取得數字。"
 
@@ -129,21 +136,34 @@ def callback():
     return 'OK'
 
 # ==========================================================
-# 🧠 5. 智慧過濾與戰略卡片發射 (安全繞過版)
+# 🧠 5. 智慧過濾與戰略卡片發射 (全方位戰術武裝版)
 # ==========================================================
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     try:
         user_msg = event.message.text.strip()
         
-        # 🌟 攔截戰術連擊指令 (擷取分析類型與股票代號)
+        # 🌟 攔截戰術連擊指令 (支援 5 大深挖模組)
         analysis_type = "綜合"
-        if "技術面" in user_msg:
+        
+        # 🌟 攔截大盤專屬指令
+        if user_msg == "大盤":
+            analysis_type = "大盤"
+        elif "技術面" in user_msg:
             analysis_type = "技術面"
             user_msg = user_msg.replace("技術面", "").strip()
         elif "籌碼面" in user_msg:
             analysis_type = "籌碼面"
             user_msg = user_msg.replace("籌碼面", "").strip()
+        elif "基本面" in user_msg:
+            analysis_type = "基本面"
+            user_msg = user_msg.replace("基本面", "").strip()
+        elif "題材面" in user_msg:
+            analysis_type = "題材面"
+            user_msg = user_msg.replace("題材面", "").strip()
+        elif "同族群" in user_msg:
+            analysis_type = "同族群"
+            user_msg = user_msg.replace("同族群", "").strip()
 
         if len(user_msg) > 15:
             return
@@ -152,7 +172,13 @@ def handle_message(event):
         stock_query = ""
         stock_code = ""
 
-        if re.fullmatch(r'\d{4,6}', user_msg):
+        # 🌟 大盤強制分流，不比對字典
+        if analysis_type == "大盤" or user_msg == "大盤":
+            is_stock_query = True
+            stock_query = "加權指數 (大盤)"
+            stock_code = "^TWII"
+            analysis_type = "大盤"
+        elif re.fullmatch(r'\d{4,6}', user_msg):
             is_stock_query = True
             stock_query = user_msg
             stock_code = user_msg
@@ -189,8 +215,17 @@ def handle_message(event):
                 try:
                     client = genai.Client(api_key=current_key)
                     
-                    # 🌟 [規避審查指令] 將敏感字眼替換，防止 AI 拒答停機
-                    if analysis_type == "技術面":
+                    # 🌟 [動態大腦] 根據 6 種不同情境發布指令
+                    if analysis_type == "大盤":
+                        prompt = f"""你是一位台股操盤手。請根據真實數據：【{real_data}】
+分析【加權指數(大盤)】的整體盤勢。請直接給出客觀結論(150字內)：
+1. 大盤均線多空趨勢研判。
+2. 支撐與壓力防線。
+3. 統帥近期總體戰略建議(積極/防禦)。
+絕對不要有免責聲明與內心戲。"""
+                        card_title = "📉 大盤多空雷達"
+                        
+                    elif analysis_type == "技術面":
                         prompt = f"""你是一位台股操盤手。請根據真實數據：【{real_data}】
 分析【{stock_query}】的純技術面。請直接給出客觀結論(150字內)：
 1. 均線排列與乖離狀況。
@@ -198,6 +233,7 @@ def handle_message(event):
 3. 短線觀察重點與風險提示。
 絕對不要有免責聲明與內心戲。"""
                         card_title = "📈 技術面深度解析"
+                        
                     elif analysis_type == "籌碼面":
                         prompt = f"""你是一位台股操盤手。請根據真實數據：【{real_data}】
 分析【{stock_query}】的籌碼與主力心理。請直接給出客觀結論(150字內)：
@@ -206,6 +242,30 @@ def handle_message(event):
 3. 籌碼變化觀察重點。
 絕對不要有免責聲明與內心戲。"""
                         card_title = "🕵️ 籌碼面深度解析"
+                        
+                    elif analysis_type == "基本面":
+                        prompt = f"""你是一位台股分析師。請分析【{stock_query}】的基本面與護城河。請直接給出客觀結論(150字內)：
+1. 公司核心獲利業務。
+2. 產業地位與未來成長動能。
+3. 長線投資價值評估。
+絕對不要有免責聲明與內心戲。"""
+                        card_title = "🏢 基本面價值分析"
+                        
+                    elif analysis_type == "題材面":
+                        prompt = f"""你是一位台股操盤手。請分析【{stock_query}】目前的市場題材。請直接給出客觀結論(150字內)：
+1. 所屬強勢概念股分類。
+2. 近期市場炒作的利多/題材動能。
+3. 資金關注度研判。
+絕對不要有免責聲明與內心戲。"""
+                        card_title = "🔥 題材面動能解析"
+                        
+                    elif analysis_type == "同族群":
+                        prompt = f"""你是一位台股操盤手。請尋找【{stock_query}】的同族群戰友。請直接給出客觀結論(150字內)：
+1. 列出 3~5 檔同業競爭對手或上下游供應鏈(需含股票代號)。
+2. 簡述該族群目前的整體產業趨勢是向上或向下。
+絕對不要有免責聲明與內心戲。"""
+                        card_title = "🤝 同族群戰友雷達"
+                        
                     else:
                         prompt = f"""你是一位台股操盤手。請根據真實數據：【{real_data}】
 分析【{stock_query}】。請直接給出客觀結論(150字內)：
@@ -256,13 +316,27 @@ def handle_message(event):
                     }
                 }
 
-                # 🌟 [戰術連擊選單] 動態隱藏已選擇的按鈕，提升使用者體驗
+                # 🌟 [戰術連擊選單] 掛載五大武器庫 (如果查詢的是大盤則只顯示大盤特定按鈕)
                 btn_items = []
-                if analysis_type != "技術面":
-                    btn_items.append(QuickReplyButton(action=MessageAction(label="📈 深挖技術面", text=f"技術面 {stock_code}")))
-                if analysis_type != "籌碼面":
-                    btn_items.append(QuickReplyButton(action=MessageAction(label="🕵️ 深挖籌碼面", text=f"籌碼面 {stock_code}")))
-                btn_items.append(QuickReplyButton(action=MessageAction(label="🔙 查詢大盤", text="大盤")))
+                if analysis_type != "大盤":
+                    if analysis_type != "技術面":
+                        btn_items.append(QuickReplyButton(action=MessageAction(label="📈 技術", text=f"技術面 {stock_code}")))
+                    if analysis_type != "籌碼面":
+                        btn_items.append(QuickReplyButton(action=MessageAction(label="🕵️ 籌碼", text=f"籌碼面 {stock_code}")))
+                    if analysis_type != "基本面":
+                        btn_items.append(QuickReplyButton(action=MessageAction(label="🏢 基本", text=f"基本面 {stock_code}")))
+                    if analysis_type != "題材面":
+                        btn_items.append(QuickReplyButton(action=MessageAction(label="🔥 題材", text=f"題材面 {stock_code}")))
+                    if analysis_type != "同族群":
+                        btn_items.append(QuickReplyButton(action=MessageAction(label="🤝 族群", text=f"同族群 {stock_code}")))
+                
+                # 永遠提供回查大盤的退路，除非已經在大盤
+                if analysis_type != "大盤":
+                    btn_items.append(QuickReplyButton(action=MessageAction(label="📉 查大盤", text="大盤")))
+                else:
+                    # 如果在大盤畫面，可以給點熱門股當引導
+                    btn_items.append(QuickReplyButton(action=MessageAction(label="🔥 查台積電", text="2330")))
+                    btn_items.append(QuickReplyButton(action=MessageAction(label="🚢 查長榮", text="2603")))
 
                 quick_reply = QuickReply(items=btn_items)
                 
