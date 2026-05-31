@@ -14,7 +14,7 @@ import io
 import base64
 import pandas as pd
 import matplotlib
-matplotlib.use('Agg') # 🚀 無頭模式 (伺服器專用，不跳出視窗)
+matplotlib.use('Agg')
 import mplfinance as mpf
 
 app = Flask(__name__)
@@ -24,7 +24,7 @@ app = Flask(__name__)
 # ==========================================================
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
-IMGBB_API_KEY = os.environ.get('IMGBB_API_KEY') # 🌟 切換為 ImgBB 圖床金鑰
+IMGBB_API_KEY = os.environ.get('IMGBB_API_KEY') 
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
@@ -68,38 +68,75 @@ def get_stock_dict():
     return global_stock_dict
 
 # ==========================================================
-# 📊 3. 戰場即時數據 (文字版)
+# 📊 3. 雙雷達情報中樞 (TWSE 即時偷價 + Yahoo 均線備援)
 # ==========================================================
 def fetch_realtime_data(stock_code):
     headers = {"User-Agent": "Mozilla/5.0"}
+    yahoo_ma = ""
+    yahoo_price = ""
+    
+    # [第一階段] 取得 Yahoo 宏觀均線數據
     try:
         if stock_code == "^TWII":
             url = "https://query1.finance.yahoo.com/v8/finance/chart/^TWII?range=2mo&interval=1d"
-            res = requests.get(url, headers=headers, timeout=5)
-            data = res.json()
+            res = requests.get(url, headers=headers, timeout=5).json()
         else:
             url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TW?range=2mo&interval=1d"
-            res = requests.get(url, headers=headers, timeout=5)
-            data = res.json()
-            if not data.get('chart', {}).get('result'):
+            res = requests.get(url, headers=headers, timeout=5).json()
+            if not res.get('chart', {}).get('result'):
                 url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TWO?range=2mo&interval=1d"
-                res = requests.get(url, headers=headers, timeout=5)
-                data = res.json()
+                res = requests.get(url, headers=headers, timeout=5).json()
 
-        result = data['chart']['result'][0]
+        result = res['chart']['result'][0]
         closes = result['indicators']['quote'][0]['close']
         volumes = result['indicators']['quote'][0]['volume']
         valid_closes = [c for c in closes if c is not None]
         valid_vols = [v for v in volumes if v is not None]
-        if len(valid_closes) < 20: return "⚠️ 歷史數據不足。"
-        ma5 = round(sum(valid_closes[-5:]) / 5, 2)
-        ma10 = round(sum(valid_closes[-10:]) / 10, 2)
-        ma20 = round(sum(valid_closes[-20:]) / 20, 2)
-        return f"最新報價 {round(valid_closes[-1], 2)}，成交量 {int(valid_vols[-1] / 1000)}。5MA={ma5}，10MA={ma10}，20MA={ma20}。"
-    except: return "⚠️ 雷達連線受阻。"
+        
+        if len(valid_closes) >= 20:
+            ma5 = round(sum(valid_closes[-5:]) / 5, 2)
+            ma10 = round(sum(valid_closes[-10:]) / 10, 2)
+            ma20 = round(sum(valid_closes[-20:]) / 20, 2)
+            yahoo_ma = f"5MA={ma5}, 10MA={ma10}, 20MA={ma20}"
+            yahoo_price = f"報價:{round(valid_closes[-1], 2)} 量:{int(valid_vols[-1] / 1000)}"
+        else:
+            yahoo_ma = "均線不足"
+    except:
+        yahoo_ma = "連線受阻"
+
+    if stock_code == "^TWII":
+        return f"大盤備援數據 | {yahoo_price}。{yahoo_ma}"
+
+    # [第二階段] 派出游擊隊潛入證交所偷取「絕對即時微觀數據」
+    try:
+        req = requests.Session()
+        # 先打招呼拿通行證
+        req.get('https://mis.twse.com.tw/stock/index.jsp', headers=headers, timeout=3)
+        
+        twse_data = None
+        for market in ['tse', 'otc']:
+            url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={market}_{stock_code}.tw"
+            res = req.get(url, timeout=3).json()
+            if res.get('msgArray'):
+                data = res['msgArray'][0]
+                z = data.get('z', '-') # 最新成交價
+                if z == '-': z = data.get('y', '-') # 若無交易或盤前，用昨收取代
+                h = data.get('h', '-')
+                l = data.get('l', '-')
+                o = data.get('o', '-')
+                v = data.get('v', '-')
+                twse_data = f"🔴證交所即時 最新:{z} (開:{o} 高:{h} 低:{l} 量:{v})"
+                break
+                
+        if twse_data:
+            return f"{twse_data}\n📊Yahoo{yahoo_ma}"
+        else:
+            return f"⚠️游擊隊失聯(備援啟動) | {yahoo_price}。{yahoo_ma}"
+    except:
+        return f"⚠️游擊隊失聯(備援啟動) | {yahoo_price}。{yahoo_ma}"
 
 # ==========================================================
-# 💥 4. 【重裝火力】K線圖繪製與 ImgBB 空投引擎
+# 💥 4. K線圖繪製與 ImgBB 空投引擎 (夜間塗裝版)
 # ==========================================================
 def generate_and_upload_kline(stock_code):
     if not IMGBB_API_KEY:
@@ -118,7 +155,6 @@ def generate_and_upload_kline(stock_code):
         timestamps = result['timestamp']
         quote = result['indicators']['quote'][0]
         
-        # 轉換成 mplfinance 規定的 Pandas 格式
         df = pd.DataFrame({
             'Date': pd.to_datetime(timestamps, unit='s'),
             'Open': quote['open'],
@@ -130,34 +166,30 @@ def generate_and_upload_kline(stock_code):
         df.set_index('Date', inplace=True)
         df.dropna(inplace=True)
         
-        # 在記憶體中作圖 
         buf = io.BytesIO()
-        mc = mpf.make_marketcolors(up='r', down='g', inherit=True) 
-        s  = mpf.make_mpf_style(marketcolors=mc, gridstyle=':')
-        mpf.plot(df, type='candle', style=s, volume=True, 
-                 mav=(5, 10, 20), title=f"Stock {stock_code} (3 Months)", 
-                 savefig=dict(fname=buf, dpi=120, bbox_inches='tight'))
+        mc = mpf.make_marketcolors(up='#ef4444', down='#22c55e', edge='inherit', wick='inherit', volume='inherit')
+        s = mpf.make_mpf_style(
+            marketcolors=mc, facecolor='#020617', figcolor='#0f172a', gridcolor='#1e293b', gridstyle='--',
+            rc={'text.color': '#f8fafc', 'axes.labelcolor': '#f8fafc', 'xtick.color': '#94a3b8', 'ytick.color': '#94a3b8', 'axes.edgecolor': '#334155'}
+        )
+        
+        title_str = "Index ^TWII" if stock_code == "^TWII" else f"Stock {stock_code}"
+        mpf.plot(df, type='candle', style=s, volume=True, mav=(5, 10, 20), title=f"{title_str} (3 Months)", savefig=dict(fname=buf, dpi=150, bbox_inches='tight', facecolor='#0f172a'))
         buf.seek(0)
         
-        # 🚀 發射至 ImgBB 取得公開網址 (使用 Base64 編碼上傳更穩定)
         img_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
         img_url = "https://api.imgbb.com/1/upload"
-        payload = {
-            "key": IMGBB_API_KEY,
-            "image": img_b64
-        }
+        payload = {"key": IMGBB_API_KEY, "image": img_b64}
         
         upload_res = requests.post(img_url, data=payload, timeout=15)
-        
         if upload_res.status_code == 200:
-            return upload_res.json()['data']['url'] # ImgBB 網址欄位是 url
+            return upload_res.json()['data']['url']
         return None
     except Exception as e:
-        print(f"繪圖引擎故障: {e}")
         return None
 
 # ==========================================================
-# 📡 5. Webhook 與過濾中樞
+# 📡 5. Webhook 與過濾中樞 (實戰劇本模組啟動)
 # ==========================================================
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -173,11 +205,12 @@ def handle_message(event):
         user_msg = event.message.text.strip()
         analysis_type = "綜合"
         
+        # 🌟 攔截新指令：劇本
         if user_msg == "大盤": analysis_type = "大盤"
         elif "K線圖" in user_msg: analysis_type, user_msg = "K線圖", user_msg.replace("K線圖", "").strip()
+        elif "劇本" in user_msg or "實戰劇本" in user_msg: analysis_type, user_msg = "劇本", user_msg.replace("實戰劇本", "").replace("劇本", "").strip()
         elif "技術面" in user_msg: analysis_type, user_msg = "技術面", user_msg.replace("技術面", "").strip()
         elif "籌碼面" in user_msg: analysis_type, user_msg = "籌碼面", user_msg.replace("籌碼面", "").strip()
-        elif "基本面" in user_msg: analysis_type, user_msg = "基本面", user_msg.replace("基本面", "").strip()
         elif "題材面" in user_msg: analysis_type, user_msg = "題材面", user_msg.replace("題材面", "").strip()
         elif "同族群" in user_msg: analysis_type, user_msg = "同族群", user_msg.replace("同族群", "").strip()
 
@@ -212,7 +245,6 @@ def handle_message(event):
                 return
 
         if is_stock_query:
-            # 💥 獨立處理 K 線圖空投任務
             if analysis_type == "K線圖":
                 img_url = generate_and_upload_kline(stock_code)
                 if img_url:
@@ -242,15 +274,16 @@ def handle_message(event):
                     elif analysis_type == "籌碼面":
                         prompt = f"你是台股操盤手。根據數據【{real_data}】分析【{stock_query}】籌碼面。150字內：1.大戶意圖 2.散戶心理 3.觀察重點。無免責聲明。"
                         card_title = "🕵️ 籌碼面深度解析"
-                    elif analysis_type == "基本面":
-                        prompt = f"你是台股分析師。分析【{stock_query}】基本面。150字內：1.核心業務 2.產業地位 3.長線價值。無免責聲明。"
-                        card_title = "🏢 基本面價值分析"
                     elif analysis_type == "題材面":
                         prompt = f"你是台股操盤手。分析【{stock_query}】市場題材。150字內：1.強勢概念分類 2.近期利多動能 3.資金關注度。無免責聲明。"
                         card_title = "🔥 題材面動能解析"
                     elif analysis_type == "同族群":
                         prompt = f"你是台股操盤手。尋找【{stock_query}】同族群。150字內：1.列出3~5檔戰友(含代號) 2.族群產業趨勢。無免責聲明。"
                         card_title = "🤝 同族群戰友雷達"
+                    elif analysis_type == "劇本":
+                        # 🌟 專為統帥量身打造的劇本提示詞 (植入扣抵與大戶心理觀念)
+                        prompt = f"你是台股操盤手。請利用均線扣抵觀念與主力籌碼心理，根據即時數據【{real_data}】推演【{stock_query}】實戰劇本。150字內給出具體價位：1.🔥向上突破追擊條件與壓力點 2.🛡️拉回低接防守支撐點 3.☠️跌破停損撤退底線。無免責聲明。"
+                        card_title = "📝 實戰劇本推演"
                     else:
                         prompt = f"你是台股操盤手。根據數據【{real_data}】分析【{stock_query}】。150字內：1.均線趨勢 2.籌碼推測 3.關鍵防守。無免責聲明。"
                         card_title = "🎯 綜合戰術推演"
@@ -279,12 +312,13 @@ def handle_message(event):
                     def get_color(t): return "#2563EB" if analysis_type == t else "#475569"
                     def create_btn(lbl, t, cmd): return {"type": "button", "style": "primary", "color": get_color(t), "height": "sm", "action": {"type": "message", "label": lbl, "text": cmd}}
                     
+                    # 🌟 將第一排的「基本」替換成高價值的「📝劇本」
                     row1 = {
                         "type": "box", "layout": "horizontal", "spacing": "sm",
                         "contents": [
                             create_btn("技術", "技術面", f"技術面 {stock_code}"),
                             create_btn("籌碼", "籌碼面", f"籌碼面 {stock_code}"),
-                            create_btn("基本", "基本面", f"基本面 {stock_code}")
+                            create_btn("📝劇本", "劇本", f"劇本 {stock_code}")
                         ]
                     }
                     row2 = {
@@ -296,7 +330,6 @@ def handle_message(event):
                         ]
                     }
                     
-                    # 獨立放置 📊 K線 按鈕，佔滿全寬，氣勢更強，避免跟小按鈕擠在一起
                     row3 = {
                         "type": "box", "layout": "horizontal", "spacing": "sm", "margin": "md",
                         "contents": [
