@@ -40,14 +40,13 @@ for i in range(1, 6):
 if gemini_keys: key_cycle = itertools.cycle(gemini_keys)
 
 # ==========================================================
-# 📚 2. 台股標的庫 (🌟極致輕量化防爆裝甲版)
+# 📚 2. 台股標的庫 (極致輕量化防爆裝甲版)
 # ==========================================================
 global_stock_dict = {}
 def get_stock_dict():
     global global_stock_dict
     if len(global_stock_dict) > 0: return global_stock_dict
     
-    # 💥 不在開機主線程下載超大JSON，改用FinMind輕量化接口，且縮短超時，防止卡死
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
         url = "https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo"
@@ -56,17 +55,15 @@ def get_stock_dict():
             for item in res.get("data", []):
                 name = item.get("stock_name")
                 sid = item.get("stock_id")
-                if name and sid and len(sid) <= 4: # 只抓核心四大碼股票，極大節省記憶體
+                if name and sid and len(sid) <= 4: 
                     global_stock_dict[name.strip()] = sid.strip()
     except:
         pass
         
-    # 備援防線：萬一完全斷網，手工內建幾檔核心主力，確保基本運作不崩潰
     if len(global_stock_dict) == 0:
         global_stock_dict = {"台積電": "2330", "鴻海": "2317", "聯發科": "2454", "廣達": "2382", "長榮": "2603"}
     return global_stock_dict
 
-# 🚀 背景非同步預載，不阻礙開機進程
 threading.Thread(target=get_stock_dict).start()
 
 # ==========================================================
@@ -218,7 +215,7 @@ def background_async_task(user_id, user_msg, analysis_type, period_arg):
                 current_key = next(key_cycle)
                 try:
                     client = genai.Client(api_key=current_key)
-                    base_prompt = "你是台股操盤手，以直接、果斷的軍事化口吻下達指令。絕不可輸出任何思考過程或廢話。"
+                    base_prompt = "你是台股操盤手，以直接、果斷的軍事化口吻下達指令。絕不可輸出 any 思考過程或廢話。"
                     if analysis_type == "大盤": prompt = f"{base_prompt}根據數據【{real_data}】分析大盤。150字內：1.多空趨勢 2.支撐壓力 3.行動建議(加碼/減碼/觀望)。無免責聲明。"; card_title = "📉 大盤多空雷達"
                     elif analysis_type == "技術面": prompt = f"{base_prompt}根據數據【{real_data}】分析【{stock_query}】技術面。150字內：1.扣抵預判 2.支撐壓力 3.明確指示。無免責聲明。"; card_title = "📈 技術面深度解析"
                     elif analysis_type == "籌碼面": prompt = f"{base_prompt}根據數據【{real_data}】分析【{stock_query}】籌碼面。150字內：1.大戶動能 2.散戶心理 3.明確跟單指示。無免責聲明。"; card_title = "🕵️ 籌碼面深度解析"
@@ -269,10 +266,8 @@ def handle_message(event):
         user_msg = event.message.text.strip()
         user_id = event.source.user_id
         
-        # 👑 【第一擊：搶先秒回安撫文字】
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="🛰️ 雷達已鎖定目標，正全速調閱軍情，請統帥稍候..."))
 
-        # 👑 【純淨版・當日最新戰報直接攔截】
         if user_msg in ["最新戰報", "調閱戰報", "戰報"]:
             timestamp = datetime.datetime.now().strftime("%H%M%S")
             report_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/latest_report.html?v={timestamp}"
@@ -286,7 +281,6 @@ def handle_message(event):
             line_bot_api.push_message(user_id, FlexSendMessage(alt_text="指揮部：最新戰報調閱令", contents=flex_report))
             return
 
-        # 解析 K 線或 AI 模式
         analysis_type = "綜合"; period_arg = "3月"
         if "K線圖" in user_msg: 
             analysis_type = "K線圖"; user_msg = user_msg.replace("K線圖", "").strip()
@@ -301,10 +295,37 @@ def handle_message(event):
 
         if len(user_msg) > 15: return
 
-        # 🚀 【多執行緒出擊】：將沉重的數據運算與 AI 劇本推演包，丟到背景默默執行
         threading.Thread(target=background_async_task, args=(user_id, user_msg, analysis_type, period_arg)).start()
 
     except: pass
 
+# ==========================================================
+# 💥 【免改網頁防禦陣線】直接在程式碼底部注入 Gunicorn 超時配置！
+# ==========================================================
+class StandaloneApplication:
+    def __init__(self, app, options=None):
+        self.options = options or {}
+        self.application = app
+    def run(self):
+        import gunicorn.app.base
+        class FlaskGunicornApp(gunicorn.app.base.BaseApplication):
+            def __init__(self, app, options):
+                self.options = options
+                self.application = app
+                super().__init__()
+            def load_config(self):
+                for key, value in self.options.items():
+                    self.cfg.set(key.lower(), value)
+            def load(self):
+                return self.application
+        FlaskGunicornApp(self.application, self.options).run()
+
 if __name__ == "__main__":
-    app.run(port=5000)
+    # 💥 本地直接執行或 Render 預設啟動時，直接接管並套用 120 秒超時保護與雙執行緒設定！
+    options = {
+        'bind': '0.0.0.0:10000',
+        'workers': 1,
+        'threads': 2,
+        'timeout': 120
+    }
+    StandaloneApplication(app, options).run()
