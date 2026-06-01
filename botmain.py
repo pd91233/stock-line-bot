@@ -2,7 +2,9 @@
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction
+from linebot.models import (
+    MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction, ImageSendMessage
+)
 from google import genai
 import requests
 import os
@@ -20,7 +22,7 @@ import mplfinance as mpf
 app = Flask(__name__)
 
 # ==========================================================
-# 🔑 1. 金鑰設定
+# 🔑 1. API 金鑰與通訊參數設定
 # ==========================================================
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
@@ -37,12 +39,13 @@ for i in range(1, 6):
 if gemini_keys: key_cycle = itertools.cycle(gemini_keys)
 
 # ==========================================================
-# 📚 2. 台股標的庫
+# 📚 2. 台股資料庫 (輕量化防爆模組)
 # ==========================================================
 global_stock_dict = {}
 def get_stock_dict():
     global global_stock_dict
     if len(global_stock_dict) > 0: return global_stock_dict
+    
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
         url = "https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo"
@@ -54,6 +57,7 @@ def get_stock_dict():
                 if name and sid and len(sid) <= 4: 
                     global_stock_dict[name.strip()] = sid.strip()
     except: pass
+        
     if len(global_stock_dict) == 0:
         global_stock_dict = {"台積電": "2330", "鴻海": "2317", "聯發科": "2454", "廣達": "2382", "長榮": "2603"}
     return global_stock_dict
@@ -61,7 +65,7 @@ def get_stock_dict():
 threading.Thread(target=get_stock_dict).start()
 
 # ==========================================================
-# 📊 3. 雙雷達情報中樞
+# 📊 3. 雙通道市場行情分析中心
 # ==========================================================
 def fetch_realtime_data(stock_code):
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -91,12 +95,12 @@ def fetch_realtime_data(stock_code):
             if curr_vol > vol_5ma * 1.5: big_player = "🔥大戶放量攻擊"
             elif curr_vol < vol_5ma * 0.7: big_player = "🧊量縮散戶觀望"
             else: big_player = "⚖️籌碼動能平穩"
-            yahoo_ma = f"均線(5/10/20): {ma5}, {ma10}, {ma20}\n扣抵價: {kd5}, {kd10}, {kd20}\n籌碼: {big_player}"
-            yahoo_price = f"報價:{round(valid_closes[-1], 2)} 量:{int(valid_vols[-1] / 1000)}"
-        else: yahoo_ma = "均線不足"
-    except: yahoo_ma = "連線受阻"
+            yahoo_ma = f"均線數值(5/10/20): {ma5}, {ma10}, {ma20}\n扣抵價位: {kd5}, {kd10}, {kd20}\n籌碼動向: {big_player}"
+            yahoo_price = f"最新收盤:{round(valid_closes[-1], 2)} 成交量:{int(valid_vols[-1] / 1000)}張"
+        else: yahoo_ma = "均線資料庫不足"
+    except: yahoo_ma = "備援線路連線受阻"
 
-    if stock_code == "^TWII": return f"大盤備援數據 | {yahoo_price}。\n{yahoo_ma}"
+    if stock_code == "^TWII": return f"大盤歷史備援數據 | {yahoo_price}。\n{yahoo_ma}"
 
     try:
         req = requests.Session(); req.get('https://mis.twse.com.tw/stock/index.jsp', headers=headers, timeout=1) 
@@ -109,15 +113,15 @@ def fetch_realtime_data(stock_code):
                     data = res['msgArray'][0]; z = data.get('z', '-')
                     if z == '-': z = data.get('y', '-') 
                     h = data.get('h', '-'); l = data.get('l', '-'); v = data.get('v', '-')
-                    twse_data = f"🔴即時 最新:{z} (高:{h} 低:{l} 量:{v})"
+                    twse_data = f"🔴交易所即時成交價:{z} (今日最高:{h} 今日最低:{l} 即時個股量:{v}張)"
                     break
             except: continue 
         if twse_data: return f"{twse_data}\n📊{yahoo_ma}"
-        else: return f"⚠️游擊隊受阻 | {yahoo_price}\n📊{yahoo_ma}"
-    except: return f"⚠️游擊隊受阻 | {yahoo_price}\n📊{yahoo_ma}"
+        else: return f"⚠️盤中即時報價受阻 | {yahoo_price}\n📊{yahoo_ma}"
+    except: return f"⚠️盤中即時報價受阻 | {yahoo_price}\n📊{yahoo_ma}"
 
 # ==========================================================
-# 💥 4. 多維度 K線圖繪製引擎
+# 💥 4. 技術圖表（多維度K線圖）生成中心
 # ==========================================================
 def generate_and_upload_kline(stock_code, period="3月"):
     if not IMGBB_API_KEY: return None
@@ -154,7 +158,7 @@ def generate_and_upload_kline(stock_code, period="3月"):
     except: return None
 
 # ==========================================================
-# 💥 5. 背景非同步重火力推送艙 (改用安全穩定 Push 機制)
+# 💥 5. 背景非同步交易運算中心 (Push 推送機制)
 # ==========================================================
 def background_async_task(user_id, user_msg, analysis_type, period_arg):
     try:
@@ -172,13 +176,13 @@ def background_async_task(user_id, user_msg, analysis_type, period_arg):
                 is_stock_query = True; stock_query = f"{name} ({stock_code})"
             elif len(matches) > 1:
                 choices = "\n".join([f"• {n} ({c})" for n, c in sorted(matches.items(), key=lambda x: len(x[0]))[:10]])
-                line_bot_api.push_message(user_id, TextSendMessage(text=f"📍 找到多筆資料，請確認：\n{choices}"))
+                line_bot_api.push_message(user_id, TextSendMessage(text=f"📍 找到多筆符合名稱，請確認輸入：\n{choices}"))
                 return
             else:
                 try:
                     current_key = next(key_cycle)
                     client = genai.Client(api_key=current_key)
-                    prompt = f"你是台股操盤手，以果斷軍事口吻簡短回應這句話，100字內：{user_msg}"
+                    prompt = f"你是資深證券分析師，請以專業、果斷的操盤手口吻精簡回應這句話，100字內：{user_msg}"
                     response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
                     if response.text: line_bot_api.push_message(user_id, TextSendMessage(text=response.text.strip()))
                 except: pass
@@ -189,15 +193,15 @@ def background_async_task(user_id, user_msg, analysis_type, period_arg):
                 img_url = generate_and_upload_kline(stock_code, period_arg)
                 if img_url: 
                     quick_reply_btns = QuickReply(items=[
-                        QuickReplyButton(action=MessageAction(label="🕐 1日分時", text=f"K線圖 {stock_code} 1日")),
-                        QuickReplyButton(action=MessageAction(label="🕒 5日", text=f"K線圖 {stock_code} 5日")),
-                        QuickReplyButton(action=MessageAction(label="📅 1個月", text=f"K線圖 {stock_code} 1月")),
-                        QuickReplyButton(action=MessageAction(label="📅 6個月", text=f"K線圖 {stock_code} 6月")),
-                        QuickReplyButton(action=MessageAction(label="📆 1年(週K)", text=f"K線圖 {stock_code} 1年")),
-                        QuickReplyButton(action=MessageAction(label="🗺️ 5年(月K)", text=f"K線圖 {stock_code} 5年"))
+                        QuickReplyButton(action=MessageAction(label="🕐 1日分時線", text=f"K線圖 {stock_code} 1日")),
+                        QuickReplyButton(action=MessageAction(label="🕒 5日線", text=f"K線圖 {stock_code} 5日")),
+                        QuickReplyButton(action=MessageAction(label="📅 1個月日K", text=f"K線圖 {stock_code} 1月")),
+                        QuickReplyButton(action=MessageAction(label="📅 6個月日K", text=f"K線圖 {stock_code} 6月")),
+                        QuickReplyButton(action=MessageAction(label="📆 1年週K線", text=f"K線圖 {stock_code} 1年")),
+                        QuickReplyButton(action=MessageAction(label="🗺️ 5年月K線", text=f"K線圖 {stock_code} 5年"))
                     ])
                     line_bot_api.push_message(user_id, ImageSendMessage(original_content_url=img_url, preview_image_url=img_url, quick_reply=quick_reply_btns))
-                else: line_bot_api.push_message(user_id, TextSendMessage(text="⚠️ 報告統帥：K線圖空投失敗"))
+                else: line_bot_api.push_message(user_id, TextSendMessage(text="⚠️ 技術圖表繪製線路異常"))
                 return
 
             real_data = fetch_realtime_data(stock_code)
@@ -208,12 +212,12 @@ def background_async_task(user_id, user_msg, analysis_type, period_arg):
                 current_key = next(key_cycle)
                 try:
                     client = genai.Client(api_key=current_key)
-                    base_prompt = "你是台股操盤手，以直接、果斷的軍事化口吻下達指令。絕不可輸出任何思考過程或廢話。"
-                    if analysis_type == "大盤": prompt = f"{base_prompt}根據數據【{real_data}】分析大盤。150字內：1.多空趨勢 2.支撐壓力 3.行動建議(加碼/減碼/觀望)。無免責聲明。"
-                    elif analysis_type == "技術面": prompt = f"{base_prompt}根據數據【{real_data}】分析【{stock_query}】技術面。150字內：1.扣抵預判 2.支撐壓力 3.明確指示。無免責聲明。"
-                    elif analysis_type == "籌碼面": prompt = f"{base_prompt}根據數據【{real_data}】分析【{stock_query}】籌碼面。150字內：1.大戶動能 2.散戶心理 3.明確跟單指示。無免責聲明。"
-                    elif analysis_type == "劇本": prompt = f"{base_prompt}根據最新報報、均線、扣抵與量能【{real_data}】，為【{stock_query}】制定作戰計畫。150字內給出：1.🎯明確行動 2.🔥攻擊點位 3.🛡️防守點位。無免責聲明。"
-                    else: prompt = f"{base_prompt}根據數據【{real_data}】分析【{stock_query}】。150字內：1.均線趨勢 2.籌碼推測 3.具體防守點。無免責聲明。"
+                    base_prompt = "你是專業台股操盤手，請以直接、果斷的市場交易術語下達具體點位指令。嚴禁輸出任何內部思考思維或冗贅廢話。"
+                    if analysis_type == "大盤": prompt = f"{base_prompt}根據盤勢數據【{real_data}】進行加權指數多空評估。150字內包含：1.多空波段趨勢 2.關鍵支撐與壓力區間 3.交易部位控管策略建議。無須任何免責聲明。"
+                    elif analysis_type == "技術面": prompt = f"{base_prompt}根據技術數據【{real_data}】分析【{stock_query}】技術面。150字內包含：1.均線扣抵位置預判 2.短線多空臨界點 3.明確指示。無須任何免責聲明。"
+                    elif analysis_type == "籌碼面": prompt = f"{base_prompt}根據量能數據【{real_data}】分析【{stock_query}】籌碼面。150字內包含：1.大戶資金進出意圖 2.市場散戶心理狀態評估 3.明確跟單跟隨指示。無須任何免責聲明。"
+                    elif analysis_type == "劇本": prompt = f"{base_prompt}根據最新即時成交價、均線排列、扣抵位置與成交量能數據【{real_data}】，為【{stock_query}】制定下一步明確交易決策。150字內給出：1.🎯明確行動指令(例：現價買進進場/空手觀望/逢高分批獲利入袋/跌破防守線確實停損) 2.🔥上攻突破追擊點位 3.🛡️拉回低接防守支撐點位。必須給出絕對數字價位。無須任何免責聲明。"
+                    else: prompt = f"{base_prompt}根據報價數據【{real_data}】分析【{stock_query}】。150字內給出：1.均線趨勢方向 2.主力持股動向推測 3.關鍵支撐防守價位。無須任何免責聲明。"
 
                     response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
                     if response.text: ai_reply = response.text.strip(); success = True; break 
@@ -221,23 +225,23 @@ def background_async_task(user_id, user_msg, analysis_type, period_arg):
 
             if success:
                 def get_color(t): return "🔵" if analysis_type == t else "⚪"
-                header_text = f"📊 【股海觀浪・戰術推演】\n🎯 標的：{stock_query}\n\n{real_data}\n====================\n{ai_reply}"
+                header_text = f"📊 【市場全景分析・個股盤勢診斷】\n🎯 追蹤標的：{stock_query}\n\n{real_data}\n====================\n{ai_reply}"
                 
-                # 底部純文字控制網格
+                # 下方附隨即時功能鍵
                 row_btns = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label=f"{get_color('技術面')}技術分析", text=f"技術面 {stock_code}")),
-                    QuickReplyButton(action=MessageAction(label=f"{get_color('籌碼面')}籌碼追蹤", text=f"籌碼面 {stock_code}")),
-                    QuickReplyButton(action=MessageAction(label=f"{get_color('劇本')}絕對行動指示", text=f"劇本 {stock_code}")),
+                    QuickReplyButton(action=MessageAction(label=f"{get_color('技術面')}技術分析預判", text=f"技術面 {stock_code}")),
+                    QuickReplyButton(action=MessageAction(label=f"{get_color('籌碼面')}籌碼資金追蹤", text=f"籌碼面 {stock_code}")),
+                    QuickReplyButton(action=MessageAction(label=f"{get_color('劇本')}絕對行動決策指示", text=f"劇本 {stock_code}")),
                     QuickReplyButton(action=MessageAction(label="📊 呼叫 K線圖", text=f"K線圖 {stock_code}"))
                 ])
                 line_bot_api.push_message(user_id, TextSendMessage(text=header_text, quick_reply=row_btns))
     except: pass
 
 # ==========================================================
-# 📡 6. Webhook 中樞 (無條件純文字秒回防線)
+# 📡 6. Webhook 通道 (純文字秒回防線)
 # ==========================================================
 @app.route("/", methods=['GET'])
-def home(): return "前線偵察兵：戰備狀態正常，未休眠！"
+def home(): return "前線看盤伺服器：交易連線狀態正常，常駐清醒中！"
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -252,19 +256,18 @@ def handle_message(event):
         user_msg = event.message.text.strip()
         user_id = event.source.user_id
         
-        # 👑 【核心改裝：無條件純文字秒回超連結】
-        # 如果使用者輸入「戰報」，不走多執行緒，直接在 0.1 秒內把 pCloud 最新網址用一條文字發射出去！
+        # 👑 【精準突圍：最新選股戰報一鍵速回超連結】
         if user_msg in ["最新戰報", "調閱戰報", "戰報"]:
             timestamp = datetime.datetime.now().strftime("%H%M%S")
             report_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/latest_report.html?v={timestamp}"
             
-            broadcast_text = f"📊 【股海觀浪・最新選股戰報】\n========================\n大本營主控台已將本日最新選股策略網頁歸檔至雲端補給線！\n\n🔗 點擊解鎖本日最新戰報 (跳出瀏覽器新視窗)：\n{report_url}"
+            broadcast_text = f"📊 【策略選股大師・當日最新特報】\n========================\n主控台已將本日最新核心選股策略網頁歸檔至雲端補給線！\n\n🔗 點擊解鎖本日最新網頁戰報 (跳出獨立瀏覽器新視窗)：\n{report_url}"
             
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=broadcast_text))
             return
 
-        # 其餘常規股票與 AI 查詢，第一時間先發送安撫文字
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="🛰️ 雷達已鎖定目標，正全速調閱軍情，請統帥稍候..."))
+        # 基礎個股查詢，第一擊搶先秒回，封鎖斷線風險
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="🛰️ 系統已鎖定標的，正全速連線市場報價，請稍候..."))
 
         analysis_type = "綜合"; period_arg = "3月"
         if "K線圖" in user_msg: 
@@ -284,7 +287,7 @@ def handle_message(event):
     except: pass
 
 # ==========================================================
-# 💥 Gunicorn 超時配置內嵌
+# 💥 Gunicorn 免改網頁開機超時配置嵌入
 # ==========================================================
 class StandaloneApplication:
     def __init__(self, app, options=None): self.options = options or {}; self.application = app
