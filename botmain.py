@@ -14,7 +14,7 @@ import itertools
 import io
 import base64
 import datetime
-import threading # 🚀 引入多執行緒戰術：讓耗時計算在背景跑，主執行緒先秒回安撫
+import threading
 import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
@@ -40,22 +40,34 @@ for i in range(1, 6):
 if gemini_keys: key_cycle = itertools.cycle(gemini_keys)
 
 # ==========================================================
-# 📚 2. 台股標的庫 
+# 📚 2. 台股標的庫 (🌟極致輕量化防爆裝甲版)
 # ==========================================================
 global_stock_dict = {}
 def get_stock_dict():
     global global_stock_dict
     if len(global_stock_dict) > 0: return global_stock_dict
+    
+    # 💥 不在開機主線程下載超大JSON，改用FinMind輕量化接口，且縮短超時，防止卡死
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        l_res = requests.get("https://openapi.twse.com.tw/v1/opendata/t187ap03_L", headers=headers, timeout=5, verify=False)
-        if l_res.status_code == 200:
-            for item in l_res.json(): global_stock_dict[item.get('公司簡稱', '').strip()] = item.get('公司代號', '').strip()
-        o_res = requests.get("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O", headers=headers, timeout=5, verify=False)
-        if o_res.status_code == 200:
-            for item in o_res.json(): global_stock_dict[item.get('公司簡稱', '').strip()] = item.get('公司代號', '').strip()
-    except: pass
+        url = "https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo"
+        res = requests.get(url, headers=headers, timeout=3, verify=False).json()
+        if res.get("msg") == "success":
+            for item in res.get("data", []):
+                name = item.get("stock_name")
+                sid = item.get("stock_id")
+                if name and sid and len(sid) <= 4: # 只抓核心四大碼股票，極大節省記憶體
+                    global_stock_dict[name.strip()] = sid.strip()
+    except:
+        pass
+        
+    # 備援防線：萬一完全斷網，手工內建幾檔核心主力，確保基本運作不崩潰
+    if len(global_stock_dict) == 0:
+        global_stock_dict = {"台積電": "2330", "鴻海": "2317", "聯發科": "2454", "廣達": "2382", "長榮": "2603"}
     return global_stock_dict
+
+# 🚀 背景非同步預載，不阻礙開機進程
+threading.Thread(target=get_stock_dict).start()
 
 # ==========================================================
 # 📊 3. 雙雷達情報中樞
@@ -151,7 +163,7 @@ def generate_and_upload_kline(stock_code, period="3月"):
     except: return None
 
 # ==========================================================
-# 💥 5. 【核心改裝】背景重裝重火力計算與推送艙
+# 💥 5. 背景重裝重火力計算與推送艙
 # ==========================================================
 def background_async_task(user_id, user_msg, analysis_type, period_arg):
     try:
@@ -172,7 +184,6 @@ def background_async_task(user_id, user_msg, analysis_type, period_arg):
                 line_bot_api.push_message(user_id, TextSendMessage(text=f"📍 找到多筆資料，請確認：\n{choices}"))
                 return
             else:
-                # 💥 統帥指令：若真的不是股票，也不是預設指令，AI 直接接管聊天（當作一般對話互動秒回）
                 try:
                     current_key = next(key_cycle)
                     client = genai.Client(api_key=current_key)
@@ -240,7 +251,7 @@ def background_async_task(user_id, user_msg, analysis_type, period_arg):
     except: pass
 
 # ==========================================================
-# 📡 6. Webhook 與過濾中樞 (改裝為秒回機制)
+# 📡 6. Webhook 與過濾中樞 (秒回機制)
 # ==========================================================
 @app.route("/", methods=['GET'])
 def home(): return "前線偵察兵：戰備狀態正常，未休眠！"
@@ -259,7 +270,6 @@ def handle_message(event):
         user_id = event.source.user_id
         
         # 👑 【第一擊：搶先秒回安撫文字】
-        # 只要使用者發送任何訊息，在 0.1 秒內無條件回覆，搶占 LINE 的強制斷線限制，絕不當機！
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="🛰️ 雷達已鎖定目標，正全速調閱軍情，請統帥稍候..."))
 
         # 👑 【純淨版・當日最新戰報直接攔截】
@@ -273,7 +283,6 @@ def handle_message(event):
                 "body": {"type": "box", "layout": "vertical", "contents": [{"type": "text", "text": "📡 雲端即時連線成功", "color": "#38BDF8", "weight": "bold", "size": "xs"}, {"type": "text", "text": "大本營主控台已將本日最新選股策略歸檔至雲端，請立刻點擊查閱軍情。", "color": "#94A3B8", "size": "sm", "margin": "md", "wrap": True}]},
                 "footer": {"type": "box", "layout": "vertical", "contents": [{"type": "button", "style": "primary", "color": "#B45309", "action": {"type": "uri", "label": "🔓 解鎖本日最新戰報", "url": report_url}}]}
             }
-            # 因為 reply_token 已經拿去發安撫信號了，後續所有大圖卡一律改用 push_message 發射
             line_bot_api.push_message(user_id, FlexSendMessage(alt_text="指揮部：最新戰報調閱令", contents=flex_report))
             return
 
@@ -292,7 +301,7 @@ def handle_message(event):
 
         if len(user_msg) > 15: return
 
-        # 🚀 【多執行緒出擊】：將沉重的數據運算與 AI 劇本推演包，丟到背景默默執行，絕不阻塞前線通道！
+        # 🚀 【多執行緒出擊】：將沉重的數據運算與 AI 劇本推演包，丟到背景默默執行
         threading.Thread(target=background_async_task, args=(user_id, user_msg, analysis_type, period_arg)).start()
 
     except: pass
