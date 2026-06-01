@@ -3,7 +3,8 @@ from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
-    MessageEvent, TextMessage, TextSendMessage, FlexSendMessage, ImageSendMessage
+    MessageEvent, TextMessage, TextSendMessage, FlexSendMessage, ImageSendMessage,
+    QuickReply, QuickReplyButton, MessageAction
 )
 from google import genai
 import requests
@@ -20,7 +21,7 @@ import mplfinance as mpf
 app = Flask(__name__)
 
 # ==========================================================
-# 🔑 1. 金鑰設定與輪轉彈匣
+# 🔑 1. 金鑰設定
 # ==========================================================
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
@@ -49,17 +50,17 @@ def get_stock_dict():
     if len(global_stock_dict) > 0: return global_stock_dict
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        l_res = requests.get("https://openapi.twse.com.tw/v1/opendata/t187ap03_L", headers=headers, timeout=10, verify=False)
+        l_res = requests.get("https://openapi.twse.com.tw/v1/opendata/t187ap03_L", headers=headers, timeout=5, verify=False)
         if l_res.status_code == 200:
             for item in l_res.json(): global_stock_dict[item.get('公司簡稱', '').strip()] = item.get('公司代號', '').strip()
-        o_res = requests.get("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O", headers=headers, timeout=10, verify=False)
+        o_res = requests.get("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O", headers=headers, timeout=5, verify=False)
         if o_res.status_code == 200:
             for item in o_res.json(): global_stock_dict[item.get('公司簡稱', '').strip()] = item.get('公司代號', '').strip()
     except: pass
     if len(global_stock_dict) == 0:
         try:
             url = "https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo"
-            res = requests.get(url, timeout=10, verify=False).json()
+            res = requests.get(url, timeout=5, verify=False).json()
             if res.get("msg") == "success":
                 for item in res.get("data", []):
                     if item.get("stock_name") and item.get("stock_id"):
@@ -68,24 +69,23 @@ def get_stock_dict():
     return global_stock_dict
 
 # ==========================================================
-# 📊 3. 雙雷達情報中樞 (TWSE 即時偷價 + Yahoo 均線備援)
+# 📊 3. 雙雷達情報中樞 
 # ==========================================================
 def fetch_realtime_data(stock_code):
     headers = {"User-Agent": "Mozilla/5.0"}
     yahoo_ma = ""
     yahoo_price = ""
     
-    # [第一階段] 取得 Yahoo 宏觀均線數據
     try:
         if stock_code == "^TWII":
             url = "https://query1.finance.yahoo.com/v8/finance/chart/^TWII?range=2mo&interval=1d"
-            res = requests.get(url, headers=headers, timeout=5).json()
+            res = requests.get(url, headers=headers, timeout=2).json()
         else:
             url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TW?range=2mo&interval=1d"
-            res = requests.get(url, headers=headers, timeout=5).json()
+            res = requests.get(url, headers=headers, timeout=2).json()
             if not res.get('chart', {}).get('result'):
                 url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TWO?range=2mo&interval=1d"
-                res = requests.get(url, headers=headers, timeout=5).json()
+                res = requests.get(url, headers=headers, timeout=2).json()
 
         result = res['chart']['result'][0]
         closes = result['indicators']['quote'][0]['close']
@@ -107,89 +107,105 @@ def fetch_realtime_data(stock_code):
     if stock_code == "^TWII":
         return f"大盤備援數據 | {yahoo_price}。{yahoo_ma}"
 
-    # [第二階段] 派出游擊隊潛入證交所偷取「絕對即時微觀數據」
     try:
         req = requests.Session()
-        # 先打招呼拿通行證
-        req.get('https://mis.twse.com.tw/stock/index.jsp', headers=headers, timeout=3)
+        req.get('https://mis.twse.com.tw/stock/index.jsp', headers=headers, timeout=1) 
         
         twse_data = None
         for market in ['tse', 'otc']:
-            url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={market}_{stock_code}.tw"
-            res = req.get(url, timeout=3).json()
-            if res.get('msgArray'):
-                data = res['msgArray'][0]
-                z = data.get('z', '-') # 最新成交價
-                if z == '-': z = data.get('y', '-') # 若無交易或盤前，用昨收取代
-                h = data.get('h', '-')
-                l = data.get('l', '-')
-                o = data.get('o', '-')
-                v = data.get('v', '-')
-                twse_data = f"🔴證交所即時 最新:{z} (開:{o} 高:{h} 低:{l} 量:{v})"
-                break
+            try:
+                url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={market}_{stock_code}.tw"
+                res = req.get(url, timeout=1).json() 
+                if res.get('msgArray'):
+                    data = res['msgArray'][0]
+                    z = data.get('z', '-')
+                    if z == '-': z = data.get('y', '-') 
+                    h = data.get('h', '-')
+                    l = data.get('l', '-')
+                    o = data.get('o', '-')
+                    v = data.get('v', '-')
+                    twse_data = f"🔴證交所即時 最新:{z} (開:{o} 高:{h} 低:{l} 量:{v})"
+                    break
+            except:
+                continue 
                 
         if twse_data:
             return f"{twse_data}\n📊Yahoo{yahoo_ma}"
         else:
-            return f"⚠️游擊隊失聯(備援啟動) | {yahoo_price}。{yahoo_ma}"
+            return f"⚠️游擊隊受阻(極速備援) | {yahoo_price}。{yahoo_ma}"
     except:
-        return f"⚠️游擊隊失聯(備援啟動) | {yahoo_price}。{yahoo_ma}"
+        return f"⚠️游擊隊受阻(極速備援) | {yahoo_price}。{yahoo_ma}"
 
 # ==========================================================
-# 💥 4. K線圖繪製與 ImgBB 空投引擎 (夜間塗裝版)
+# 💥 4. 多維度 K線圖繪製引擎 (支援 1日~5年)
 # ==========================================================
-def generate_and_upload_kline(stock_code):
-    if not IMGBB_API_KEY:
-        return None
+def generate_and_upload_kline(stock_code, period="3月"):
+    if not IMGBB_API_KEY: return None
+    
+    # 🌟 根據統帥要求，切換不同時間區間與 K 棒頻率
+    period_map = {
+        "1日": ("1d", "5m"),     # 1天內，每5分鐘一根K棒
+        "5日": ("5d", "15m"),    # 5天內，每15分鐘一根K棒
+        "1月": ("1mo", "1d"),    # 1個月，日K
+        "3月": ("3mo", "1d"),    # 3個月，日K
+        "6月": ("6mo", "1d"),    # 6個月，日K
+        "1年": ("1y", "1wk"),    # 1年，週K (濾掉雜訊)
+        "5年": ("5y", "1mo")     # 5年，月K (看超長線大底)
+    }
+    
+    if period not in period_map:
+        period = "3月"
+        
+    rng, intv = period_map[period]
+    
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
         suffix = "" if stock_code == "^TWII" else ".TW"
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}{suffix}?range=3mo&interval=1d"
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}{suffix}?range={rng}&interval={intv}"
         res = requests.get(url, headers=headers, timeout=5).json()
         
         if not res.get('chart', {}).get('result') and stock_code != "^TWII":
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TWO?range=3mo&interval=1d"
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TWO?range={rng}&interval={intv}"
             res = requests.get(url, headers=headers, timeout=5).json()
             
         result = res['chart']['result'][0]
         timestamps = result['timestamp']
         quote = result['indicators']['quote'][0]
         
+        # 轉換時間並修正為台灣時區 (+8小時)，避免分時圖時間錯亂
         df = pd.DataFrame({
-            'Date': pd.to_datetime(timestamps, unit='s'),
-            'Open': quote['open'],
-            'High': quote['high'],
-            'Low': quote['low'],
-            'Close': quote['close'],
-            'Volume': quote['volume']
+            'Date': pd.to_datetime(timestamps, unit='s') + pd.Timedelta(hours=8),
+            'Open': quote['open'], 'High': quote['high'], 'Low': quote['low'], 
+            'Close': quote['close'], 'Volume': quote['volume']
         })
         df.set_index('Date', inplace=True)
         df.dropna(inplace=True)
         
+        # 極短線 (1日/5日) 取消均線顯示，其餘維持 5, 10, 20
+        mav_setting = None if period in ["1日", "5日"] else (5, 10, 20)
+        
         buf = io.BytesIO()
         mc = mpf.make_marketcolors(up='#ef4444', down='#22c55e', edge='inherit', wick='inherit', volume='inherit')
-        s = mpf.make_mpf_style(
-            marketcolors=mc, facecolor='#020617', figcolor='#0f172a', gridcolor='#1e293b', gridstyle='--',
-            rc={'text.color': '#f8fafc', 'axes.labelcolor': '#f8fafc', 'xtick.color': '#94a3b8', 'ytick.color': '#94a3b8', 'axes.edgecolor': '#334155'}
-        )
+        s = mpf.make_mpf_style(marketcolors=mc, facecolor='#020617', figcolor='#0f172a', gridcolor='#1e293b', gridstyle='--', rc={'text.color': '#f8fafc', 'axes.labelcolor': '#f8fafc', 'xtick.color': '#94a3b8', 'ytick.color': '#94a3b8', 'axes.edgecolor': '#334155'})
         
         title_str = "Index ^TWII" if stock_code == "^TWII" else f"Stock {stock_code}"
-        mpf.plot(df, type='candle', style=s, volume=True, mav=(5, 10, 20), title=f"{title_str} (3 Months)", savefig=dict(fname=buf, dpi=150, bbox_inches='tight', facecolor='#0f172a'))
+        
+        # 畫圖
+        if mav_setting:
+            mpf.plot(df, type='candle', style=s, volume=True, mav=mav_setting, title=f"{title_str} ({period})", savefig=dict(fname=buf, dpi=150, bbox_inches='tight', facecolor='#0f172a'))
+        else:
+            mpf.plot(df, type='candle', style=s, volume=True, title=f"{title_str} ({period})", savefig=dict(fname=buf, dpi=150, bbox_inches='tight', facecolor='#0f172a'))
+            
         buf.seek(0)
         
         img_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-        img_url = "https://api.imgbb.com/1/upload"
-        payload = {"key": IMGBB_API_KEY, "image": img_b64}
-        
-        upload_res = requests.post(img_url, data=payload, timeout=15)
-        if upload_res.status_code == 200:
-            return upload_res.json()['data']['url']
+        upload_res = requests.post("https://api.imgbb.com/1/upload", data={"key": IMGBB_API_KEY, "image": img_b64}, timeout=15)
+        if upload_res.status_code == 200: return upload_res.json()['data']['url']
         return None
-    except Exception as e:
-        return None
+    except: return None
 
 # ==========================================================
-# 📡 5. Webhook 與過濾中樞 (實戰劇本模組啟動)
+# 📡 5. Webhook 與過濾中樞
 # ==========================================================
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -204,10 +220,18 @@ def handle_message(event):
     try:
         user_msg = event.message.text.strip()
         analysis_type = "綜合"
+        period_arg = "3月" # 預設 K 線區間
         
-        # 🌟 攔截新指令：劇本
-        if user_msg == "大盤": analysis_type = "大盤"
-        elif "K線圖" in user_msg: analysis_type, user_msg = "K線圖", user_msg.replace("K線圖", "").strip()
+        # 🌟 攔截並解析 K線圖的時間區間 (例如：K線圖 2330 1年)
+        if "K線圖" in user_msg: 
+            analysis_type = "K線圖"
+            user_msg = user_msg.replace("K線圖", "").strip()
+            for p in ["1日", "5日", "1月", "3月", "6月", "1年", "5年"]:
+                if p in user_msg:
+                    period_arg = p
+                    user_msg = user_msg.replace(p, "").strip()
+
+        elif user_msg == "大盤": analysis_type = "大盤"
         elif "劇本" in user_msg or "實戰劇本" in user_msg: analysis_type, user_msg = "劇本", user_msg.replace("實戰劇本", "").replace("劇本", "").strip()
         elif "技術面" in user_msg: analysis_type, user_msg = "技術面", user_msg.replace("技術面", "").strip()
         elif "籌碼面" in user_msg: analysis_type, user_msg = "籌碼面", user_msg.replace("籌碼面", "").strip()
@@ -245,11 +269,24 @@ def handle_message(event):
                 return
 
         if is_stock_query:
+            # 💥 獨立處理多維度 K 線圖空投
             if analysis_type == "K線圖":
-                img_url = generate_and_upload_kline(stock_code)
-                if img_url:
-                    line_bot_api.reply_message(event.reply_token, ImageSendMessage(original_content_url=img_url, preview_image_url=img_url))
-                else:
+                img_url = generate_and_upload_kline(stock_code, period_arg)
+                if img_url: 
+                    # 🌟 製作時間切換彈匣 (Quick Reply Pills)，附著在圖片下方
+                    quick_reply_btns = QuickReply(items=[
+                        QuickReplyButton(action=MessageAction(label="🕐 1日分時", text=f"K線圖 {stock_code} 1日")),
+                        QuickReplyButton(action=MessageAction(label="🕒 5日", text=f"K線圖 {stock_code} 5日")),
+                        QuickReplyButton(action=MessageAction(label="📅 1個月", text=f"K線圖 {stock_code} 1月")),
+                        QuickReplyButton(action=MessageAction(label="📅 6個月", text=f"K線圖 {stock_code} 6月")),
+                        QuickReplyButton(action=MessageAction(label="📆 1年(週K)", text=f"K線圖 {stock_code} 1年")),
+                        QuickReplyButton(action=MessageAction(label="🗺️ 5年(月K)", text=f"K線圖 {stock_code} 5年"))
+                    ])
+                    line_bot_api.reply_message(
+                        event.reply_token, 
+                        ImageSendMessage(original_content_url=img_url, preview_image_url=img_url, quick_reply=quick_reply_btns)
+                    )
+                else: 
                     line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 報告統帥：K線圖空投失敗 (請確認 ImgBB 金鑰是否安裝正確)"))
                 return
 
@@ -264,100 +301,34 @@ def handle_message(event):
                 current_key = next(key_cycle)
                 try:
                     client = genai.Client(api_key=current_key)
-                    
-                    if analysis_type == "大盤":
-                        prompt = f"你是台股操盤手。根據數據【{real_data}】分析大盤。150字內：1.多空趨勢 2.支撐壓力 3.戰略建議。無免責聲明。"
-                        card_title = "📉 大盤多空雷達"
-                    elif analysis_type == "技術面":
-                        prompt = f"你是台股操盤手。根據數據【{real_data}】分析【{stock_query}】技術面。150字內：1.均線乖離 2.支撐壓力 3.觀察重點。無免責聲明。"
-                        card_title = "📈 技術面深度解析"
-                    elif analysis_type == "籌碼面":
-                        prompt = f"你是台股操盤手。根據數據【{real_data}】分析【{stock_query}】籌碼面。150字內：1.大戶意圖 2.散戶心理 3.觀察重點。無免責聲明。"
-                        card_title = "🕵️ 籌碼面深度解析"
-                    elif analysis_type == "題材面":
-                        prompt = f"你是台股操盤手。分析【{stock_query}】市場題材。150字內：1.強勢概念分類 2.近期利多動能 3.資金關注度。無免責聲明。"
-                        card_title = "🔥 題材面動能解析"
-                    elif analysis_type == "同族群":
-                        prompt = f"你是台股操盤手。尋找【{stock_query}】同族群。150字內：1.列出3~5檔戰友(含代號) 2.族群產業趨勢。無免責聲明。"
-                        card_title = "🤝 同族群戰友雷達"
-                    elif analysis_type == "劇本":
-                        # 🌟 專為統帥量身打造的劇本提示詞 (植入扣抵與大戶心理觀念)
-                        prompt = f"你是台股操盤手。請利用均線扣抵觀念與主力籌碼心理，根據即時數據【{real_data}】推演【{stock_query}】實戰劇本。150字內給出具體價位：1.🔥向上突破追擊條件與壓力點 2.🛡️拉回低接防守支撐點 3.☠️跌破停損撤退底線。無免責聲明。"
-                        card_title = "📝 實戰劇本推演"
-                    else:
-                        prompt = f"你是台股操盤手。根據數據【{real_data}】分析【{stock_query}】。150字內：1.均線趨勢 2.籌碼推測 3.關鍵防守。無免責聲明。"
-                        card_title = "🎯 綜合戰術推演"
+                    if analysis_type == "大盤": prompt = f"你是台股操盤手。根據數據【{real_data}】分析大盤。150字內：1.多空趨勢 2.支撐壓力 3.戰略建議。無免責聲明。"; card_title = "📉 大盤多空雷達"
+                    elif analysis_type == "技術面": prompt = f"你是台股操盤手。根據數據【{real_data}】分析【{stock_query}】技術面。150字內：1.均線乖離 2.支撐壓力 3.觀察重點。無免責聲明。"; card_title = "📈 技術面深度解析"
+                    elif analysis_type == "籌碼面": prompt = f"你是台股操盤手。根據數據【{real_data}】分析【{stock_query}】籌碼面。150字內：1.大戶意圖 2.散戶心理 3.觀察重點。無免責聲明。"; card_title = "🕵️ 籌碼面深度解析"
+                    elif analysis_type == "題材面": prompt = f"你是台股操盤手。分析【{stock_query}】市場題材。150字內：1.強勢概念分類 2.近期利多動能 3.資金關注度。無免責聲明。"; card_title = "🔥 題材面動能解析"
+                    elif analysis_type == "同族群": prompt = f"你是台股操盤手。尋找【{stock_query}】同族群。150字內：1.列出3~5檔戰友(含代號) 2.族群產業趨勢。無免責聲明。"; card_title = "🤝 同族群戰友雷達"
+                    elif analysis_type == "劇本": prompt = f"你是台股操盤手。請利用均線扣抵觀念與籌碼心理，根據數據【{real_data}】推演【{stock_query}】。150字內給出具體價位：1.🔥向上突破追擊條件與壓力點 2.🛡️拉回低接防守支撐點 3.☠️跌破停損撤退底線。無免責聲明。"; card_title = "📝 實戰劇本推演"
+                    else: prompt = f"你是台股操盤手。根據數據【{real_data}】分析【{stock_query}】。150字內：1.均線趨勢 2.籌碼推測 3.關鍵防守。無免責聲明。"; card_title = "🎯 綜合戰術推演"
 
                     response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
                     if not response.text: raise ValueError("空白")
                     ai_reply = response.text.strip()
                     success = True
                     break 
-                except Exception as e:
-                    attempts += 1
+                except: attempts += 1
 
             if success:
                 footer_contents = []
                 if analysis_type == "大盤":
-                    footer_contents = [
-                        {
-                            "type": "box", "layout": "horizontal", "spacing": "sm",
-                            "contents": [
-                                {"type": "button", "style": "primary", "color": "#1E3A8A", "height": "sm", "action": {"type": "message", "label": "📊 K線", "text": "K線圖 大盤"}},
-                                {"type": "button", "style": "primary", "color": "#1E3A8A", "height": "sm", "action": {"type": "message", "label": "台積電", "text": "2330"}}
-                            ]
-                        }
-                    ]
+                    footer_contents = [{"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [{"type": "button", "style": "primary", "color": "#1E3A8A", "height": "sm", "action": {"type": "message", "label": "📊 K線", "text": "K線圖 大盤"}}, {"type": "button", "style": "primary", "color": "#1E3A8A", "height": "sm", "action": {"type": "message", "label": "台積電", "text": "2330"}}]}]
                 else:
                     def get_color(t): return "#2563EB" if analysis_type == t else "#475569"
                     def create_btn(lbl, t, cmd): return {"type": "button", "style": "primary", "color": get_color(t), "height": "sm", "action": {"type": "message", "label": lbl, "text": cmd}}
-                    
-                    # 🌟 將第一排的「基本」替換成高價值的「📝劇本」
-                    row1 = {
-                        "type": "box", "layout": "horizontal", "spacing": "sm",
-                        "contents": [
-                            create_btn("技術", "技術面", f"技術面 {stock_code}"),
-                            create_btn("籌碼", "籌碼面", f"籌碼面 {stock_code}"),
-                            create_btn("📝劇本", "劇本", f"劇本 {stock_code}")
-                        ]
-                    }
-                    row2 = {
-                        "type": "box", "layout": "horizontal", "spacing": "sm", "margin": "md",
-                        "contents": [
-                            create_btn("題材", "題材面", f"題材面 {stock_code}"),
-                            create_btn("族群", "同族群", f"同族群 {stock_code}"),
-                            {"type": "button", "style": "primary", "color": "#334155", "height": "sm", "action": {"type": "message", "label": "大盤", "text": "大盤"}}
-                        ]
-                    }
-                    
-                    row3 = {
-                        "type": "box", "layout": "horizontal", "spacing": "sm", "margin": "md",
-                        "contents": [
-                            {"type": "button", "style": "primary", "color": "#B91C1C", "height": "sm", "action": {"type": "message", "label": "📊 呼叫 K線圖", "text": f"K線圖 {stock_code}"}}
-                        ]
-                    }
+                    row1 = {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [create_btn("技術", "技術面", f"技術面 {stock_code}"), create_btn("籌碼", "籌碼面", f"籌碼面 {stock_code}"), create_btn("📝劇本", "劇本", f"劇本 {stock_code}")]}
+                    row2 = {"type": "box", "layout": "horizontal", "spacing": "sm", "margin": "md", "contents": [create_btn("題材", "題材面", f"題材面 {stock_code}"), create_btn("族群", "同族群", f"同族群 {stock_code}"), {"type": "button", "style": "primary", "color": "#334155", "height": "sm", "action": {"type": "message", "label": "大盤", "text": "大盤"}}]}
+                    row3 = {"type": "box", "layout": "horizontal", "spacing": "sm", "margin": "md", "contents": [{"type": "button", "style": "primary", "color": "#B91C1C", "height": "sm", "action": {"type": "message", "label": "📊 呼叫 K線圖", "text": f"K線圖 {stock_code}"}}]}
                     footer_contents = [row1, row2, row3]
 
-                flex_content = {
-                    "type": "bubble",
-                    "styles": {"header": {"backgroundColor": "#1A365D"}, "body": {"backgroundColor": "#F7FAFC"}, "footer": {"backgroundColor": "#0F172A"}},
-                    "header": {
-                        "type": "box", "layout": "vertical",
-                        "contents": [
-                            {"type": "text", "text": card_title, "color": "#D69E2E", "weight": "bold", "size": "sm"},
-                            {"type": "text", "text": stock_query, "color": "#FFFFFF", "weight": "bold", "size": "xl", "margin": "md"}
-                        ]
-                    },
-                    "body": {
-                        "type": "box", "layout": "vertical",
-                        "contents": [
-                            {"type": "text", "text": f"📊 雷達數據：\n{real_data}", "color": "#1A365D", "size": "xs", "weight": "bold", "wrap": True},
-                            {"type": "separator", "margin": "md"},
-                            {"type": "text", "text": ai_reply, "color": "#2D3748", "wrap": True, "size": "sm", "margin": "md"}
-                        ]
-                    },
-                    "footer": {"type": "box", "layout": "vertical", "paddingAll": "md", "contents": footer_contents}
-                }
+                flex_content = {"type": "bubble", "styles": {"header": {"backgroundColor": "#1A365D"}, "body": {"backgroundColor": "#F7FAFC"}, "footer": {"backgroundColor": "#0F172A"}}, "header": {"type": "box", "layout": "vertical", "contents": [{"type": "text", "text": card_title, "color": "#D69E2E", "weight": "bold", "size": "sm"}, {"type": "text", "text": stock_query, "color": "#FFFFFF", "weight": "bold", "size": "xl", "margin": "md"}]}, "body": {"type": "box", "layout": "vertical", "contents": [{"type": "text", "text": f"📊 雷達數據：\n{real_data}", "color": "#1A365D", "size": "xs", "weight": "bold", "wrap": True}, {"type": "separator", "margin": "md"}, {"type": "text", "text": ai_reply, "color": "#2D3748", "wrap": True, "size": "sm", "margin": "md"}]}, "footer": {"type": "box", "layout": "vertical", "paddingAll": "md", "contents": footer_contents}}
                 line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text=f"戰報：{stock_query}", contents=flex_content))
             else:
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 報告統帥：AI 金鑰連線異常，或觸發金融防護限制！"))
