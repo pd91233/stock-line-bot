@@ -14,6 +14,7 @@ import itertools
 import io
 import base64
 import datetime
+import threading # 🚀 引入多執行緒戰術：讓耗時計算在背景跑，主執行緒先秒回安撫
 import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
@@ -150,68 +151,10 @@ def generate_and_upload_kline(stock_code, period="3月"):
     except: return None
 
 # ==========================================================
-# 📡 5. Webhook 與過濾中樞
+# 💥 5. 【核心改裝】背景重裝重火力計算與推送艙
 # ==========================================================
-@app.route("/", methods=['GET'])
-def home(): return "前線偵察兵：戰備狀態正常，未休眠！"
-
-@app.route("/callback", methods=['POST'])
-def callback():
-    signature = request.headers['X-Line-Signature']; body = request.get_data(as_text=True)
-    try: handler.handle(body, signature)
-    except InvalidSignatureError: abort(400)
-    return 'OK'
-
-@handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
+def background_async_task(user_id, user_msg, analysis_type, period_arg):
     try:
-        user_msg = event.message.text.strip()
-        
-        # 👑 【純淨版・當日最新戰報攔截】
-        if user_msg in ["最新戰報", "調閱戰報", "戰報"]:
-            # 使用高精準時間戳防網頁快取 (Cache)
-            timestamp = datetime.datetime.now().strftime("%H%M%S")
-            report_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/latest_report.html?v={timestamp}"
-
-            flex_report = {
-                "type": "bubble",
-                "styles": {"header": {"backgroundColor": "#1E1B4B"}, "body": {"backgroundColor": "#0F172A"}, "footer": {"backgroundColor": "#020617"}},
-                "header": {
-                    "type": "box", "layout": "vertical",
-                    "contents": [{"type": "text", "text": "⚔️ 股海觀浪・最新戰報", "color": "#FBBF24", "weight": "bold", "size": "lg"}]
-                },
-                "body": {
-                    "type": "box", "layout": "vertical",
-                    "contents": [
-                        {"type": "text", "text": "📡 雲端即時連線成功", "color": "#38BDF8", "weight": "bold", "size": "xs"},
-                        {"type": "text", "text": "大本營主控台已將本日最新選股策略歸檔至雲端，請立刻點擊查閱軍情。", "color": "#94A3B8", "size": "sm", "margin": "md", "wrap": True}
-                    ]
-                },
-                "footer": {
-                    "type": "box", "layout": "vertical",
-                    "contents": [
-                        {"type": "button", "style": "primary", "color": "#B45309", "action": {"type": "uri", "label": "🔓 解鎖本日最新戰報", "url": report_url}}
-                    ]
-                }
-            }
-            line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="指揮部：最新戰報調閱令", contents=flex_report))
-            return
-
-        # ---- 以下維持原本的 K線與 AI 指令流 ----
-        analysis_type = "綜合"; period_arg = "3月"
-        
-        if "K線圖" in user_msg: 
-            analysis_type = "K線圖"; user_msg = user_msg.replace("K線圖", "").strip()
-            for p in ["1日", "5日", "1月", "3月", "6月", "1年", "5年"]:
-                if p in user_msg: period_arg = p; user_msg = user_msg.replace(p, "").strip()
-        elif user_msg == "大盤": analysis_type = "大盤"
-        elif "劇本" in user_msg or "實戰劇本" in user_msg: analysis_type, user_msg = "劇本", user_msg.replace("實戰劇本", "").replace("劇本", "").strip()
-        elif "技術面" in user_msg: analysis_type, user_msg = "技術面", user_msg.replace("技術面", "").strip()
-        elif "籌碼面" in user_msg: analysis_type, user_msg = "籌碼面", user_msg.replace("籌碼面", "").strip()
-        elif "題材面" in user_msg: analysis_type, user_msg = "題材面", user_msg.replace("題材面", "").strip()
-        elif "同族群" in user_msg: analysis_type, user_msg = "同族群", user_msg.replace("同族群", "").strip()
-
-        if len(user_msg) > 15: return
         is_stock_query = False; stock_query = ""; stock_code = ""
 
         if analysis_type == "大盤" or user_msg == "大盤":
@@ -226,9 +169,19 @@ def handle_message(event):
                 is_stock_query = True; stock_query = f"{name} ({stock_code})"
             elif len(matches) > 1:
                 choices = "\n".join([f"• {n} ({c})" for n, c in sorted(matches.items(), key=lambda x: len(x[0]))[:10]])
-                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"📍 找到多筆資料，請確認：\n{choices}"))
+                line_bot_api.push_message(user_id, TextSendMessage(text=f"📍 找到多筆資料，請確認：\n{choices}"))
                 return
-            else: return
+            else:
+                # 💥 統帥指令：若真的不是股票，也不是預設指令，AI 直接接管聊天（當作一般對話互動秒回）
+                try:
+                    current_key = next(key_cycle)
+                    client = genai.Client(api_key=current_key)
+                    prompt = f"你是台股操盤手，以果斷軍事口吻簡短回應這句話，100字內：{user_msg}"
+                    response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+                    if response.text:
+                        line_bot_api.push_message(user_id, TextSendMessage(text=response.text.strip()))
+                except: pass
+                return
 
         if is_stock_query:
             if analysis_type == "K線圖":
@@ -242,8 +195,8 @@ def handle_message(event):
                         QuickReplyButton(action=MessageAction(label="📆 1年(週K)", text=f"K線圖 {stock_code} 1年")),
                         QuickReplyButton(action=MessageAction(label="🗺️ 5年(月K)", text=f"K線圖 {stock_code} 5年"))
                     ])
-                    line_bot_api.reply_message(event.reply_token, ImageSendMessage(original_content_url=img_url, preview_image_url=img_url, quick_reply=quick_reply_btns))
-                else: line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 報告統帥：K線圖空投失敗"))
+                    line_bot_api.push_message(user_id, ImageSendMessage(original_content_url=img_url, preview_image_url=img_url, quick_reply=quick_reply_btns))
+                else: line_bot_api.push_message(user_id, TextSendMessage(text="⚠️ 報告統帥：K線圖空投失敗"))
                 return
 
             real_data = fetch_realtime_data(stock_code)
@@ -261,7 +214,7 @@ def handle_message(event):
                     elif analysis_type == "劇本": 
                         prompt = f"{base_prompt}根據最新報價、均線、扣抵價與量能【{real_data}】，為【{stock_query}】制定作戰計畫。150字內給出：1. 🎯明確行動(例：現價進場/空手觀望/逢高停利/破線停損) 2. 🔥攻擊點位(過X元追擊) 3. 🛡️防守點位(破Y元撤退)。必須有絕對數字，不可含糊其辭。無免責聲明。"
                         card_title = "📝 絕對行動劇本"
-                    else: prompt = f"{base_prompt}根據數據【{real_data}】分析【{stock_query}】。150字內：1.均線趨勢 2.籌碼推測 3.具體防守點.無免責聲明。"; card_title = "🎯 綜合戰術推演"
+                    else: prompt = f"{base_prompt}根據數據【{real_data}】分析【{stock_query}】。150字內：1.均線趨勢 2.籌碼推測 3.具體防守點。無免責聲明。"; card_title = "🎯 綜合戰術推演"
 
                     response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
                     if not response.text: raise ValueError("空白")
@@ -281,9 +234,67 @@ def handle_message(event):
                     footer_contents = [row1, row2, row3]
 
                 flex_content = {"type": "bubble", "styles": {"header": {"backgroundColor": "#1A365D"}, "body": {"backgroundColor": "#F7FAFC"}, "footer": {"backgroundColor": "#0F172A"}}, "header": {"type": "box", "layout": "vertical", "contents": [{"type": "text", "text": card_title, "color": "#D69E2E", "weight": "bold", "size": "sm"}, {"type": "text", "text": stock_query, "color": "#FFFFFF", "weight": "bold", "size": "xl", "margin": "md"}]}, "body": {"type": "box", "layout": "vertical", "contents": [{"type": "text", "text": f"📊 雷達數據：\n{real_data}", "color": "#1A365D", "size": "xs", "weight": "bold", "wrap": True}, {"type": "separator", "margin": "md"}, {"type": "text", "text": ai_reply, "color": "#2D3748", "wrap": True, "size": "sm", "margin": "md"}]}, "footer": {"type": "box", "layout": "vertical", "paddingAll": "md", "contents": footer_contents}}
-                line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text=f"戰報：{stock_query}", contents=flex_content))
+                line_bot_api.push_message(user_id, FlexSendMessage(alt_text=f"戰報：{stock_query}", contents=flex_content))
             else:
-                line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 報告統帥：AI 金鑰連線異常！"))
+                line_bot_api.push_message(user_id, TextSendMessage(text="⚠️ 報告統帥：AI 金鑰連線異常！"))
+    except: pass
+
+# ==========================================================
+# 📡 6. Webhook 與過濾中樞 (改裝為秒回機制)
+# ==========================================================
+@app.route("/", methods=['GET'])
+def home(): return "前線偵察兵：戰備狀態正常，未休眠！"
+
+@app.route("/callback", methods=['POST'])
+def callback():
+    signature = request.headers['X-Line-Signature']; body = request.get_data(as_text=True)
+    try: handler.handle(body, signature)
+    except InvalidSignatureError: abort(400)
+    return 'OK'
+
+@handler.add(MessageEvent, message=TextMessage)
+def handle_message(event):
+    try:
+        user_msg = event.message.text.strip()
+        user_id = event.source.user_id
+        
+        # 👑 【第一擊：搶先秒回安撫文字】
+        # 只要使用者發送任何訊息，在 0.1 秒內無條件回覆，搶占 LINE 的強制斷線限制，絕不當機！
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="🛰️ 雷達已鎖定目標，正全速調閱軍情，請統帥稍候..."))
+
+        # 👑 【純淨版・當日最新戰報直接攔截】
+        if user_msg in ["最新戰報", "調閱戰報", "戰報"]:
+            timestamp = datetime.datetime.now().strftime("%H%M%S")
+            report_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/latest_report.html?v={timestamp}"
+
+            flex_report = {
+                "type": "bubble", "styles": {"header": {"backgroundColor": "#1E1B4B"}, "body": {"backgroundColor": "#0F172A"}, "footer": {"backgroundColor": "#020617"}},
+                "header": {"type": "box", "layout": "vertical", "contents": [{"type": "text", "text": "⚔️ 股海觀浪・最新戰報", "color": "#FBBF24", "weight": "bold", "size": "lg"}]},
+                "body": {"type": "box", "layout": "vertical", "contents": [{"type": "text", "text": "📡 雲端即時連線成功", "color": "#38BDF8", "weight": "bold", "size": "xs"}, {"type": "text", "text": "大本營主控台已將本日最新選股策略歸檔至雲端，請立刻點擊查閱軍情。", "color": "#94A3B8", "size": "sm", "margin": "md", "wrap": True}]},
+                "footer": {"type": "box", "layout": "vertical", "contents": [{"type": "button", "style": "primary", "color": "#B45309", "action": {"type": "uri", "label": "🔓 解鎖本日最新戰報", "url": report_url}}]}
+            }
+            # 因為 reply_token 已經拿去發安撫信號了，後續所有大圖卡一律改用 push_message 發射
+            line_bot_api.push_message(user_id, FlexSendMessage(alt_text="指揮部：最新戰報調閱令", contents=flex_report))
+            return
+
+        # 解析 K 線或 AI 模式
+        analysis_type = "綜合"; period_arg = "3月"
+        if "K線圖" in user_msg: 
+            analysis_type = "K線圖"; user_msg = user_msg.replace("K線圖", "").strip()
+            for p in ["1日", "5日", "1月", "3月", "6月", "1年", "5年"]:
+                if p in user_msg: period_arg = p; user_msg = user_msg.replace(p, "").strip()
+        elif user_msg == "大盤": analysis_type = "大盤"
+        elif "劇本" in user_msg or "實戰劇本" in user_msg: analysis_type, user_msg = "劇本", user_msg.replace("實戰劇本", "").replace("劇本", "").strip()
+        elif "技術面" in user_msg: analysis_type, user_msg = "技術面", user_msg.replace("技術面", "").strip()
+        elif "籌碼面" in user_msg: analysis_type, user_msg = "籌碼面", user_msg.replace("籌碼面", "").strip()
+        elif "題材面" in user_msg: analysis_type, user_msg = "題材面", user_msg.replace("題材面", "").strip()
+        elif "同族群" in user_msg: analysis_type, user_msg = "同族群", user_msg.replace("同族群", "").strip()
+
+        if len(user_msg) > 15: return
+
+        # 🚀 【多執行緒出擊】：將沉重的數據運算與 AI 劇本推演包，丟到背景默默執行，絕不阻塞前線通道！
+        threading.Thread(target=background_async_task, args=(user_id, user_msg, analysis_type, period_arg)).start()
+
     except: pass
 
 if __name__ == "__main__":
