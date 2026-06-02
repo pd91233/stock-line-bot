@@ -14,6 +14,7 @@ import io
 import base64
 import datetime
 import threading
+import time
 import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
@@ -22,7 +23,7 @@ import mplfinance as mpf
 app = Flask(__name__)
 
 # ==========================================================
-# 🔑 1. API 金鑰與通訊參數設定
+# 🔑 1. API 金鑰與通訊參數設定 (完全保留，嚴禁割)
 # ==========================================================
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
@@ -39,7 +40,7 @@ for i in range(1, 6):
 if gemini_keys: key_cycle = itertools.cycle(gemini_keys)
 
 # ==========================================================
-# 📚 2. 台股資料庫 (輕量化防爆模組)
+# 📚 2. 台股資料庫 (輕量化防爆模組 - 完全保留)
 # ==========================================================
 global_stock_dict = {}
 def get_stock_dict():
@@ -65,7 +66,7 @@ def get_stock_dict():
 threading.Thread(target=get_stock_dict).start()
 
 # ==========================================================
-# 📊 3. 雙通道市場行情分析中心
+# 📊 3. 雙通道市場行情分析中心 (完全保留)
 # ==========================================================
 def fetch_realtime_data(stock_code):
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -121,7 +122,7 @@ def fetch_realtime_data(stock_code):
     except: return f"⚠️盤中即時報價受阻 | {yahoo_price}\n📊{yahoo_ma}"
 
 # ==========================================================
-# 💥 4. 技術圖表（多維度K線圖）生成中心
+# 💥 4. 技術圖表（多維度K線圖）生成中心 (完全保留)
 # ==========================================================
 def generate_and_upload_kline(stock_code, period="3月"):
     if not IMGBB_API_KEY: return None
@@ -158,7 +159,7 @@ def generate_and_upload_kline(stock_code, period="3月"):
     except: return None
 
 # ==========================================================
-# 💥 5. 背景非同步交易運算中心 (Push 推送機制)
+# 💥 5. 背景非同步交易運算中心 (完全保留，口吻已依令調整)
 # ==========================================================
 def background_async_task(user_id, user_msg, analysis_type, period_arg):
     try:
@@ -227,7 +228,6 @@ def background_async_task(user_id, user_msg, analysis_type, period_arg):
                 def get_color(t): return "🔵" if analysis_type == t else "⚪"
                 header_text = f"📊 【市場全景分析・個股盤勢診斷】\n🎯 追蹤標的：{stock_query}\n\n{real_data}\n====================\n{ai_reply}"
                 
-                # 下方附隨即時功能鍵
                 row_btns = QuickReply(items=[
                     QuickReplyButton(action=MessageAction(label=f"{get_color('技術面')}技術分析預判", text=f"技術面 {stock_code}")),
                     QuickReplyButton(action=MessageAction(label=f"{get_color('籌碼面')}籌碼資金追蹤", text=f"籌碼面 {stock_code}")),
@@ -238,7 +238,7 @@ def background_async_task(user_id, user_msg, analysis_type, period_arg):
     except: pass
 
 # ==========================================================
-# 📡 6. Webhook 通道 (純文字秒回防線)
+# 📡 6. Webhook 通道 (包含回報攔截與秒回防線)
 # ==========================================================
 @app.route("/", methods=['GET'])
 def home(): return "前線看盤伺服器：交易連線狀態正常，常駐清醒中！"
@@ -256,13 +256,38 @@ def handle_message(event):
         user_msg = event.message.text.strip()
         user_id = event.source.user_id
         
+        # 👑 [系統管理專用] 獲取管理員專屬 LINE ID
+        if user_msg == "獲取系統ID":
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(
+                text=f"您的專屬使用者 ID 為：\n{user_id}\n\n請將此代碼填入系統後台的 ADMIN_LINE_ID 環境變數中。"
+            ))
+            return
+
+        # 👑 [使用者專用] 問題回報直通轉發機制
+        if user_msg.startswith("問題回報 ") or user_msg.startswith("回報 "):
+            issue_content = user_msg.replace("問題回報 ", "").replace("回報 ", "").strip()
+            if not issue_content:
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(
+                    text="⚠️ 格式錯誤：請在「問題回報」後方加上空格，並說明您遇到的狀況。\n範例：問題回報 K線圖無法顯示"
+                ))
+                return
+            
+            reply_text = f"✅ 已收到您的系統反饋：\n「{issue_content}」\n管理員將盡快查閱並維護交易環境。"
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
+            
+            admin_id = os.environ.get('ADMIN_LINE_ID')
+            if admin_id:
+                try:
+                    alert_msg = f"🚨 【看盤系統異常回報】\n發送用戶 ID: {user_id}\n問題內容：\n{issue_content}"
+                    line_bot_api.push_message(admin_id, TextSendMessage(text=alert_msg))
+                except: pass
+            return
+
         # 👑 【精準突圍：最新選股戰報一鍵速回超連結】
         if user_msg in ["最新戰報", "調閱戰報", "戰報"]:
             timestamp = datetime.datetime.now().strftime("%H%M%S")
             report_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/latest_report.html?v={timestamp}"
-            
             broadcast_text = f"📊 【策略選股大師・當日最新特報】\n========================\n主控台已將本日最新核心選股策略網頁歸檔至雲端補給線！\n\n🔗 點擊解鎖本日最新網頁戰報 (跳出獨立瀏覽器新視窗)：\n{report_url}"
-            
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=broadcast_text))
             return
 
@@ -287,7 +312,196 @@ def handle_message(event):
     except: pass
 
 # ==========================================================
-# 💥 Gunicorn 免改網頁開機超時配置嵌入
+# 🌟 7. 🚀 [新增防線] 雲端全時相決策中心 (五時相定時追蹤 + 核心量價公式)
+# ==========================================================
+def market_patrol_loop():
+    last_triggered_date = ""
+    triggered_phases = set()
+
+    while True:
+        try:
+            now = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
+            date_today = now.strftime("%Y%m%d")
+            
+            if date_today != last_triggered_date:
+                last_triggered_date = date_today
+                triggered_phases.clear()
+
+            is_weekend = (now.weekday() >= 5)
+            current_phase = None
+            phase_title = ""
+            
+            if not is_weekend and now.hour == 9 and now.minute == 15 and "0915" not in triggered_phases:
+                current_phase = "0915"; phase_title = "🌅 09:15 【早盤強勢突破與假開高篩選點】"
+            elif not is_weekend and now.hour == 10 and now.minute == 0 and "1000" not in triggered_phases:
+                current_phase = "1000"; phase_title = "📈 10:00 【早盤方向確認點】"
+            elif not is_weekend and now.hour == 12 and now.minute == 30 and "1230" not in triggered_phases:
+                current_phase = "1230"; phase_title = "⚖️ 12:30 【尾盤籌碼定調點】"
+            elif not is_weekend and now.hour == 13 and now.minute == 15 and "1315" not in triggered_phases:
+                current_phase = "1315"; phase_title = "👑 13:15 【終局之戰：主力作線與鎖碼確認點】"
+            elif now.hour == 21 and now.minute == 0 and "2100" not in triggered_phases:
+                current_phase = "2100"; phase_title = "📡 21:00 【夜間雷達：多空溫度計與美股期指共振】"
+
+            if current_phase:
+                triggered_phases.add(current_phase)
+                timestamp_v = datetime.datetime.now().strftime("%H%M%S")
+
+                if current_phase == "2100":
+                    headers = {"User-Agent": "Mozilla/5.0"}
+                    sox_pct = 0.0; tsm_pct = 0.0; night_p = "連線超時"
+                    try:
+                        req_sox = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/%5ESOX?interval=1d&range=2d", headers=headers, timeout=5).json()
+                        d = req_sox['chart']['result'][0]['meta']
+                        sox_pct = round(((d['regularMarketPrice'] - d['chartPreviousClose']) / d['chartPreviousClose']) * 100, 2)
+                        
+                        req_tsm = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/TSM?interval=1d&range=2d", headers=headers, timeout=5).json()
+                        d = req_tsm['chart']['result'][0]['meta']
+                        tsm_pct = round(((d['regularMarketPrice'] - d['chartPreviousClose']) / d['chartPreviousClose']) * 100, 2)
+                    except: pass
+                    
+                    try:
+                        req_idx = requests.Session(); req_idx.get('https://mis.twse.com.tw/stock/index.jsp', headers=headers, timeout=2)
+                        res_idx = req_idx.get("https://mis.twse.com.tw/stock/api/getMarketInfo.jsp", timeout=2).json()
+                        if res_idx.get('msgArray'): night_p = f"{res_idx['msgArray'][0].get('z', '-')} 點"
+                    except: pass
+                    
+                    ai_filter = "大盤夜盤平穩，隔日維持既定紀律操作。"
+                    if gemini_keys:
+                        try:
+                            client = genai.Client(api_key=next(key_cycle))
+                            prompt = f"你是頂尖風控長。美股盤前費半指數變動{sox_pct}%，台積電ADR變動{tsm_pct}%，台指夜盤現況{night_p}。請用客觀交易術語在80字內為明天的台股策略進行系統風險定調。嚴禁輸出任何思考思維。"
+                            response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+                            if response.text: ai_filter = response.text.strip()
+                        except: pass
+                        
+                    night_report = f"{phase_title}\n數據時間：{now.strftime('%Y-%m-%d %H:%M')}\n====================\n🇺🇸 費城半導體盤前: {sox_pct}%\n📉 台積電 ADR 盤前: {tsm_pct}%\n📊 台指期夜盤即時: {night_p}\n====================\n🛡️ 【風控長明日戰略環境預判】\n{ai_filter}\n====================\n⚠️ 【嚴格防守紀律宣告】\n本環境預判為國際量價共振之客觀追蹤，絕非獲利保證。市場具備隨時反轉風險，任何交易請務必嚴格控管資金成數，並預先掛好停損條件單。"
+                    try: line_bot_api.broadcast(TextSendMessage(text=night_report))
+                    except: pass
+                    time.sleep(60)
+                    continue
+
+                json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={timestamp_v}"
+                res_json = requests.get(json_url, timeout=5)
+                
+                if res_json.status_code == 200 and res_json.text:
+                    monitor_data = res_json.json()
+                    if monitor_data:
+                        headers = {"User-Agent": "Mozilla/5.0"}
+                        req = requests.Session()
+                        req.get('https://mis.twse.com.tw/stock/index.jsp', headers=headers, timeout=2)
+                        
+                        twii_chg = 0.0
+                        try:
+                            twii_res = req.get("https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_%5ETWII.tw", timeout=2).json()
+                            if twii_res.get('msgArray'):
+                                twii_data = twii_res['msgArray'][0]
+                                twii_z = float(twii_data.get('z', 0) if twii_data.get('z', '-') != '-' else twii_data.get('y', 0))
+                                twii_y = float(twii_data.get('y', 0))
+                                if twii_y > 0: twii_chg = ((twii_z - twii_y) / twii_y) * 100
+                        except: pass
+
+                        broadcast_msg = f"{phase_title}\n時間：{now.strftime('%H:%M')} (大盤即時：{round(twii_chg, 2)}%)\n====================\n"
+                        ai_payload = []
+
+                        for code, info in monitor_data.items():
+                            try:
+                                url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{code}.tw"
+                                res = req.get(url, timeout=2).json()
+                                if not res.get('msgArray'):
+                                    url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_{code}.tw"
+                                    res = req.get(url, timeout=2).json()
+                                    
+                                if res.get('msgArray'):
+                                    data = res['msgArray'][0]
+                                    name = info.get('name', code)
+                                    
+                                    z = float(data.get('z', 0) if data.get('z', '-') != '-' else data.get('y', 0)) 
+                                    o = float(data.get('o', z) if data.get('o', '-') != '-' else z)                 
+                                    h = float(data.get('h', z) if data.get('h', '-') != '-' else z)                 
+                                    l = float(data.get('l', z) if data.get('l', '-') != '-' else z)                 
+                                    v = float(data.get('v', 0) if data.get('v', '-') != '-' else 0)                 
+                                    y = float(data.get('y', z))                                                     
+                                    chg = round(((z - y) / y) * 100, 2) if y > 0 else 0.0
+                                    
+                                    vwap = round((o + h + l + z * 2) / 5, 2)
+                                    elapsed_mins = 60 if current_phase == "0915" else (105 if current_phase == "1000" else (255 if current_phase == "1230" else 300))
+                                    est_vol = v * (270 / elapsed_mins)
+                                    v_ratio = round(est_vol / info['v_5ma'], 1) if info['v_5ma'] > 0 else 1.0
+                                    
+                                    amp = h - l if h - l > 0 else 1.0
+                                    upper_shadow = h - max(o, z)
+                                    shadow_pct = round((upper_shadow / amp) * 100, 1)
+                                    is_overheated_tr = (v_ratio > 2.5 and chg > 5)
+
+                                    veto_triggered = False
+                                    veto_reason = ""
+                                    
+                                    if twii_chg <= -1.0:
+                                        veto_triggered = True
+                                        veto_reason = f"🚨 大盤目前跌幅 {round(twii_chg,2)}% 觸發環境崩塌警報。本檔被迫取消多方評估，禁止任何買進試單！持股者請死守防守價 {info['ma5']}元 (5MA) 或 {info['ma10']}元 (10MA)，一旦收盤跌破必須確實執行停損，保留資金實力。"
+                                    elif z >= h * 0.99 and chg > 2 and v_ratio < 0.8:
+                                        veto_triggered = True
+                                        veto_reason = f"🚨 現價 {z}元 創高，但預估量僅達5日均量之 {v_ratio}倍 (量縮背離)。此為典型無量虛胖誘多陷阱，強烈建議空手者嚴格觀望，絕對禁止在現價追高買進！"
+                                    elif z < vwap and chg > 1:
+                                        veto_triggered = True
+                                        veto_reason = f"🚨 股價現報 {z}元，仍受制於盤中大戶平均成本線 {vwap}元 (VWAP) 下方。在未能穩定站上 {vwap}元 之前，反彈皆為假象，嚴禁伸手接刀或盲目攤平。"
+                                    elif chg > 3 and shadow_pct > 40.0:
+                                        veto_triggered = True
+                                        veto_reason = f"🚨 股價雖高達 {z}元，但盤中上影線比例已達 {shadow_pct}% (已超過40%出貨臨界點)。這代表買盤力道遭主力拋壓吞噬，型態轉為出貨K線，強烈警告空手者現價禁止接刀，持股者若跌破 {vwap}元 (盤中均價) 請立即減碼落跑。"
+                                    elif is_overheated_tr:
+                                        veto_triggered = True
+                                        veto_reason = f"🚨 本標的量能爆發達 {v_ratio}倍，籌碼處於極度失控與過熱狀態。這種凌亂籌碼尾盤極容易引發人踩人多殺多跳水風險，軍令強制：此檔今日封鎖交易，嚴禁真金白銀進場搏鬥！"
+
+                                    stock_payload = {
+                                        "code": code, "name": name, "type": info.get('type', 'core'),
+                                        "z": z, "chg": chg, "vwap": vwap, "v_ratio": v_ratio, "shadow_pct": shadow_pct,
+                                        "ma5": info['ma5'], "ma10": info['ma10'], "ma20": info['ma20'], "kd5": info['kd5'],
+                                        "veto_triggered": veto_triggered, "veto_reason": veto_reason
+                                    }
+                                    ai_payload.append(stock_payload)
+                                time.sleep(1) 
+                            except: continue
+
+                        for s in ai_payload:
+                            broadcast_msg += f"📌 **{s['name']} ({s['code']})** | 現價: {s['z']} ({'+' if s['chg']>0 else ''}{s['chg']}%)\n"
+                            broadcast_msg += f"📊 盤中均價(VWAP): {s['vwap']}元 | 量能: 預估5MA之 {s['v_ratio']}倍\n"
+                            
+                            if s['veto_triggered']:
+                                broadcast_msg += f"🎯 **行動指令：**\n   {s['veto_reason']}\n"
+                            else:
+                                ai_instruction = "根據既定防守價進行部位追蹤。"
+                                if gemini_keys:
+                                    try:
+                                        client = genai.Client(api_key=next(key_cycle))
+                                        prompt = (
+                                            f"你是台股王牌操盤參謀。標的 {s['name']}({s['code']})，時相為【{current_phase}】。現價{s['z']}元，盤中均價VWAP為{s['vwap']}元，5MA為{s['ma5']}元，10MA為{s['ma10']}元，明日5MA扣抵{s['kd5']}元。"
+                                            f"請根據上述絕對數字，直接在一句話內給出明確下一步行動指令（現價可逢低試單/強勢站穩XX元加碼/破XX元無條件砍單停損）。"
+                                            f"【最高憲法】：必須包含絕對數字價位（如：{s['ma5']}元），嚴禁僅使用『月線』、『均線』、『前低』、『破線』或『均價線』等純文字代稱。嚴禁輸出思考過程，50字內。"
+                                        )
+                                        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+                                        if response.text: ai_instruction = response.text.strip()
+                                    except: pass
+                                broadcast_msg += f"🎯 **行動指令：**\n   {ai_instruction}\n"
+                            broadcast_msg += f"--------------------\n"
+
+                        broadcast_msg += "====================\n"
+                        broadcast_msg += "⚠️ **【嚴格防守紀律宣告】**\n"
+                        broadcast_msg += "本盤中快報為 AI 數據實時之量價客觀追蹤，絕非獲利保證。市場瞬息萬變，任何進場策略請務必嚴格控管資金成數（新進單部位嚴禁超過1成試單，乖離過大僅限原有持股續抱，嚴禁加碼），並預先掛好上述絕對價格之觸價條件單。懂得停損，才是能在股海長期生存的唯一法則。"
+
+                        try: line_bot_api.broadcast(TextSendMessage(text=broadcast_msg))
+                        except Exception as e: print(f"雲端廣播失敗: {e}")
+                        
+                time.sleep(60) 
+            else:
+                time.sleep(15) 
+        except Exception as e:
+            time.sleep(30)
+
+# 啟動背景全時相廣播巡邏雷達
+threading.Thread(target=market_patrol_loop, daemon=True).start()
+
+# ==========================================================
+# 💥 Gunicorn 免改網頁開機超時配置嵌入 (完全保留)
 # ==========================================================
 class StandaloneApplication:
     def __init__(self, app, options=None): self.options = options or {}; self.application = app
