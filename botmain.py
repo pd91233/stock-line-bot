@@ -66,7 +66,7 @@ def get_stock_dict():
 threading.Thread(target=get_stock_dict).start()
 
 # ==========================================================
-# 📊 3. 雙通道市場行情分析中心 (修復尖峰超時與昨收定錨)
+# 📊 3. 雙通道市場行情分析中心 (修復尖峰超時與加入快取破甲彈)
 # ==========================================================
 def fetch_realtime_data(stock_code):
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -109,8 +109,9 @@ def fetch_realtime_data(stock_code):
         twse_data = None
         for market in ['tse', 'otc']:
             try:
-                url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={market}_{stock_code}.tw"
-                res = req.get(url, timeout=3).json() # 開盤尖峰延長至 3 秒
+                # 🚀 加入時間戳記 (Cache-Buster)，粉碎證交所 CDN 舊快取！
+                url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={market}_{stock_code}.tw&_={int(time.time() * 1000)}"
+                res = req.get(url, timeout=3).json() 
                 if res.get('msgArray'):
                     data = res['msgArray'][0]
                     z_val = data.get('z', '-')
@@ -423,7 +424,9 @@ def market_patrol_loop():
                         
                         twii_chg = 0.0
                         try:
-                            twii_res = req.get("https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_%5ETWII.tw", timeout=2).json()
+                            # 🚀 [大盤] 加上時間戳記，粉碎快取
+                            twii_url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_%5ETWII.tw&_={int(time.time() * 1000)}"
+                            twii_res = req.get(twii_url, timeout=2).json()
                             if twii_res.get('msgArray'):
                                 twii_data = twii_res['msgArray'][0]
                                 twii_z = float(twii_data.get('z', 0) if twii_data.get('z', '-') != '-' else twii_data.get('y', 0))
@@ -436,10 +439,12 @@ def market_patrol_loop():
 
                         for code, info in monitor_data.items():
                             try:
-                                url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{code}.tw"
-                                res = req.get(url, timeout=3).json() # 增加超時容忍
+                                # 🚀 [上市個股] 加上時間戳記，粉碎快取
+                                url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{code}.tw&_={int(time.time() * 1000)}"
+                                res = req.get(url, timeout=3).json() 
                                 if not res.get('msgArray'):
-                                    url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_{code}.tw"
+                                    # 🚀 [上櫃個股] 加上時間戳記，粉碎快取
+                                    url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_{code}.tw&_={int(time.time() * 1000)}"
                                     res = req.get(url, timeout=3).json()
                                     
                                 if res.get('msgArray'):
@@ -504,12 +509,18 @@ def market_patrol_loop():
                                 if gemini_keys:
                                     try:
                                         client = genai.Client(api_key=next(key_cycle))
-                                        # ... (中間 prompt 程式碼不變) ...
+                                        # 🚀 完整修復遺漏的 AI Prompt 提示詞
+                                        prompt = (
+                                            f"你是台股王牌操盤參謀。標的 {s['name']}({s['code']})，時相為【{current_phase}】。現價{s['z']}元，盤中均價VWAP為{s['vwap']}元，5MA為{s['ma5']}元，10MA為{s['ma10']}元，明日5MA扣抵{s['kd5']}元。"
+                                            f"請根據上述絕對數字，直接在一句話內給出明確下一步行動指令（現價可逢低試單/強勢站穩XX元加碼/破XX元無條件砍單停損）。"
+                                            f"【最高憲法】：必須包含絕對數字價位（如：{s['ma5']}元），嚴禁僅使用『月線』、『均線』、『前低』、『破線』或『均價線』等純文字代稱。嚴禁輸出思考過程，50字內。"
+                                            f"⚠️【數值絕對禁令】：推算突破點【絕不可低於】現價，防守點【絕不可高於】現價！乖離過大請直接建議觀望。"
+                                        )
                                         response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
                                         if response.text: ai_instruction = response.text.strip()
                                     except: pass
                                 
-                                # 🚀 加入這行！強迫冷卻 5 秒，保護 API 額度不被瞬間打爆！
+                                # 🚀 加入冷卻，保護 API 額度不被瞬間打爆！
                                 time.sleep(5) 
 
                                 broadcast_msg += f"🎯 **行動指令：**\n   {ai_instruction}\n"
