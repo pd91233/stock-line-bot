@@ -23,7 +23,7 @@ import mplfinance as mpf
 app = Flask(__name__)
 
 # ==========================================================
-# 🔑 1. API 金鑰與通訊參數設定 (完全保留，嚴禁割)
+# 🔑 1. API 金鑰與通訊參數設定
 # ==========================================================
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
@@ -40,7 +40,7 @@ for i in range(1, 6):
 if gemini_keys: key_cycle = itertools.cycle(gemini_keys)
 
 # ==========================================================
-# 📚 2. 台股資料庫 (輕量化防爆模組 - 完全保留)
+# 📚 2. 台股資料庫 
 # ==========================================================
 global_stock_dict = {}
 def get_stock_dict():
@@ -66,7 +66,7 @@ def get_stock_dict():
 threading.Thread(target=get_stock_dict).start()
 
 # ==========================================================
-# 📊 3. 雙通道市場行情分析中心 (完全保留 + 🚀新增昨收防呆機制)
+# 📊 3. 雙通道市場行情分析中心 (修復尖峰超時與昨收定錨)
 # ==========================================================
 def fetch_realtime_data(stock_code):
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -76,10 +76,10 @@ def fetch_realtime_data(stock_code):
             url = "https://query1.finance.yahoo.com/v8/finance/chart/^TWII?range=2mo&interval=1d"
         else:
             url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TW?range=2mo&interval=1d"
-        res = requests.get(url, headers=headers, timeout=2).json()
+        res = requests.get(url, headers=headers, timeout=3).json() # 增加超時容忍
         if not res.get('chart', {}).get('result') and stock_code != "^TWII":
             url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TWO?range=2mo&interval=1d"
-            res = requests.get(url, headers=headers, timeout=2).json()
+            res = requests.get(url, headers=headers, timeout=3).json()
 
         result = res['chart']['result'][0]
         closes = result['indicators']['quote'][0]['close']
@@ -104,12 +104,13 @@ def fetch_realtime_data(stock_code):
     if stock_code == "^TWII": return f"大盤歷史備援數據 | {yahoo_price}。\n{yahoo_ma}"
 
     try:
-        req = requests.Session(); req.get('https://mis.twse.com.tw/stock/index.jsp', headers=headers, timeout=1) 
+        req = requests.Session()
+        req.get('https://mis.twse.com.tw/stock/index.jsp', headers=headers, timeout=3) # 開盤尖峰延長至 3 秒
         twse_data = None
         for market in ['tse', 'otc']:
             try:
                 url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={market}_{stock_code}.tw"
-                res = req.get(url, timeout=1).json() 
+                res = req.get(url, timeout=3).json() # 開盤尖峰延長至 3 秒
                 if res.get('msgArray'):
                     data = res['msgArray'][0]
                     z_val = data.get('z', '-')
@@ -125,17 +126,17 @@ def fetch_realtime_data(stock_code):
                         z_val = y_val 
                     
                     if is_before_market:
-                        twse_data = f"🔴交易所即時成交價:{z_val} (盤前昨收基準)\n(今日最高:- 今日最低:- 即時個股量:0張)"
+                        twse_data = f"🔴交易所即時成交價:{z_val} (盤前昨收或試撮基準)\n(今日最高:- 今日最低:- 即時個股量:0張)"
                     else:
                         twse_data = f"🔴交易所即時成交價:{z_val} (今日最高:{h_val} 今日最低:{l_val} 即時個股量:{v_val}張)"
                     break
             except: continue 
         if twse_data: return f"{twse_data}\n📊{yahoo_ma}"
-        else: return f"⚠️盤中即時報價受阻 | {yahoo_price}\n📊{yahoo_ma}"
-    except: return f"⚠️盤中即時報價受阻 | {yahoo_price}\n📊{yahoo_ma}"
+        else: return f"⚠️盤中即時報價受阻(尖峰超載) | {yahoo_price}\n📊{yahoo_ma}"
+    except: return f"⚠️盤中即時報價受阻(連線失敗) | {yahoo_price}\n📊{yahoo_ma}"
 
 # ==========================================================
-# 💥 4. 技術圖表（多維度K線圖）生成中心 (完全保留)
+# 💥 4. 技術圖表生成中心
 # ==========================================================
 def generate_and_upload_kline(stock_code, period="3月"):
     if not IMGBB_API_KEY: return None
@@ -172,7 +173,7 @@ def generate_and_upload_kline(stock_code, period="3月"):
     except: return None
 
 # ==========================================================
-# 💥 5. 背景非同步交易運算中心 (完全保留 + 🚀新增數值絕對禁令)
+# 💥 5. 背景非同步交易運算中心 (強制解除靜默當機黑盒子)
 # ==========================================================
 def background_async_task(user_id, user_msg, analysis_type, period_arg):
     try:
@@ -221,39 +222,58 @@ def background_async_task(user_id, user_msg, analysis_type, period_arg):
             real_data = fetch_realtime_data(stock_code)
             success = False; attempts = 0; max_attempts = len(gemini_keys) if gemini_keys else 1
             ai_reply = ""
+            ai_error_msg = ""
 
-            while attempts < max_attempts and gemini_keys:
-                current_key = next(key_cycle)
-                try:
-                    client = genai.Client(api_key=current_key)
-                    base_prompt = "你是專業台股操盤手，請以直接、果斷的市場交易術語下達具體點位指令。嚴禁輸出任何內部思考思維或冗贅廢話。"
-                    if analysis_type == "大盤": prompt = f"{base_prompt}根據盤勢數據【{real_data}】進行加權指數多空評估。150字內包含：1.多空波段趨勢 2.關鍵支撐與壓力區間 3.交易部位控管策略建議。無須任何免責聲明。"
-                    elif analysis_type == "技術面": prompt = f"{base_prompt}根據技術數據【{real_data}】分析【{stock_query}】技術面。150字內包含：1.均線扣抵位置預判 2.短線多空臨界點 3.明確指示。無須任何免責聲明。"
-                    elif analysis_type == "籌碼面": prompt = f"{base_prompt}根據量能數據【{real_data}】分析【{stock_query}】籌碼面。150字內包含：1.大戶資金進出意圖 2.市場散戶心理狀態評估 3.明確跟單跟隨指示。無須任何免責聲明。"
-                    elif analysis_type == "劇本": 
-                        # 🚀 [防護禁令追加] 強制約束 AI 計算點位時的邏輯，阻止幻覺產生
-                        prompt = f"{base_prompt}根據最新即時成交價、均線排列、扣抵位置與成交量能數據【{real_data}】，為【{stock_query}】制定下一步明確交易決策。150字內給出：1.🎯明確行動指令(例：現價買進進場/空手觀望/逢高分批獲利入袋/跌破防守線確實停損) 2.🔥上攻突破追擊點位 3.🛡️拉回低接防守支撐點位。必須給出絕對數字價位。無須任何免責聲明。\n⚠️【最高數值防護限制】：\n1. 你推算的「🔥上攻突破追擊點位」【絕對不可低於】現價！\n2. 你推算的「🛡️拉回低接防守支撐點位」【絕對不可高於】現價！\n3. 若現價與均線正乖離過大，請直接警告「乖離過大嚴禁追高」，禁止捏造突破點！"
-                    else: prompt = f"{base_prompt}根據報價數據【{real_data}】分析【{stock_query}】。150字內給出：1.均線趨勢方向 2.主力持股動向推測 3.關鍵支撐防守價位。無須任何免責聲明。"
+            # 確保有金鑰才執行 AI，否則直接給出報價
+            if gemini_keys:
+                while attempts < max_attempts:
+                    current_key = next(key_cycle)
+                    try:
+                        client = genai.Client(api_key=current_key)
+                        base_prompt = "你是專業台股操盤手，請以直接、果斷的市場交易術語下達具體點位指令。嚴禁輸出任何內部思考思維或冗贅廢話。"
+                        if analysis_type == "大盤": prompt = f"{base_prompt}根據盤勢數據【{real_data}】進行加權指數多空評估。150字內包含：1.多空波段趨勢 2.關鍵支撐與壓力區間 3.交易部位控管策略建議。無須任何免責聲明。"
+                        elif analysis_type == "技術面": prompt = f"{base_prompt}根據技術數據【{real_data}】分析【{stock_query}】技術面。150字內包含：1.均線扣抵位置預判 2.短線多空臨界點 3.明確指示。無須任何免責聲明。"
+                        elif analysis_type == "籌碼面": prompt = f"{base_prompt}根據量能數據【{real_data}】分析【{stock_query}】籌碼面。150字內包含：1.大戶資金進出意圖 2.市場散戶心理狀態評估 3.明確跟單跟隨指示。無須任何免責聲明。"
+                        elif analysis_type == "劇本": 
+                            prompt = f"{base_prompt}根據最新即時成交價、均線排列、扣抵位置與成交量能數據【{real_data}】，為【{stock_query}】制定下一步明確交易決策。150字內給出：1.🎯明確行動指令(例：現價買進進場/空手觀望/逢高分批獲利入袋/跌破防守線確實停損) 2.🔥上攻突破追擊點位 3.🛡️拉回低接防守支撐點位。必須給出絕對數字價位。無須任何免責聲明。\n⚠️【最高數值防護限制】：\n1. 你推算的「🔥上攻突破追擊點位」【絕對不可低於】現價！\n2. 你推算的「🛡️拉回低接防守支撐點位」【絕對不可高於】現價！\n3. 若現價與均線正乖離過大，請直接警告「乖離過大嚴禁追高」，禁止捏造突破點！"
+                        else: prompt = f"{base_prompt}根據報價數據【{real_data}】分析【{stock_query}】。150字內給出：1.均線趨勢方向 2.主力持股動向推測 3.關鍵支撐防守價位。無須任何免責聲明。"
 
-                    response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
-                    if response.text: ai_reply = response.text.strip(); success = True; break 
-                except: attempts += 1
+                        response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
+                        if response.text: 
+                            ai_reply = response.text.strip()
+                            success = True
+                            break 
+                    except Exception as e: 
+                        attempts += 1
+                        ai_error_msg = str(e)
+            else:
+                ai_error_msg = "系統未配置有效的 Gemini API Key。"
+
+            # 🚨 破除靜默當機：不管成功或失敗，都必須回報結果給使用者
+            def get_color(t): return "🔵" if analysis_type == t else "⚪"
+            row_btns = QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label=f"{get_color('技術面')}技術分析預判", text=f"技術面 {stock_code}")),
+                QuickReplyButton(action=MessageAction(label=f"{get_color('籌碼面')}籌碼資金追蹤", text=f"籌碼面 {stock_code}")),
+                QuickReplyButton(action=MessageAction(label=f"{get_color('劇本')}絕對行動決策指示", text=f"劇本 {stock_code}")),
+                QuickReplyButton(action=MessageAction(label="📊 呼叫 K線圖", text=f"K線圖 {stock_code}"))
+            ])
 
             if success:
-                def get_color(t): return "🔵" if analysis_type == t else "⚪"
                 header_text = f"📊 【市場全景分析・個股盤勢診斷】\n🎯 追蹤標的：{stock_query}\n\n{real_data}\n====================\n{ai_reply}"
-                
-                row_btns = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label=f"{get_color('技術面')}技術分析預判", text=f"技術面 {stock_code}")),
-                    QuickReplyButton(action=MessageAction(label=f"{get_color('籌碼面')}籌碼資金追蹤", text=f"籌碼面 {stock_code}")),
-                    QuickReplyButton(action=MessageAction(label=f"{get_color('劇本')}絕對行動決策指示", text=f"劇本 {stock_code}")),
-                    QuickReplyButton(action=MessageAction(label="📊 呼叫 K線圖", text=f"K線圖 {stock_code}"))
-                ])
                 line_bot_api.push_message(user_id, TextSendMessage(text=header_text, quick_reply=row_btns))
-    except: pass
+            else:
+                # 失敗時吐出錯誤代碼，終結「遲遲沒有回應」的黑盒子
+                fallback_text = f"📊 【市場全景分析・個股盤勢診斷】\n🎯 追蹤標的：{stock_query}\n\n{real_data}\n====================\n⚠️ AI 雲端大腦連線失敗或超載！\n請直接參考上方數據操作，或稍後再點擊按鈕重試。\n(偵錯碼: {ai_error_msg[:30]})"
+                line_bot_api.push_message(user_id, TextSendMessage(text=fallback_text, quick_reply=row_btns))
+
+    except Exception as e: 
+        # 最外層防護網，程式碼寫錯或崩潰時強制通報
+        try:
+            line_bot_api.push_message(user_id, TextSendMessage(text=f"⚠️ 系統嚴重異常：\n執行指令時發生崩潰，請回報管理員。\n錯誤：{str(e)[:50]}"))
+        except: pass
 
 # ==========================================================
-# 📡 6. Webhook 通道 (包含回報攔截與秒回防線)
+# 📡 6. Webhook 通道
 # ==========================================================
 @app.route("/", methods=['GET'])
 def home(): return "前線看盤伺服器：交易連線狀態正常，常駐清醒中！"
@@ -271,14 +291,12 @@ def handle_message(event):
         user_msg = event.message.text.strip()
         user_id = event.source.user_id
         
-        # 👑 [系統管理專用] 獲取管理員專屬 LINE ID
         if user_msg == "獲取系統ID":
             line_bot_api.reply_message(event.reply_token, TextSendMessage(
                 text=f"您的專屬使用者 ID 為：\n{user_id}\n\n請將此代碼填入系統後台的 ADMIN_LINE_ID 環境變數中。"
             ))
             return
 
-        # 👑 [使用者專用] 問題回報直通轉發機制
         if user_msg.startswith("問題回報 ") or user_msg.startswith("回報 "):
             issue_content = user_msg.replace("問題回報 ", "").replace("回報 ", "").strip()
             if not issue_content:
@@ -298,7 +316,6 @@ def handle_message(event):
                 except: pass
             return
 
-        # 👑 【精準突圍：最新選股戰報一鍵速回超連結】
         if user_msg in ["最新戰報", "調閱戰報", "戰報"]:
             timestamp = datetime.datetime.now().strftime("%H%M%S")
             report_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/latest_report.html?v={timestamp}"
@@ -306,7 +323,6 @@ def handle_message(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=broadcast_text))
             return
 
-        # 基礎個股查詢，第一擊搶先秒回，封鎖斷線風險
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="🛰️ 系統已鎖定標的，正全速連線市場報價，請稍候..."))
 
         analysis_type = "綜合"; period_arg = "3月"
@@ -327,7 +343,7 @@ def handle_message(event):
     except: pass
 
 # ==========================================================
-# 🌟 7. 🚀 [新增防線] 雲端全時相決策中心 (五時相定時追蹤 + 核心量價公式)
+# 🌟 7. 🚀 雲端全時相決策中心
 # ==========================================================
 def market_patrol_loop():
     last_triggered_date = ""
@@ -421,10 +437,10 @@ def market_patrol_loop():
                         for code, info in monitor_data.items():
                             try:
                                 url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{code}.tw"
-                                res = req.get(url, timeout=2).json()
+                                res = req.get(url, timeout=3).json() # 增加超時容忍
                                 if not res.get('msgArray'):
                                     url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_{code}.tw"
-                                    res = req.get(url, timeout=2).json()
+                                    res = req.get(url, timeout=3).json()
                                     
                                 if res.get('msgArray'):
                                     data = res['msgArray'][0]
