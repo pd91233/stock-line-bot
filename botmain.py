@@ -504,15 +504,14 @@ def market_patrol_loop():
                                 if gemini_keys:
                                     try:
                                         client = genai.Client(api_key=next(key_cycle))
-                                        prompt = (
-                                            f"你是台股王牌操盤參謀。標的 {s['name']}({s['code']})，時相為【{current_phase}】。現價{s['z']}元，盤中均價VWAP為{s['vwap']}元，5MA為{s['ma5']}元，10MA為{s['ma10']}元，明日5MA扣抵{s['kd5']}元。"
-                                            f"請根據上述絕對數字，直接在一句話內給出明確下一步行動指令（現價可逢低試單/強勢站穩XX元加碼/破XX元無條件砍單停損）。"
-                                            f"【最高憲法】：必須包含絕對數字價位（如：{s['ma5']}元），嚴禁僅使用『月線』、『均線』、『前低』、『破線』或『均價線』等純文字代稱。嚴禁輸出思考過程，50字內。"
-                                            f"⚠️【數值絕對禁令】：推算突破點【絕不可低於】現價，防守點【絕不可高於】現價！乖離過大請直接建議觀望。"
-                                        )
+                                        # ... (中間 prompt 程式碼不變) ...
                                         response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
                                         if response.text: ai_instruction = response.text.strip()
                                     except: pass
+                                
+                                # 🚀 加入這行！強迫冷卻 5 秒，保護 API 額度不被瞬間打爆！
+                                time.sleep(5) 
+
                                 broadcast_msg += f"🎯 **行動指令：**\n   {ai_instruction}\n"
                             broadcast_msg += f"--------------------\n"
 
