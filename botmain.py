@@ -66,7 +66,7 @@ def get_stock_dict():
 threading.Thread(target=get_stock_dict).start()
 
 # ==========================================================
-# 📊 3. 雙通道市場行情分析中心 (完全保留)
+# 📊 3. 雙通道市場行情分析中心 (完全保留 + 🚀新增昨收防呆機制)
 # ==========================================================
 def fetch_realtime_data(stock_code):
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -111,10 +111,23 @@ def fetch_realtime_data(stock_code):
                 url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={market}_{stock_code}.tw"
                 res = req.get(url, timeout=1).json() 
                 if res.get('msgArray'):
-                    data = res['msgArray'][0]; z = data.get('z', '-')
-                    if z == '-': z = data.get('y', '-') 
-                    h = data.get('h', '-'); l = data.get('l', '-'); v = data.get('v', '-')
-                    twse_data = f"🔴交易所即時成交價:{z} (今日最高:{h} 今日最低:{l} 即時個股量:{v}張)"
+                    data = res['msgArray'][0]
+                    z_val = data.get('z', '-')
+                    y_val = data.get('y', '-') 
+                    h_val = data.get('h', '-')
+                    l_val = data.get('l', '-')
+                    v_val = data.get('v', '-')
+                    
+                    # 🚀 [防呆機制] 盤前若抓不到即時成交價(-)，強迫改用昨日收盤價定錨！
+                    is_before_market = False
+                    if z_val == '-' or z_val == '':
+                        is_before_market = True
+                        z_val = y_val 
+                    
+                    if is_before_market:
+                        twse_data = f"🔴交易所即時成交價:{z_val} (盤前昨收基準)\n(今日最高:- 今日最低:- 即時個股量:0張)"
+                    else:
+                        twse_data = f"🔴交易所即時成交價:{z_val} (今日最高:{h_val} 今日最低:{l_val} 即時個股量:{v_val}張)"
                     break
             except: continue 
         if twse_data: return f"{twse_data}\n📊{yahoo_ma}"
@@ -159,7 +172,7 @@ def generate_and_upload_kline(stock_code, period="3月"):
     except: return None
 
 # ==========================================================
-# 💥 5. 背景非同步交易運算中心 (完全保留，口吻已依令調整)
+# 💥 5. 背景非同步交易運算中心 (完全保留 + 🚀新增數值絕對禁令)
 # ==========================================================
 def background_async_task(user_id, user_msg, analysis_type, period_arg):
     try:
@@ -217,7 +230,9 @@ def background_async_task(user_id, user_msg, analysis_type, period_arg):
                     if analysis_type == "大盤": prompt = f"{base_prompt}根據盤勢數據【{real_data}】進行加權指數多空評估。150字內包含：1.多空波段趨勢 2.關鍵支撐與壓力區間 3.交易部位控管策略建議。無須任何免責聲明。"
                     elif analysis_type == "技術面": prompt = f"{base_prompt}根據技術數據【{real_data}】分析【{stock_query}】技術面。150字內包含：1.均線扣抵位置預判 2.短線多空臨界點 3.明確指示。無須任何免責聲明。"
                     elif analysis_type == "籌碼面": prompt = f"{base_prompt}根據量能數據【{real_data}】分析【{stock_query}】籌碼面。150字內包含：1.大戶資金進出意圖 2.市場散戶心理狀態評估 3.明確跟單跟隨指示。無須任何免責聲明。"
-                    elif analysis_type == "劇本": prompt = f"{base_prompt}根據最新即時成交價、均線排列、扣抵位置與成交量能數據【{real_data}】，為【{stock_query}】制定下一步明確交易決策。150字內給出：1.🎯明確行動指令(例：現價買進進場/空手觀望/逢高分批獲利入袋/跌破防守線確實停損) 2.🔥上攻突破追擊點位 3.🛡️拉回低接防守支撐點位。必須給出絕對數字價位。無須任何免責聲明。"
+                    elif analysis_type == "劇本": 
+                        # 🚀 [防護禁令追加] 強制約束 AI 計算點位時的邏輯，阻止幻覺產生
+                        prompt = f"{base_prompt}根據最新即時成交價、均線排列、扣抵位置與成交量能數據【{real_data}】，為【{stock_query}】制定下一步明確交易決策。150字內給出：1.🎯明確行動指令(例：現價買進進場/空手觀望/逢高分批獲利入袋/跌破防守線確實停損) 2.🔥上攻突破追擊點位 3.🛡️拉回低接防守支撐點位。必須給出絕對數字價位。無須任何免責聲明。\n⚠️【最高數值防護限制】：\n1. 你推算的「🔥上攻突破追擊點位」【絕對不可低於】現價！\n2. 你推算的「🛡️拉回低接防守支撐點位」【絕對不可高於】現價！\n3. 若現價與均線正乖離過大，請直接警告「乖離過大嚴禁追高」，禁止捏造突破點！"
                     else: prompt = f"{base_prompt}根據報價數據【{real_data}】分析【{stock_query}】。150字內給出：1.均線趨勢方向 2.主力持股動向推測 3.關鍵支撐防守價位。無須任何免責聲明。"
 
                     response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
@@ -477,6 +492,7 @@ def market_patrol_loop():
                                             f"你是台股王牌操盤參謀。標的 {s['name']}({s['code']})，時相為【{current_phase}】。現價{s['z']}元，盤中均價VWAP為{s['vwap']}元，5MA為{s['ma5']}元，10MA為{s['ma10']}元，明日5MA扣抵{s['kd5']}元。"
                                             f"請根據上述絕對數字，直接在一句話內給出明確下一步行動指令（現價可逢低試單/強勢站穩XX元加碼/破XX元無條件砍單停損）。"
                                             f"【最高憲法】：必須包含絕對數字價位（如：{s['ma5']}元），嚴禁僅使用『月線』、『均線』、『前低』、『破線』或『均價線』等純文字代稱。嚴禁輸出思考過程，50字內。"
+                                            f"⚠️【數值絕對禁令】：推算突破點【絕不可低於】現價，防守點【絕不可高於】現價！乖離過大請直接建議觀望。"
                                         )
                                         response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
                                         if response.text: ai_instruction = response.text.strip()
