@@ -262,6 +262,10 @@ def background_async_task(user_id, user_msg, analysis_type, period_arg):
                     except Exception as e: 
                         attempts += 1
                         ai_error_msg = str(e)
+                        # 🛡️ 429 資源耗盡防禦網：指數退避冷卻機制
+                        if "429" in ai_error_msg:
+                            time.sleep(2 ** attempts) # 等待 2, 4, 8... 秒後再換下一把鑰匙繼續撞
+                            continue
             else:
                 ai_error_msg = "系統未配置有效的 Gemini API Key。"
 
