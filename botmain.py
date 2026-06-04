@@ -424,14 +424,13 @@ def market_patrol_loop():
                         
                         twii_chg = 0.0
                         try:
-                            # 🚀 [大盤] 加上時間戳記，粉碎快取
-                            twii_url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_%5ETWII.tw&_={int(time.time() * 1000)}"
-                            twii_res = req.get(twii_url, timeout=2).json()
-                            if twii_res.get('msgArray'):
-                                twii_data = twii_res['msgArray'][0]
-                                twii_z = float(twii_data.get('z', 0) if twii_data.get('z', '-') != '-' else twii_data.get('y', 0))
-                                twii_y = float(twii_data.get('y', 0))
-                                if twii_y > 0: twii_chg = ((twii_z - twii_y) / twii_y) * 100
+                            # 🚀 [大盤] 改用穩定 Yahoo API 抓取加權指數，徹底解決 0.0% 問題
+                            yh_res = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/^TWII?range=1d&interval=1d", headers=headers, timeout=5).json()
+                            yh_meta = yh_res['chart']['result'][0]['meta']
+                            curr_idx = yh_meta['regularMarketPrice']
+                            prev_idx = yh_meta['chartPreviousClose']
+                            if prev_idx > 0: 
+                                twii_chg = ((curr_idx - prev_idx) / prev_idx) * 100
                         except: pass
 
                         broadcast_msg = f"{phase_title}\n時間：{now.strftime('%H:%M')} (大盤即時：{round(twii_chg, 2)}%)\n====================\n"
@@ -526,12 +525,17 @@ def market_patrol_loop():
                                 broadcast_msg += f"🎯 **行動指令：**\n   {ai_instruction}\n"
                             broadcast_msg += f"--------------------\n"
 
-                        broadcast_msg += "====================\n"
-                        broadcast_msg += "⚠️ **【嚴格防守紀律宣告】**\n"
-                        broadcast_msg += "本盤中快報為 AI 數據實時之量價客觀追蹤，絕非獲利保證。市場瞬息萬變，任何進場策略請務必嚴格控管資金成數（新進單部位嚴禁超過1成試單，乖離過大僅限原有持股續抱，嚴禁加碼），並預先掛好上述絕對價格之觸價條件單。懂得停損，才是能在股海長期生存的唯一法則。"
+                        # 🚀 智慧判斷：只有當真的有股票資訊時，才發送廣播！
+                        if len(ai_payload) > 0:
+                            broadcast_msg += "====================\n"
+                            broadcast_msg += "⚠️ **【戰區紀律宣告】**\n"
+                            broadcast_msg += "本訊號為客觀量價追蹤。嚴禁追高滿倉，新單上限1成。進場務必同步設定「觸價停損單」，留得青山在，不怕沒柴燒。"
 
-                        try: line_bot_api.broadcast(TextSendMessage(text=broadcast_msg))
-                        except Exception as e: print(f"雲端廣播失敗: {e}")
+                            try: line_bot_api.broadcast(TextSendMessage(text=broadcast_msg))
+                            except Exception as e: print(f"雲端廣播失敗: {e}")
+                        else:
+                            # 如果沒有標的，就只在終端機印出紀錄，不吵擾使用者
+                            print(f"{phase_title} - 目前無達標戰略目標，維持觀望。")
                         
                 time.sleep(60) 
             else:
