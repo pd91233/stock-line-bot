@@ -359,6 +359,24 @@ def handle_message(event):
 
     except: pass
 
+
+# ==========================================================
+# 📡 新增：給網頁探子抓取的戰情接口
+# ==========================================================
+from flask import jsonify
+
+@app.route("/api/live_marquee", methods=['GET'])
+def get_live_marquee():
+    # 1. 這裡直接呼叫您現有的盤中運算邏輯，或簡單從 pCloud 讀取一份預存的 JSON
+    # 為了效能，我們可以設定每 60 秒才更新一次這個 JSON 快取
+    try:
+        # 您原本就在用的 JSON 路徑 (或是從您的 market_patrol_loop 產出的路徑)
+        json_url = "https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/live_data.json"
+        res = requests.get(json_url, timeout=3)
+        return jsonify(res.json())
+    except:
+        return jsonify({"fundsText": "📡 系統連線維護中...", "stocksText": "等待盤中戰況上傳..."})
+
 # ==========================================================
 # 🌟 7. 🚀 雲端全時相決策中心
 # ==========================================================
@@ -538,6 +556,20 @@ def market_patrol_loop():
 
                         # 🚀 智慧判斷：只有當真的有股票資訊時，才發送廣播！
                         if len(ai_payload) > 0:
+                            # 📦 [戰術升級] 整理跑馬燈彈藥包
+                            live_data = {
+                                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% | {phase_title}",
+                                "stocksText": " | ".join([f"{s['name']}({s['code']}) {s['z']}元 ({'+' if s['chg']>0 else ''}{s['chg']}%)" for s in ai_payload])
+                            }
+                            
+                            # 💾 寫入 live_data.json (讓前端網頁來抓取)
+                            try:
+                                with open("live_data.json", "w", encoding="utf-8") as f:
+                                    json.dump(live_data, f, ensure_ascii=False)
+                            except Exception as e:
+                                print(f"JSON 寫入失敗: {e}")
+
+                            # 📢 原有的 LINE 廣播功能
                             broadcast_msg += "====================\n"
                             broadcast_msg += "⚠️ **【戰區紀律宣告】**\n"
                             broadcast_msg += "本訊號為客觀量價追蹤。嚴禁追高滿倉，新單上限1成。進場務必同步設定「觸價停損單」，留得青山在，不怕沒柴燒。"
