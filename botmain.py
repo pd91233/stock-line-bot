@@ -604,3 +604,4 @@ class StandaloneApplication:
 if __name__ == "__main__":
     options = {'bind': '0.0.0.0:10000', 'workers': 1, 'threads': 2, 'timeout': 120}
     StandaloneApplication(app, options).run()
+    print("雷達掃描引擎已啟動")
