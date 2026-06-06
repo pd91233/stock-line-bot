@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
-from flask import Flask, request, abort
+from flask import Flask, request, abort, send_file
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
+from flask import send_file
     MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction, ImageSendMessage
 )
 from google import genai
+import json
 import requests
 import os
 import re
@@ -365,17 +367,14 @@ def handle_message(event):
 # ==========================================================
 from flask import jsonify
 
-@app.route("/api/live_marquee", methods=['GET'])
-def get_live_marquee():
-    # 1. 這裡直接呼叫您現有的盤中運算邏輯，或簡單從 pCloud 讀取一份預存的 JSON
-    # 為了效能，我們可以設定每 60 秒才更新一次這個 JSON 快取
+@app.route("/live_data.json", methods=['GET'])
+def get_live_data():
     try:
-        # 您原本就在用的 JSON 路徑 (或是從您的 market_patrol_loop 產出的路徑)
-        json_url = "https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/live_data.json"
-        res = requests.get(json_url, timeout=3)
-        return jsonify(res.json())
-    except:
-        return jsonify({"fundsText": "📡 系統連線維護中...", "stocksText": "等待盤中戰況上傳..."})
+        # 直接由 Render 伺服器傳送根目錄下的 live_data.json
+        return send_file("live_data.json")
+    except Exception:
+        # 若檔案尚未產生 (例如週末或開盤前)，回傳此錯誤訊息
+        return {"error": "戰情包尚未生成 (系統待命)"}, 404
 
 # ==========================================================
 # 🌟 7. 🚀 雲端全時相決策中心
