@@ -563,7 +563,8 @@ def market_patrol_loop():
                             
                             # 💾 寫入 live_data.json (讓前端網頁來抓取)
                             try:
-                                with open("live_data.json", "w", encoding="utf-8") as f:
+                            file_path = os.path.join(os.getcwd(), "live_data.json")
+                                with open(file_path, "w", encoding="utf-8") as f:
                                     json.dump(live_data, f, ensure_ascii=False)
                             except Exception as e:
                                 print(f"JSON 寫入失敗: {e}")
