@@ -382,15 +382,23 @@ def handle_message(event):
 
 
 # ==========================================================
-# 📡 新增：給網頁探子抓取的戰情接口
+# 📡 新增：給網頁探子抓取的戰情接口 (加入跨域 CORS 通行證)
 # ==========================================================
 from flask import jsonify
 
 @app.route("/live_data.json", methods=['GET'])
 def get_live_data():
+    from flask import make_response, send_file
+    import os
     try:
-        # 直接由 Render 伺服器傳送根目錄下的 live_data.json
-        return send_file("live_data.json")
+        file_path = os.path.join(os.getcwd(), "live_data.json")
+        # 建立回應物件
+        response = make_response(send_file(file_path))
+        # 🔑 給予網頁通行證，解除瀏覽器阻擋 (CORS)
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        # 🚫 禁用快取，確保網頁每次都抓到最新戰況
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
     except Exception:
         # 若檔案尚未產生 (例如週末或開盤前)，回傳此錯誤訊息
         return {"error": "戰情包尚未生成 (系統待命)"}, 404
