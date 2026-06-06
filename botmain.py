@@ -308,24 +308,7 @@ def handle_message(event):
     try:
         user_msg = event.message.text.strip()
         user_id = event.source.user_id
-
-
-        # 在 handle_message 裡面，新增這一小段邏輯
-        if user_msg == "測試寫入":
-            test_data = {
-                "fundsText": "📢 [測試成功] 系統彈藥庫路徑驗收完成！",
-                "stocksText": "🎯 系統已準備好週一 09:00 自動開火。"
-            }
-            # 強制寫入檔案
-            try:
-                import json
-                file_path = os.path.join(os.getcwd(), "live_data.json")
-                with open(file_path, "w", encoding="utf-8") as f:
-                    json.dump(test_data, f, ensure_ascii=False)
-                line_bot_api.reply_message(event.reply_token, TextSendMessage(text="✅ 測試 JSON 已成功寫入 Render 根目錄！現在請去瀏覽器檢查網址。"))
-            except Exception as e:
-                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ 寫入失敗: {str(e)}"))
-            return
+       
 
 
         
