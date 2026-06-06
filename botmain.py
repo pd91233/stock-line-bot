@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
-from flask import Flask, request, abort, send_file
+from flask import Flask, request, abort, send_file, jsonify
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
-from flask import send_file
     MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction, ImageSendMessage
 )
 from google import genai
