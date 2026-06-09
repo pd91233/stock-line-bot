@@ -24,11 +24,11 @@ import mplfinance as mpf
 app = Flask(__name__)  # <--- 您原本的代碼這裡有一行這個
 
 # 🚀 [戰術升級] 繞過硬碟，直接更新記憶體變數
-                            global live_data_cache
-                            live_data_cache = {
-                                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% | {phase_title}",
-                                "stocksText": " | ".join([f"{s['name']}({s['code']}) {s['z']}元 ({'+' if s['chg']>0 else ''}{s['chg']}%)" for s in ai_payload])
-                            }
+global live_data_cache
+live_data_cache = {
+"fundsText": f"📊 加權指數 {round(twii_chg, 2)}% | {phase_title}",
+"stocksText": " | ".join([f"{s['name']}({s['code']}) {s['z']}元 ({'+' if s['chg']>0 else ''}{s['chg']}%)" for s in ai_payload])
+}
 
 # ==========================================================
 # 🔑 1. API 金鑰與通訊參數設定
@@ -616,4 +616,5 @@ if __name__ == "__main__":
     options = {'bind': '0.0.0.0:10000', 'workers': 1, 'threads': 2, 'timeout': 120}
     StandaloneApplication(app, options).run()
     print("雷達掃描引擎已啟動")
+
 
