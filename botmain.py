@@ -21,8 +21,9 @@ import matplotlib
 matplotlib.use('Agg')
 import mplfinance as mpf
 
-app = Flask(__name__)
-# 🚀 [戰術升級] 直接更新記憶體，不寫入硬碟
+app = Flask(__name__)  # <--- 您原本的代碼這裡有一行這個
+
+# 🚀 [戰術升級] 繞過硬碟，直接更新記憶體變數
                             global live_data_cache
                             live_data_cache = {
                                 "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% | {phase_title}",
@@ -377,9 +378,11 @@ from flask import jsonify
 
 @app.route("/live_data.json", methods=['GET'])
 def get_live_data():
+    from flask import jsonify, make_response
     global live_data_cache
+    
     # 🛡️ 直接從記憶體回傳 JSON，繞過所有硬碟權限與路徑問題
-    response = jsonify(live_data_cache)
+    response = make_response(jsonify(live_data_cache))
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     return response
