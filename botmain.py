@@ -22,6 +22,12 @@ matplotlib.use('Agg')
 import mplfinance as mpf
 
 app = Flask(__name__)
+# 🚀 [戰術升級] 直接更新記憶體，不寫入硬碟
+                            global live_data_cache
+                            live_data_cache = {
+                                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% | {phase_title}",
+                                "stocksText": " | ".join([f"{s['name']}({s['code']}) {s['z']}元 ({'+' if s['chg']>0 else ''}{s['chg']}%)" for s in ai_payload])
+                            }
 
 # ==========================================================
 # 🔑 1. API 金鑰與通訊參數設定
@@ -371,20 +377,12 @@ from flask import jsonify
 
 @app.route("/live_data.json", methods=['GET'])
 def get_live_data():
-    from flask import make_response, send_file
-    import os
-    try:
-        file_path = os.path.join(os.getcwd(), "live_data.json")
-        # 建立回應物件
-        response = make_response(send_file(file_path))
-        # 🔑 給予網頁通行證，解除瀏覽器阻擋 (CORS)
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        # 🚫 禁用快取，確保網頁每次都抓到最新戰況
-        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-        return response
-    except Exception:
-        # 若檔案尚未產生 (例如週末或開盤前)，回傳此錯誤訊息
-        return {"error": "戰情包尚未生成 (系統待命)"}, 404
+    global live_data_cache
+    # 🛡️ 直接從記憶體回傳 JSON，繞過所有硬碟權限與路徑問題
+    response = jsonify(live_data_cache)
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return response
 
 # ==========================================================
 # 🌟 7. 🚀 雲端全時相決策中心
@@ -615,3 +613,4 @@ if __name__ == "__main__":
     options = {'bind': '0.0.0.0:10000', 'workers': 1, 'threads': 2, 'timeout': 120}
     StandaloneApplication(app, options).run()
     print("雷達掃描引擎已啟動")
+
