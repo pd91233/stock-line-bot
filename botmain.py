@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from flask import Flask, request, abort, send_file, jsonify
+from flask import Flask, request, abort, send_file, jsonify, make_response
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
@@ -21,13 +21,12 @@ import matplotlib
 matplotlib.use('Agg')
 import mplfinance as mpf
 
-app = Flask(__name__)  # <--- 您原本的代碼這裡有一行這個
+app = Flask(__name__)
 
-# 🚀 [戰術升級] 繞過硬碟，直接更新記憶體變數
-global live_data_cache
+# 🛡️ 戰術快取容器：程式啟動時的預設值 (絕對不能在這裡放 twii_chg 等動態變數)
 live_data_cache = {
-"fundsText": f"📊 加權指數 {round(twii_chg, 2)}% | {phase_title}",
-"stocksText": " | ".join([f"{s['name']}({s['code']}) {s['z']}元 ({'+' if s['chg']>0 else ''}{s['chg']}%)" for s in ai_payload])
+    "fundsText": "⏳ 系統剛啟動，等待盤中數據同步...", 
+    "stocksText": "⏳ 系統剛啟動，等待盤中數據同步..."
 }
 
 # ==========================================================
@@ -225,11 +224,10 @@ def background_async_task(user_id, user_msg, analysis_type, period_arg):
                     try:
                         client = genai.Client(api_key=current_key)
                         
-                        # 🌟 基礎核心指令：全域統一排版、小白用語、強制空行
                         base_prompt = (
                             f"你是頂尖台股操盤參謀兼新手導師。請根據即時報價與數據【{real_data}】為【{stock_query}】制定分析。\n"
                             f"【最高排版指令】：段落之間「必須要有空白行」分隔，嚴禁文字全部擠在一起！\n"
-                            f"【語氣指令】：必須包含「專業術語 (小白白話文解釋)」的格式，例如：多頭排列(均線像爬樓梯一樣健康向上)、大戶鎖碼(主力把籌碼藏口袋不賣)。適時加入紀律警告如「嚴禁剁手追高」、「破線請像機器人一樣無情停損」。\n\n"
+                            f"【語氣指令】：必須包含「專業術語 (小白白話文解釋)」的格式。適時加入紀律警告如「嚴禁剁手追高」、「破線請像機器人一樣無情停損」。\n\n"
                             f"請完全依照下方三段式結構輸出：\n\n"
                         )
 
@@ -237,29 +235,27 @@ def background_async_task(user_id, user_msg, analysis_type, period_arg):
                             prompt = base_prompt + (
                                 "💡 1. 【大盤多空透視】\n判斷目前大盤多空趨勢與量價結構。\n\n"
                                 "🎯 2. 【全軍資金控管指令】\n給出目前適合的持股水位(%)，以及對進場與防守的總體建議。\n\n"
-                                "💰 3. 【大盤攻防點位】\n🚀 突破天花板 (壓力)：XXXXX點 (簡短說明)\n🛒 鐵板防守區 (支撐)：XXXXX點 (簡短說明)\n\n"
+                                "💰 3. 【大盤攻防點位】\n🚀 突破天花板 (壓力)：XXXXX點\n🛒 鐵板防守區 (支撐)：XXXXX點\n\n"
                                 "⚠️ 數值絕對禁令：防守點不可高於現價！嚴禁輸出思考過程。"
                             )
                         elif analysis_type == "技術面":
                             prompt = base_prompt + (
-                                "💡 1. 【技術線型透視】\n專注分析均線排列、扣抵位置預判與乖離率，給出白話文解釋。\n\n"
-                                "🎯 2. 【兩棲作戰行動指令】\n🏃‍♂️ 空手觀望者：(告知該耐心等拉回還是可進場)\n🛡️ 已抱持股者：(告知該續抱、減碼還是停損)\n\n"
+                                "💡 1. 【技術線型透視】\n專注分析均線排列、扣抵預判與乖離率。\n\n"
+                                "🎯 2. 【兩棲作戰行動指令】\n🏃‍♂️ 空手觀望者：\n🛡️ 已抱持股者：\n\n"
                                 "💰 3. 【關鍵攻防點位】\n🚀 突破天花板 (壓力)：XX.X元\n🛒 低接甜蜜點 (支撐)：XX.X元\n🩸 最後逃生門 (停損)：XX.X元\n\n"
-                                "⚠️ 數值絕對禁令：低接與停損點【絕對不可高於】現價！嚴禁輸出思考過程。"
+                                "⚠️ 數值絕對禁令：低接與停損點【絕對不可高於】現價！"
                             )
                         elif analysis_type == "籌碼面":
                             prompt = base_prompt + (
-                                "💡 1. 【主力籌碼透視】\n專注分析大戶資金進出意圖、成交量變化與散戶心理狀態，給出白話文解釋。\n\n"
-                                "🎯 2. 【兩棲作戰行動指令】\n🏃‍♂️ 空手觀望者：(根據籌碼狀況給出進場或觀望建議)\n🛡️ 已抱持股者：(根據主力動向給出續抱或逃跑建議)\n\n"
+                                "💡 1. 【主力籌碼透視】\n專注分析大戶資金進出意圖。\n\n"
+                                "🎯 2. 【兩棲作戰行動指令】\n🏃‍♂️ 空手觀望者：\n🛡️ 已抱持股者：\n\n"
                                 "💰 3. 【關鍵攻防點位】\n🚀 突破天花板 (壓力)：XX.X元\n🛒 低接甜蜜點 (支撐)：XX.X元\n🩸 最後逃生門 (停損)：XX.X元\n\n"
-                                "⚠️ 數值絕對禁令：低接與停損點【絕對不可高於】現價！嚴禁輸出思考過程。"
                             )
-                        else:  # 涵蓋「劇本」與一般「綜合」查詢
+                        else:  
                             prompt = base_prompt + (
-                                "💡 1. 【盤勢透視與主力動向】\n綜合判斷趨勢與籌碼狀況，給出白話文解釋。\n\n"
-                                "🎯 2. 【兩棲作戰行動指令】\n🏃‍♂️ 空手觀望者：(嚴禁追高，告知適合的低接時機)\n🛡️ 已抱持股者：(告知該續抱、減碼還是停損)\n\n"
-                                "💰 3. 【關鍵攻防點位】\n🚀 突破天花板 (壓力)：XX.X元 (站穩這裡會再噴一段)\n🛒 低接甜蜜點 (支撐)：XX.X元 (買進的最佳甜蜜點)\n🩸 最後逃生門 (停損)：XX.X元 (破線請像機器人一樣無情停損)\n\n"
-                                "⚠️ 數值絕對禁令：低接與停損防線【絕對不可高於】現價！嚴禁輸出思考過程。"
+                                "💡 1. 【盤勢透視與主力動向】\n綜合判斷趨勢與籌碼狀況。\n\n"
+                                "🎯 2. 【兩棲作戰行動指令】\n🏃‍♂️ 空手觀望者：\n🛡️ 已抱持股者：\n\n"
+                                "💰 3. 【關鍵攻防點位】\n🚀 突破天花板 (壓力)：XX.X元\n🛒 低接甜蜜點 (支撐)：XX.X元\n🩸 最後逃生門 (停損)：XX.X元\n\n"
                             )
 
                         response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
@@ -270,18 +266,17 @@ def background_async_task(user_id, user_msg, analysis_type, period_arg):
                     except Exception as e: 
                         attempts += 1
                         ai_error_msg = str(e)
-                        # 🛡️ 429 資源耗盡防禦網：指數退避冷卻機制
                         if "429" in ai_error_msg:
-                            time.sleep(2 ** attempts) # 等待 2, 4, 8... 秒後再換下一把鑰匙繼續撞
+                            time.sleep(2 ** attempts) 
                             continue
             else:
                 ai_error_msg = "系統未配置有效的 Gemini API Key。"
 
             def get_color(t): return "🔵" if analysis_type == t else "⚪"
             row_btns = QuickReply(items=[
-                QuickReplyButton(action=MessageAction(label=f"{get_color('技術面')}技術分析預判", text=f"技術面 {stock_code}")),
-                QuickReplyButton(action=MessageAction(label=f"{get_color('籌碼面')}籌碼資金追蹤", text=f"籌碼面 {stock_code}")),
-                QuickReplyButton(action=MessageAction(label=f"{get_color('劇本')}絕對行動決策指示", text=f"劇本 {stock_code}")),
+                QuickReplyButton(action=MessageAction(label=f"{get_color('技術面')}技術預判", text=f"技術面 {stock_code}")),
+                QuickReplyButton(action=MessageAction(label=f"{get_color('籌碼面')}籌碼追蹤", text=f"籌碼面 {stock_code}")),
+                QuickReplyButton(action=MessageAction(label=f"{get_color('劇本')}行動決策", text=f"劇本 {stock_code}")),
                 QuickReplyButton(action=MessageAction(label="📊 呼叫 K線圖", text=f"K線圖 {stock_code}"))
             ])
 
@@ -289,16 +284,16 @@ def background_async_task(user_id, user_msg, analysis_type, period_arg):
                 header_text = f"📊 【市場全景分析・個股盤勢診斷】\n🎯 追蹤標的：{stock_query}\n\n{real_data}\n====================\n{ai_reply}"
                 line_bot_api.push_message(user_id, TextSendMessage(text=header_text, quick_reply=row_btns))
             else:
-                fallback_text = f"📊 【市場全景分析・個股盤勢診斷】\n🎯 追蹤標的：{stock_query}\n\n{real_data}\n====================\n⚠️ AI 雲端大腦連線失敗或超載！\n請直接參考上方數據操作，或稍後再點擊按鈕重試。\n(偵錯碼: {ai_error_msg[:30]})"
+                fallback_text = f"📊 【市場全景分析】\n🎯 追蹤標的：{stock_query}\n\n{real_data}\n====================\n⚠️ AI 雲端大腦連線失敗\n(偵錯碼: {ai_error_msg[:30]})"
                 line_bot_api.push_message(user_id, TextSendMessage(text=fallback_text, quick_reply=row_btns))
 
     except Exception as e: 
         try:
-            line_bot_api.push_message(user_id, TextSendMessage(text=f"⚠️ 系統嚴重異常：\n執行指令時發生崩潰，請回報管理員。\n錯誤：{str(e)[:50]}"))
+            line_bot_api.push_message(user_id, TextSendMessage(text=f"⚠️ 系統嚴重異常：\n{str(e)[:50]}"))
         except: pass
 
 # ==========================================================
-# 📡 6. Webhook 通道
+# 📡 6. Webhook 通道與戰情接口
 # ==========================================================
 @app.route("/", methods=['GET'])
 def home(): return "前線看盤伺服器：交易連線狀態正常，常駐清醒中！"
@@ -310,44 +305,44 @@ def callback():
     except InvalidSignatureError: abort(400)
     return 'OK'
 
+@app.route("/live_data.json", methods=['GET'])
+def get_live_data():
+    global live_data_cache
+    
+    # 🛡️ 直接從記憶體回傳 JSON，繞過所有硬碟權限與 404 問題
+    response = make_response(jsonify(live_data_cache))
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return response
+
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     try:
         user_msg = event.message.text.strip()
         user_id = event.source.user_id
-       
-
-
         
         if user_msg == "獲取系統ID":
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(
-                text=f"您的專屬使用者 ID 為：\n{user_id}\n\n請將此代碼填入系統後台的 ADMIN_LINE_ID 環境變數中。"
-            ))
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"您的專屬使用者 ID 為：\n{user_id}"))
             return
 
         if user_msg.startswith("問題回報 ") or user_msg.startswith("回報 "):
             issue_content = user_msg.replace("問題回報 ", "").replace("回報 ", "").strip()
             if not issue_content:
-                line_bot_api.reply_message(event.reply_token, TextSendMessage(
-                    text="⚠️ 格式錯誤：請在「問題回報」後方加上空格，並說明您遇到的狀況。\n範例：問題回報 K線圖無法顯示"
-                ))
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 格式錯誤"))
                 return
-            
-            reply_text = f"✅ 已收到您的系統反饋：\n「{issue_content}」\n管理員將盡快查閱並維護交易環境。"
+            reply_text = f"✅ 已收到您的系統反饋：\n「{issue_content}」"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
             
             admin_id = os.environ.get('ADMIN_LINE_ID')
             if admin_id:
-                try:
-                    alert_msg = f"🚨 【看盤系統異常回報】\n發送用戶 ID: {user_id}\n問題內容：\n{issue_content}"
-                    line_bot_api.push_message(admin_id, TextSendMessage(text=alert_msg))
+                try: line_bot_api.push_message(admin_id, TextSendMessage(text=f"🚨 【異常回報】\n{user_id}\n{issue_content}"))
                 except: pass
             return
 
         if user_msg in ["最新戰報", "調閱戰報", "戰報"]:
             timestamp = datetime.datetime.now().strftime("%H%M%S")
             report_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/latest_report.html?v={timestamp}"
-            broadcast_text = f"📊 【策略選股大師・當日最新特報】\n========================\n主控台已將本日最新核心選股策略網頁歸檔至雲端補給線！\n\n🔗 點擊解鎖本日最新網頁戰報 (跳出獨立瀏覽器新視窗)：\n{report_url}"
+            broadcast_text = f"📊 【策略選股大師・當日最新特報】\n========================\n🔗 點擊解鎖：\n{report_url}"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=broadcast_text))
             return
 
@@ -362,30 +357,11 @@ def handle_message(event):
         elif "劇本" in user_msg or "實戰劇本" in user_msg: analysis_type, user_msg = "劇本", user_msg.replace("實戰劇本", "").replace("劇本", "").strip()
         elif "技術面" in user_msg: analysis_type, user_msg = "技術面", user_msg.replace("技術面", "").strip()
         elif "籌碼面" in user_msg: analysis_type, user_msg = "籌碼面", user_msg.replace("籌碼面", "").strip()
-        elif "題材面" in user_msg: analysis_type, user_msg = "題材面", user_msg.replace("題材面", "").strip()
-        elif "同族群" in user_msg: analysis_type, user_msg = "同族群", user_msg.replace("同族群", "").strip()
 
         if len(user_msg) > 15: return
         threading.Thread(target=background_async_task, args=(user_id, user_msg, analysis_type, period_arg)).start()
 
     except: pass
-
-
-# ==========================================================
-# 📡 新增：給網頁探子抓取的戰情接口 (加入跨域 CORS 通行證)
-# ==========================================================
-from flask import jsonify
-
-@app.route("/live_data.json", methods=['GET'])
-def get_live_data():
-    from flask import jsonify, make_response
-    global live_data_cache
-    
-    # 🛡️ 直接從記憶體回傳 JSON，繞過所有硬碟權限與路徑問題
-    response = make_response(jsonify(live_data_cache))
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    return response
 
 # ==========================================================
 # 🌟 7. 🚀 雲端全時相決策中心
@@ -450,7 +426,7 @@ def market_patrol_loop():
                             if response.text: ai_filter = response.text.strip()
                         except: pass
                         
-                    night_report = f"{phase_title}\n數據時間：{now.strftime('%Y-%m-%d %H:%M')}\n====================\n🇺🇸 費城半導體盤前: {sox_pct}%\n📉 台積電 ADR 盤前: {tsm_pct}%\n📊 台指期夜盤即時: {night_p}\n====================\n🛡️ 【風控長明日戰略環境預判】\n{ai_filter}\n====================\n⚠️ 【嚴格防守紀律宣告】\n本環境預判為國際量價共振之客觀追蹤，絕非獲利保證。市場具備隨時反轉風險，任何交易請務必嚴格控管資金成數，並預先掛好停損條件單。"
+                    night_report = f"{phase_title}\n數據時間：{now.strftime('%Y-%m-%d %H:%M')}\n====================\n🇺🇸 費城半導體盤前: {sox_pct}%\n📉 台積電 ADR 盤前: {tsm_pct}%\n📊 台指期夜盤即時: {night_p}\n====================\n🛡️ 【風控長明日戰略環境預判】\n{ai_filter}\n====================\n⚠️ 【嚴格防守紀律宣告】\n市場具備隨時反轉風險，任何交易請務必預先掛好停損條件單。"
                     try: line_bot_api.broadcast(TextSendMessage(text=night_report))
                     except: pass
                     time.sleep(60)
@@ -467,7 +443,6 @@ def market_patrol_loop():
                         
                         twii_chg = 0.0
                         try:
-                            # 🚀 [大盤] 改用穩定 Yahoo API 抓取加權指數
                             yh_res = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/^TWII?range=1d&interval=1d", headers=headers, timeout=5).json()
                             yh_meta = yh_res['chart']['result'][0]['meta']
                             curr_idx = yh_meta['regularMarketPrice']
@@ -514,7 +489,7 @@ def market_patrol_loop():
                                     
                                     if twii_chg <= -1.0:
                                         veto_triggered = True
-                                        veto_reason = f"🚨 大盤目前跌幅 {round(twii_chg,2)}% 觸發環境崩塌警報。本檔被迫取消多方評估，禁止任何買進試單！持股者請死守防守價 {info['ma5']}元 (5MA) 或 {info['ma10']}元 (10MA)，一旦收盤跌破必須確實執行停損，保留資金實力。"
+                                        veto_reason = f"🚨 大盤目前跌幅 {round(twii_chg,2)}% 觸發環境崩塌警報。本檔被迫取消多方評估，禁止任何買進試單！持股者請死守防守價 {info['ma5']}元 (5MA) 或 {info['ma10']}元 (10MA)。"
                                     elif z >= h * 0.99 and chg > 2 and v_ratio < 0.8:
                                         veto_triggered = True
                                         veto_reason = f"🚨 現價 {z}元 創高，但預估量僅達5日均量之 {v_ratio}倍 (量縮背離)。此為典型無量虛胖誘多陷阱，強烈建議空手者嚴格觀望，絕對禁止在現價追高買進！"
@@ -523,10 +498,10 @@ def market_patrol_loop():
                                         veto_reason = f"🚨 股價現報 {z}元，仍受制於盤中大戶平均成本線 {vwap}元 (VWAP) 下方。在未能穩定站上 {vwap}元 之前，反彈皆為假象，嚴禁伸手接刀或盲目攤平。"
                                     elif chg > 3 and shadow_pct > 40.0:
                                         veto_triggered = True
-                                        veto_reason = f"🚨 股價雖高達 {z}元，但盤中上影線比例已達 {shadow_pct}% (已超過40%出貨臨界點)。這代表買盤力道遭主力拋壓吞噬，型態轉為出貨K線，強烈警告空手者現價禁止接刀，持股者若跌破 {vwap}元 (盤中均價) 請立即減碼落跑。"
+                                        veto_reason = f"🚨 股價雖高達 {z}元，但盤中上影線比例已達 {shadow_pct}% (出貨臨界點)。這代表買盤力道遭主力拋壓吞噬，型態轉為出貨K線，強烈警告現價禁止接刀。"
                                     elif is_overheated_tr:
                                         veto_triggered = True
-                                        veto_reason = f"🚨 本標的量能爆發達 {v_ratio}倍，籌碼處於極度失控與過熱狀態。這種凌亂籌碼尾盤極容易引發人踩人多殺多跳水風險，軍令強制：此檔今日封鎖交易，嚴禁真金白銀進場搏鬥！"
+                                        veto_reason = f"🚨 本標的量能爆發達 {v_ratio}倍，籌碼處於極度失控狀態。容易引發人踩人多殺多跳水風險，軍令強制：此檔今日封鎖交易，嚴禁進場！"
 
                                     stock_payload = {
                                         "code": code, "name": name, "type": info.get('type', 'core'),
@@ -550,10 +525,9 @@ def market_patrol_loop():
                                     try:
                                         client = genai.Client(api_key=next(key_cycle))
                                         prompt = (
-                                            f"你是台股王牌操盤參謀。標的 {s['name']}({s['code']})，時相為【{current_phase}】。現價{s['z']}元，盤中均價VWAP為{s['vwap']}元，5MA為{s['ma5']}元，10MA為{s['ma10']}元，明日5MA扣抵{s['kd5']}元。"
-                                            f"請根據上述絕對數字，直接在一句話內給出明確下一步行動指令（現價可逢低試單/強勢站穩XX元加碼/破XX元無條件砍單停損）。"
-                                            f"【最高憲法】：必須包含絕對數字價位（如：{s['ma5']}元），嚴禁僅使用『月線』、『均線』、『前低』、『破線』或『均價線』等純文字代稱。嚴禁輸出思考過程，50字內。"
-                                            f"⚠️【數值絕對禁令】：推算突破點【絕不可低於】現價，防守點【絕不可高於】現價！乖離過大請直接建議觀望。"
+                                            f"你是台股王牌操盤參謀。標的 {s['name']}({s['code']})，現價{s['z']}元，盤中均價VWAP為{s['vwap']}元，5MA為{s['ma5']}元，10MA為{s['ma10']}元。"
+                                            f"請根據上述絕對數字，直接在一句話內給出明確下一步行動指令。"
+                                            f"⚠️【數值絕對禁令】：推算突破點絕不可低於現價，防守點絕不可高於現價！"
                                         )
                                         response = client.models.generate_content(model='gemini-2.5-flash', contents=prompt)
                                         if response.text: ai_instruction = response.text.strip()
@@ -561,29 +535,20 @@ def market_patrol_loop():
                                 
                                 time.sleep(5) 
 
-                                broadcast_msg += f"🎯 **行動指令：**\n   {ai_instruction}\n"
+                            broadcast_msg += f"🎯 **行動指令：**\n   {ai_instruction}\n"
                             broadcast_msg += f"--------------------\n"
 
-                        # 🚀 智慧判斷：只有當真的有股票資訊時，才發送廣播！
                         if len(ai_payload) > 0:
-                            # 📦 [戰術升級] 整理跑馬燈彈藥包
-                            live_data = {
+                            # 🚀 [戰術升級] 直接更新記憶體變數，確保網頁端能抓取到最新 JSON！
+                            global live_data_cache
+                            live_data_cache = {
                                 "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% | {phase_title}",
                                 "stocksText": " | ".join([f"{s['name']}({s['code']}) {s['z']}元 ({'+' if s['chg']>0 else ''}{s['chg']}%)" for s in ai_payload])
                             }
-                            
-                            # 💾 寫入 live_data.json (讓前端網頁來抓取)
-                            try:
-                                file_path = os.path.join(os.getcwd(), "live_data.json")
-                                with open(file_path, "w", encoding="utf-8") as f:
-                                    json.dump(live_data, f, ensure_ascii=False)
-                            except Exception as e:
-                                print(f"JSON 寫入失敗: {e}")
 
-                            # 📢 原有的 LINE 廣播功能
                             broadcast_msg += "====================\n"
                             broadcast_msg += "⚠️ **【戰區紀律宣告】**\n"
-                            broadcast_msg += "本訊號為客觀量價追蹤。嚴禁追高滿倉，新單上限1成。進場務必同步設定「觸價停損單」，留得青山在，不怕沒柴燒。"
+                            broadcast_msg += "本訊號為客觀量價追蹤。嚴禁追高滿倉，進場務必設定觸價停損單。"
                             try: line_bot_api.broadcast(TextSendMessage(text=broadcast_msg))
                             except Exception as e: print(f"雲端廣播失敗: {e}")
                         else:
@@ -616,5 +581,3 @@ if __name__ == "__main__":
     options = {'bind': '0.0.0.0:10000', 'workers': 1, 'threads': 2, 'timeout': 120}
     StandaloneApplication(app, options).run()
     print("雷達掃描引擎已啟動")
-
-
