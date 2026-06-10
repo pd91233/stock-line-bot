@@ -204,13 +204,12 @@ def execute_force_refresh():
         tmp_stocks = []
         flow_text = f"🔥 資金主攻：【{true_market_top_ind}】({'+' if true_market_top_chg>0 else ''}{round(true_market_top_chg,2)}%)"
         
-        if res_json.status_code == 200:
+ if res_json.status_code == 200:
             raw_data = res_json.json()
             if isinstance(raw_data, list):
                 ticker_to_info = {}
                 symbols_to_fetch = []
                 
-                # 格式化戰報名單
                 for item in raw_data:
                     code = str(item.get("代碼", "")).strip()
                     name = item.get("商品", "").strip()
@@ -222,7 +221,6 @@ def execute_force_refresh():
                     ticker_to_info[symbol] = {"code": code, "name": name, "industry": industry}
                     symbols_to_fetch.append(symbol)
                 
-                # 極速批量查詢這 87 檔個股的盤中脈搏
                 realtime_results = {}
                 chunk_size = 40
                 for i in range(0, len(symbols_to_fetch), chunk_size):
@@ -240,23 +238,40 @@ def execute_force_refresh():
                             }
                     except: pass
 
-                # 💥 核心交集過濾：重新掃描您的戰報，只有屬於「大盤真實主攻族群 (true_market_top_ind)」的精選股才准進入跑馬燈！
                 for sym, info in ticker_to_info.items():
                     ind_clean = info["industry"].replace("上市", "").replace("上櫃", "").strip()
                     
-                    # 比如全市場半導體在噴，且您的戰報裡剛好有這檔半導體股，立刻抓出來
                     if ind_clean == true_market_top_ind:
                         price = realtime_results.get(sym, {}).get("price", 0.0)
                         chg = realtime_results.get(sym, {}).get("chg", 0.0)
                         
-                        # 完美相容本機 main.py 的 data-stock 智慧分身切碎導航超連結
                         stock_link = f"<a href='#stock-{info['code']}' style='color: inherit; text-decoration: none;'>{info['name']}({info['code']}) {price}元 ({'+' if chg>0 else ''}{round(chg,2)}%)</a>"
                         tmp_stocks.append(stock_link)
             
-            # 戰術防空轉
             if not tmp_stocks:
                 tmp_stocks = [f"📡 全市場主攻【{true_market_top_ind}】，但本次戰報標的暫無此族群個股發動"]
             
+            # ==========================================================
+            # 📰 [新聞突擊] 🚀 寄生大盤：極速抓取鉅亨網全台股最新 3 條盤中焦點頭條
+            # ==========================================================
+            news_text = ""
+            try:
+                news_url = "https://api.cnyes.com/media/api/v1/newslist/category/tw_stock?limit=3"
+                news_res = requests.get(news_url, headers=headers, timeout=4).json()
+                news_items = news_res.get("items", {}).get("data", [])
+                
+                news_list = []
+                for item in news_items:
+                    title = item.get("title", "").strip()
+                    if title:
+                        clean_title = title.replace('"', '').replace("'", "")[:24]
+                        news_list.append(f"<span style='color: #fda4af;'>📰 快訊：{clean_title}...</span>")
+                
+                if news_list:
+                    news_text = " ｜ ".join(news_list) + " ｜ "
+            except Exception as e_news:
+                print(f"⚠️ 即時頭條抓取失聯: {e_news}")
+
             # 印刻至實體硬碟快取檔
             update_cache({
                 "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {news_text}{flow_text}",
