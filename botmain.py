@@ -259,7 +259,7 @@ def execute_force_refresh():
             
             # 印刻至實體硬碟快取檔
             update_cache({
-                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {flow_text}",
+                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {news_text}{flow_text}",
                 "stocksText": " ｜ ".join(tmp_stocks)
             })
             print("✅ [戰術回報] 全市場真實資金流向與精選戰報交集篩選已完美寫入硬碟快取！")
