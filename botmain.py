@@ -116,7 +116,7 @@ def fetch_cnyes_news():
     return ""
 
 # ==========================================================
-# 📊 4. 雙通道個股即時行情分析中心
+# 📊 4. 雙通道個股即時行情 analysis 中心
 # ==========================================================
 def fetch_realtime_data(stock_code):
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -224,7 +224,7 @@ def execute_force_refresh():
 
         print(f"🎯 [全網通報] 當前台股大盤真實資金主攻部隊：【{true_market_top_ind}】({true_market_top_chg}%)")
 
-        print("🕵️‍♂️ [戰報對齊] 3. 下載 pCloud 監控名單並進行族群交集篩選...")
+        print("🕵️‍♂️ [戰報對齊] 3. 下載 pCloud 監攻名單並進行族群交集篩選...")
         timestamp_v = datetime.datetime.now().strftime("%H%M%S")
         json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={timestamp_v}"
         res_json = requests.get(json_url, headers=headers, timeout=10)
@@ -283,7 +283,7 @@ def execute_force_refresh():
             # 🚀 執行新聞空投寄生
             news_headline = fetch_cnyes_news()
             
-            # 💥 戰術修正：將資金主攻調度至新聞快訊的前方
+            # 💥 戰術修正：大盤 ➔ 資金主攻 ➔ 新聞快訊
             update_cache({
                 "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {flow_text} ｜ {news_headline}",
                 "stocksText": " ｜ ".join(tmp_stocks)
@@ -357,7 +357,7 @@ def market_patrol_loop():
                 current_phase = "0915"; phase_title = "🌅 09:15 【早盤強勢突破與假開高篩選點】"
             elif not is_weekend and now.hour == 10 and now.minute == 0 and "1000" not in triggered_phases:
                 current_phase = "1000"; phase_title = "📈 10:00 【早盤方向確認點】"
-            elif not is_weekend wildlife and now.hour == 12 and now.minute == 30 and "1230" not in triggered_phases:
+            elif not is_weekend and now.hour == 12 and now.minute == 30 and "1230" not in triggered_phases:
                 current_phase = "1230"; phase_title = "⚖️ 12:30 【尾盤籌碼定調點】"
             elif not is_weekend and now.hour == 13 and now.minute == 15 and "1315" not in triggered_phases:
                 current_phase = "1315"; phase_title = "👑 13:15 【終局之戰：主力作線與鎖碼確認點】"
@@ -454,9 +454,8 @@ def market_patrol_loop():
 
                         if len(ai_payload) > 0:
                             news_headline = fetch_cnyes_news()
-                            # 💥 戰術同步：定時自動發報的新聞也排列在階段報告後方
                             update_cache({
-                                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {phase_title} ｜ {news_headline}",
+                                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {flow_text} ｜ {news_headline}",
                                 "stocksText": " | ".join([f"{s['name']}({s['code']}) {s['z']}元 ({'+' if s['chg']>0 else ''}{s['chg']}%)" for s in ai_payload])
                             })
 
