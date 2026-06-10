@@ -283,8 +283,9 @@ def execute_force_refresh():
             # 🚀 執行新聞空投寄生
             news_headline = fetch_cnyes_news()
             
+            # 💥 戰術修正：將資金主攻調度至新聞快訊的前方
             update_cache({
-                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {news_headline}{flow_text}",
+                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {flow_text} ｜ {news_headline}",
                 "stocksText": " ｜ ".join(tmp_stocks)
             })
             print("✅ [戰術回報] 全市場真實資金流向與精選戰報交集篩選已完美寫入硬碟快取！")
@@ -356,7 +357,7 @@ def market_patrol_loop():
                 current_phase = "0915"; phase_title = "🌅 09:15 【早盤強勢突破與假開高篩選點】"
             elif not is_weekend and now.hour == 10 and now.minute == 0 and "1000" not in triggered_phases:
                 current_phase = "1000"; phase_title = "📈 10:00 【早盤方向確認點】"
-            elif not is_weekend and now.hour == 12 and now.minute == 30 and "1230" not in triggered_phases:
+            elif not is_weekend wildlife and now.hour == 12 and now.minute == 30 and "1230" not in triggered_phases:
                 current_phase = "1230"; phase_title = "⚖️ 12:30 【尾盤籌碼定調點】"
             elif not is_weekend and now.hour == 13 and now.minute == 15 and "1315" not in triggered_phases:
                 current_phase = "1315"; phase_title = "👑 13:15 【終局之戰：主力作線與鎖碼確認點】"
@@ -413,7 +414,7 @@ def market_patrol_loop():
                                     z = float(data.get('z', 0) if data.get('z', '-') != '-' else data.get('y', 0)) 
                                     o = float(data.get('o', z) if data.get('o', '-') != '-' else z)                  
                                     h = float(data.get('h', z) if data.get('h', '-') != '-' else z)                  
-                                    l = float(data.get('l', z) if data.get('l', '-') != '-' else l)                  
+                                    l = float(data.get('l', z) if data.get('l', '-') != '-' else z)                  
                                     v = float(data.get('v', 0) if data.get('v', '-') != '-' else 0)                  
                                     y = float(data.get('y', z))                                                                    
                                     chg = round(((z - y) / y) * 100, 2) if y > 0 else 0.0
@@ -453,8 +454,9 @@ def market_patrol_loop():
 
                         if len(ai_payload) > 0:
                             news_headline = fetch_cnyes_news()
+                            # 💥 戰術同步：定時自動發報的新聞也排列在階段報告後方
                             update_cache({
-                                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% | {news_headline}{phase_title}",
+                                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {phase_title} ｜ {news_headline}",
                                 "stocksText": " | ".join([f"{s['name']}({s['code']}) {s['z']}元 ({'+' if s['chg']>0 else ''}{s['chg']}%)" for s in ai_payload])
                             })
 
