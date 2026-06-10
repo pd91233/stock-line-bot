@@ -140,70 +140,117 @@ def fetch_realtime_data(stock_code):
     return f"{yahoo_price}\n{yahoo_ma}"
 
 # ==========================================================
-# 🚀 專為開機與網頁探子設計的強制刷新引擎 (終極防護與除錯版)
+# 🚀 專為開機與網頁探子設計的強制刷新引擎 (極速批量爬取 ＋ 資金流向演算版)
 # ==========================================================
 def execute_force_refresh():
     global live_data_cache
-    # 💥 換上最高級的真人瀏覽器偽裝裝甲
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     
     try:
-        print("🕵️‍♂️ [偵蒐行動] 1. 準備抓取大盤...")
+        print("🕵️‍♂️ [偵蒐行動] 1. 準備抓取大盤數據...")
         twii_chg = 0.0
         try:
             yh_res = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/^TWII?range=1d&interval=1d", headers=headers, timeout=5).json()
-            twii_chg = ((yh_res['chart']['result'][0]['meta']['regularMarketPrice'] - yh_res['chart']['result'][0]['meta']['chartPreviousClose']) / yh_res['chart']['result'][0]['meta']['chartPreviousClose']) * 100
+            meta = yh_res['chart']['result'][0]['meta']
+            twii_chg = ((meta['regularMarketPrice'] - meta['chartPreviousClose']) / meta['chartPreviousClose']) * 100
         except: pass
 
-        print("🕵️‍♂️ [偵蒐行動] 2. 準備潛入 pCloud 下載名單...")
+        print("🕵️‍♂️ [偵蒐行動] 2. 潛入 pCloud 下載全套監控名單...")
         timestamp_v = datetime.datetime.now().strftime("%H%M%S")
         json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={timestamp_v}"
-        
-        # 💥 關鍵修復：下載名單時「必須」掛上 headers，否則會被當成惡意爬蟲阻擋！
         res_json = requests.get(json_url, headers=headers, timeout=10)
-        print(f"📡 pCloud 回應狀態碼: {res_json.status_code}")
         
         if res_json.status_code == 200:
             raw_data = res_json.json()
-            print(f"📡 名單下載成功，長度: {len(raw_data)}")
+            if not isinstance(raw_data, list):
+                print("⚠️ 戰術警告：pCloud 檔案非預期的陣列格式。")
+                return
+                
+            print(f"📡 成功載入 {len(raw_data)} 檔核心戰略標的，開始重組通訊格式...")
             
-            if isinstance(raw_data, list):
-                monitor_data = {str(item.get("代碼")): {"name": item.get("商品", item.get("代碼"))} for item in raw_data if "代碼" in item}
-            else: monitor_data = raw_data
+            ticker_to_info = {}
+            symbols_to_fetch = []
             
-            tmp_stocks = []
-            print("🕵️‍♂️ [偵蒐行動] 3. 準備抓取 Yahoo 個股報價...")
-            for code, info in list(monitor_data.items())[:5]:
+            # 解析上市/上櫃後綴，包裝成 Yahoo 批量接口
+            for item in raw_data:
+                code = str(item.get("代碼", "")).strip()
+                name = item.get("商品", "").strip()
+                industry = item.get("產業", "").strip()
+                if not code: continue
+                
+                # 自動判定市場，精準指派後綴
+                suffix = ".TWO" if "上櫃" in industry else ".TW"
+                symbol = f"{code}{suffix}"
+                
+                ticker_to_info[symbol] = {"code": code, "name": name, "industry": industry}
+                symbols_to_fetch.append(symbol)
+            
+            # 💥 核心戰術：分批(每批40檔)向 Yahoo 索要即時報價，1秒之內即可全部完成！
+            realtime_results = {}
+            chunk_size = 40
+            for i in range(0, len(symbols_to_fetch), chunk_size):
+                chunk = symbols_to_fetch[i:i+chunk_size]
+                symbols_str = ",".join(chunk)
                 try:
-                    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=1d"
-                    res = requests.get(url, headers=headers, timeout=5).json()
-                    if not res.get('chart', {}).get('result'): 
-                        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TWO?range=1d&interval=1d"
-                        res = requests.get(url, headers=headers, timeout=5).json()
-                        
-                    meta = res['chart']['result'][0]['meta']
-                    z = meta['regularMarketPrice']
-                    y = meta['chartPreviousClose']
-                    chg = round(((z - y) / y) * 100, 2) if y > 0 else 0.0
-                    tmp_stocks.append(f"{info.get('name', code)}({code}) {z}元 ({'+' if chg>0 else ''}{chg}%)")
-                    print(f"✅ 成功獲取: {code}")
-                except Exception as e: 
-                    print(f"⚠️ 抓取 {code} 失敗: {e}")
-                    continue
+                    q_url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols_str}"
+                    q_res = requests.get(q_url, headers=headers, timeout=5).json()
+                    quotes = q_res.get("quoteResponse", {}).get("result", [])
+                    for q in quotes:
+                        sym = q.get("symbol")
+                        price = q.get("regularMarketPrice", 0.0)
+                        chg_pct = q.get("regularMarketChangePercent", 0.0)
+                        realtime_results[sym] = {"price": price, "chg": chg_pct}
+                except: pass
             
-            # 💥 改為呼叫 update_cache 寫入實體檔案
-            if tmp_stocks:
-                update_cache({"fundsText": f"📊 加權指數 {round(twii_chg, 2)}% | 📡 全時相雷達聯網中", "stocksText": " | ".join(tmp_stocks)})
-                print("✅ [戰術回報] 任務大獲全勝，實體檔案已更新！")
-            else:
-                # 💥 死亡回報：就算抓不到股票，也要寫入實體檔案
-                update_cache({"fundsText": "⚠️ 報價異常", "stocksText": "Yahoo API 拒絕連線或查無資料"})
+            # 💥 核心演算法：群體共振，計算真實資金熱力
+            industry_stats = {}
+            tmp_stocks = []
+            
+            for sym, info in ticker_to_info.items():
+                if sym in realtime_results:
+                    price = realtime_results[sym]["price"]
+                    chg = realtime_results[sym]["chg"]
+                    
+                    # 淨化族群名稱 (除去"上市"、"上櫃"字眼，讓畫面更精簡 scannable)
+                    ind_clean = info["industry"].replace("上市", "").replace("上櫃", "")
+                    
+                    if ind_clean not in industry_stats:
+                        industry_stats[ind_clean] = []
+                    industry_stats[ind_clean].append(chg)
+                    
+                    # 挑選前 5 檔放進個股跑馬燈展示
+                    if len(tmp_stocks) < 5:
+                        tmp_stocks.append(f"{info['name']}({info['code']}) {price}元 ({'+' if chg>0 else ''}{round(chg,2)}%)")
+            
+            # 計算各族群平均漲幅
+            industry_avg = {}
+            for ind, chgs in industry_stats.items():
+                if chgs:
+                    industry_avg[ind] = sum(chgs) / len(chgs)
+            
+            # 依據漲幅進行多頭排列，找出最強族群
+            sorted_ind = sorted(industry_avg.items(), key=lambda x: x[1], reverse=True)
+            
+            # 4. 組裝頂級資金流向文字
+            flow_text = "🔥 資金流向：市場籌碼觀望"
+            if sorted_ind:
+                top_1 = sorted_ind[0]
+                flow_text = f"🔥 資金主攻：【{top_1[0]}】({'+' if top_1[1]>0 else ''}{round(top_1[1],2)}%)"
+                # 如果有第二強且是紅盤的族群，列為副攻
+                if len(sorted_ind) > 1 and sorted_ind[1][1] > 0:
+                    top_2 = sorted_ind[1]
+                    flow_text += f" ｜ 🚀 強勢副攻：【{top_2[0]}】(+{round(top_2[1],2)}%)"
+            
+            # 5. 印刻至實體硬碟快取檔
+            update_cache({
+                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {flow_text}",
+                "stocksText": " ｜ ".join(tmp_stocks)
+            })
+            print("✅ [戰術回報] 資金熱力流向與批量報價已成功寫入硬碟快取！")
         else:
-            # 💥 死亡回報：pCloud 擋住了，寫入實體檔案
-            update_cache({"fundsText": "⚠️ 雲端阻擋", "stocksText": f"pCloud 拒絕連線 (HTTP狀態碼: {res_json.status_code})"})
+            update_cache({"fundsText": "⚠️ 雲端阻擋", "stocksText": f"pCloud 拒絕連線 (狀態碼: {res_json.status_code})"})
             
     except Exception as e:
-        # 💥 死亡回報：程式寫錯或網路斷線，寫入實體檔案
         update_cache({"fundsText": "❌ 嚴重當機", "stocksText": f"錯誤代碼: {str(e)}"})
         print(f"❌ 致命錯誤: {e}")
 
