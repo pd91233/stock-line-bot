@@ -24,11 +24,22 @@ import mplfinance as mpf
 app = Flask(__name__)
 
 # 🛡️ 戰術快取容器
-global live_data_cache
-live_data_cache = {
-    "fundsText": "⏳ 系統剛啟動，等待盤中數據同步...", 
-    "stocksText": "⏳ 系統剛啟動，等待盤中數據同步..."
-}
+# ✅ 替換為這段
+CACHE_FILE = "live_data_cache.json"
+
+def update_cache(data):
+    try:
+        with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False)
+    except: pass
+
+def read_cache():
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except: pass
+    return {"fundsText": "⏳ 系統剛啟動，等待盤中數據同步...", "stocksText": "⏳ 系統剛啟動，等待盤中數據同步..."}
 
 # ==========================================================
 # 🔑 1. API 金鑰與通訊參數設定
@@ -180,19 +191,20 @@ def execute_force_refresh():
                     print(f"⚠️ 抓取 {code} 失敗: {e}")
                     continue
             
+            # 💥 改為呼叫 update_cache 寫入實體檔案
             if tmp_stocks:
-                live_data_cache = {"fundsText": f"📊 加權指數 {round(twii_chg, 2)}% | 📡 全時相雷達聯網中", "stocksText": " | ".join(tmp_stocks)}
-                print("✅ [戰術回報] 任務大獲全勝，記憶體已更新！")
+                update_cache({"fundsText": f"📊 加權指數 {round(twii_chg, 2)}% | 📡 全時相雷達聯網中", "stocksText": " | ".join(tmp_stocks)})
+                print("✅ [戰術回報] 任務大獲全勝，實體檔案已更新！")
             else:
-                # 💥 死亡回報：就算抓不到股票，也要告訴統帥是 Yahoo 的問題
-                live_data_cache = {"fundsText": "⚠️ 報價異常", "stocksText": "Yahoo API 拒絕連線或查無資料"}
+                # 💥 死亡回報：就算抓不到股票，也要寫入實體檔案
+                update_cache({"fundsText": "⚠️ 報價異常", "stocksText": "Yahoo API 拒絕連線或查無資料"})
         else:
-            # 💥 死亡回報：告訴統帥是 pCloud 擋住了
-            live_data_cache = {"fundsText": "⚠️ 雲端阻擋", "stocksText": f"pCloud 拒絕連線 (HTTP狀態碼: {res_json.status_code})"}
+            # 💥 死亡回報：pCloud 擋住了，寫入實體檔案
+            update_cache({"fundsText": "⚠️ 雲端阻擋", "stocksText": f"pCloud 拒絕連線 (HTTP狀態碼: {res_json.status_code})"})
             
     except Exception as e:
-        # 💥 死亡回報：程式寫錯或網路斷線
-        live_data_cache = {"fundsText": "❌ 嚴重當機", "stocksText": f"錯誤代碼: {str(e)}"}
+        # 💥 死亡回報：程式寫錯或網路斷線，寫入實體檔案
+        update_cache({"fundsText": "❌ 嚴重當機", "stocksText": f"錯誤代碼: {str(e)}"})
         print(f"❌ 致命錯誤: {e}")
 
 # ==========================================================
@@ -210,8 +222,7 @@ def callback():
 
 @app.route("/live_data.json", methods=['GET'])
 def get_live_data():
-    global live_data_cache
-    response = make_response(jsonify(live_data_cache))
+    response = make_response(jsonify(read_cache())) # 💥 改為讀取實體檔案
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     return response
@@ -346,11 +357,11 @@ def market_patrol_loop():
                             except: continue
 
                         if len(ai_payload) > 0:
-                            global live_data_cache
-                            live_data_cache = {
+                            # 💥 改為呼叫 update_cache 寫入實體檔案
+                            update_cache({
                                 "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% | {phase_title}",
                                 "stocksText": " | ".join([f"{s['name']}({s['code']}) {s['z']}元 ({'+' if s['chg']>0 else ''}{s['chg']}%)" for s in ai_payload])
-                            }
+                            })
 
                 time.sleep(60) 
             else:
