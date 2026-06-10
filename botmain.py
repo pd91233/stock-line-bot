@@ -294,6 +294,31 @@ def get_live_data():
 def handle_message(event):
     pass # 省略純文字互動區段，保留原有架構
 
+
+# ==========================================================
+# 📰 [新聞突擊] 🚀 寄生大盤：極速抓取鉅亨網全台股最新 3 條盤中焦點頭條
+# ==========================================================
+            news_text = ""
+            try:
+                # 呼叫鉅亨網官方免費即時新聞接口，限制只取最實時的 3 條，0.1秒即可秒殺完成
+                news_url = "https://api.cnyes.com/media/api/v1/newslist/category/tw_stock?limit=3"
+                news_res = requests.get(news_url, headers=headers, timeout=4).json()
+                news_items = news_res.get("items", {}).get("data", [])
+                
+                news_list = []
+                for item in news_items:
+                    title = item.get("title", "").strip()
+                    if title:
+                        # 淨化標題，剪掉可能破壞排版的雙引號，限制長度防止溢出
+                        clean_title = title.replace('"', '').replace("'", "")[:24]
+                        news_list.append(f"<span style='color: #fda4af;'>📰 快訊：{clean_title}...</span>")
+                
+                if news_list:
+                    news_text = " ｜ ".join(news_list) + " ｜ "
+            except Exception as e_news:
+                print(f"⚠️ 即時頭條抓取失聯: {e_news}")
+
+
 # ==========================================================
 # 🌟 7. 🚀 雲端全時相決策中心 (加裝防呆裝甲)
 # ==========================================================
