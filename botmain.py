@@ -140,14 +140,14 @@ def fetch_realtime_data(stock_code):
     return f"{yahoo_price}\n{yahoo_ma}"
 
 # ==========================================================
-# 🚀 專為開機與網頁探子設計的強制刷新引擎 (精確族群過濾 ＋ 跨分頁連結版)
+# 🚀 專為開機與網頁探子設計的強制刷新引擎 (大盤真實產業流向解碼版)
 # ==========================================================
 def execute_force_refresh():
     global live_data_cache
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     
     try:
-        print("🕵️‍♂️ [偵蒐行動] 1. 準備抓取大盤數據...")
+        print("🕵️‍♂️ [大盤偵蒐] 1. 抓取大盤即時數據...")
         twii_chg = 0.0
         try:
             yh_res = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/^TWII?range=1d&interval=1d", headers=headers, timeout=5).json()
@@ -155,101 +155,109 @@ def execute_force_refresh():
             twii_chg = ((meta['regularMarketPrice'] - meta['chartPreviousClose']) / meta['chartPreviousClose']) * 100
         except: pass
 
-        print("🕵️‍♂️ [偵蒐行動] 2. 潛入 pCloud 下載全套監控名單...")
+        print("🕵️‍♂️ [大盤偵蒐] 2. 潛入 Yahoo 類股大本營，精算全市場即時資金流向排行...")
+        true_market_top_ind = "半導體" # 安全防呆預設值
+        true_market_top_chg = 0.0
+        
+        try:
+            # 💥 直接爬取全台股真實類股大盤網頁
+            class_res = requests.get("https://tw.stock.yahoo.com/class", headers=headers, timeout=8)
+            if class_res.status_code == 200:
+                soup = BeautifulSoup(class_res.text, 'html.parser')
+                
+                # 掃描市場常見核心產業板塊
+                target_industries = ["半導體", "電腦週邊", "電子零組件", "通信網路", "光電業", "航運業", "鋼鐵醫", "電機機械", "化學工業", "建材營造"]
+                leaderboard = {}
+                
+                # 智慧型模糊匹配：找出全市場各大產業板塊目前的真實即時漲幅
+                for ind in target_industries:
+                    # 搜尋網頁中包含產業名稱的區塊
+                    ind_element = soup.find(text=re.compile(ind))
+                    if ind_element:
+                        # 向上尋找其父容器，抓取同區塊內的百分比%文字
+                        parent_box = ind_element.find_parent()
+                        box_text = parent_box.get_text() if parent_box else ""
+                        pct_match = re.search(r'([+-]?\d+\.\d+)%', box_text)
+                        if pct_match:
+                            leaderboard[ind] = float(pct_match.group(1))
+                
+                # 多頭排列：排出全台股真正的即時最強主攻產業
+                if leaderboard:
+                    sorted_market_ind = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)
+                    true_market_top_ind = sorted_market_ind[0][0]
+                    true_market_top_chg = sorted_market_ind[0][1]
+        except Exception as e_parse:
+            print(f"⚠️ 類股排行解析失聯: {e_parse}")
+
+        print(f"🎯 [全網通報] 當前台股大盤真實資金主攻部隊：【{true_market_top_ind}】({true_market_top_chg}%)")
+
+        print("🕵️‍♂️ [戰報對齊] 3. 下載 pCloud 監控名單並進行族群交集篩選...")
         timestamp_v = datetime.datetime.now().strftime("%H%M%S")
         json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={timestamp_v}"
         res_json = requests.get(json_url, headers=headers, timeout=10)
         
+        tmp_stocks = []
+        flow_text = f"🔥 資金主攻：【{true_market_top_ind}】({'+' if true_market_top_chg>0 else ''}{round(true_market_top_chg,2)}%)"
+        
         if res_json.status_code == 200:
             raw_data = res_json.json()
-            if not isinstance(raw_data, list): return
+            if isinstance(raw_data, list):
+                ticker_to_info = {}
+                symbols_to_fetch = []
                 
-            ticker_to_info = {}
-            symbols_to_fetch = []
-            
-            # 格式化代碼
-            for item in raw_data:
-                code = str(item.get("代碼", "")).strip()
-                name = item.get("商品", "").strip()
-                industry = item.get("產業", "").strip()
-                if not code: continue
+                # 格式化戰報名單
+                for item in raw_data:
+                    code = str(item.get("代碼", "")).strip()
+                    name = item.get("商品", "").strip()
+                    industry = item.get("產業", "").strip()
+                    if not code: continue
+                    
+                    suffix = ".TWO" if "上櫃" in industry else ".TW"
+                    symbol = f"{code}{suffix}"
+                    ticker_to_info[symbol] = {"code": code, "name": name, "industry": industry}
+                    symbols_to_fetch.append(symbol)
                 
-                suffix = ".TWO" if "上櫃" in industry else ".TW"
-                symbol = f"{code}{suffix}"
-                
-                ticker_to_info[symbol] = {"code": code, "name": name, "industry": industry}
-                symbols_to_fetch.append(symbol)
-            
-            # 分批向 Yahoo 索要即時報價
-            realtime_results = {}
-            chunk_size = 40
-            for i in range(0, len(symbols_to_fetch), chunk_size):
-                chunk = symbols_to_fetch[i:i+chunk_size]
-                symbols_str = ",".join(chunk)
-                try:
-                    q_url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols_str}"
-                    q_res = requests.get(q_url, headers=headers, timeout=5).json()
-                    quotes = q_res.get("quoteResponse", {}).get("result", [])
-                    for q in quotes:
-                        sym = q.get("symbol")
-                        realtime_results[sym] = {
-                            "price": q.get("regularMarketPrice", 0.0),
-                            "chg": q.get("regularMarketChangePercent", 0.0)
-                        }
-                except: pass
-            
-            # 第一階段計算：統計各族群的平均漲幅
-            industry_stats = {}
-            for sym, info in ticker_to_info.items():
-                chg = realtime_results.get(sym, {}).get("chg", 0.0)
-                ind_clean = info["industry"].replace("上市", "").replace("上櫃", "").strip()
-                
-                if ind_clean not in industry_stats:
-                    industry_stats[ind_clean] = []
-                industry_stats[ind_clean].append(chg)
-            
-            industry_avg = {ind: sum(chgs)/len(chgs) for ind, chgs in industry_stats.items() if chgs}
-            sorted_ind = sorted(industry_avg.items(), key=lambda x: x[1], reverse=True)
-            
-            # 第二階段核心：決定主攻族群，並精確篩選該族群的股票
-            flow_text = "🔥 資金流向：市場籌碼觀望"
-            tmp_stocks = []
-            
-            if sorted_ind:
-                top_1_ind = sorted_ind[0][0]  # 例如："半導體"
-                top_1_chg = sorted_ind[0][1]
-                flow_text = f"🔥 資金主攻：【{top_1_ind}】({'+' if top_1_chg>0 else ''}{round(top_1_chg,2)}%)"
-                
-                if len(sorted_ind) > 1 and sorted_ind[1][1] > 0:
-                    flow_text += f" ｜ 🚀 強勢副攻：【{sorted_ind[1][0]}】(+{round(sorted_ind[1][1],2)}%)"
-                
-                # 💥 戰術修正點：重新掃描清單，只有屬於「主攻族群 (top_1_ind)」的股票才准入選跑馬燈
+                # 極速批量查詢這 87 檔個股的盤中脈搏
+                realtime_results = {}
+                chunk_size = 40
+                for i in range(0, len(symbols_to_fetch), chunk_size):
+                    chunk = symbols_to_fetch[i:i+chunk_size]
+                    symbols_str = ",".join(chunk)
+                    try:
+                        q_url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols_str}"
+                        q_res = requests.get(q_url, headers=headers, timeout=5).json()
+                        quotes = q_res.get("quoteResponse", {}).get("result", [])
+                        for q in quotes:
+                            sym = q.get("symbol")
+                            realtime_results[sym] = {
+                                "price": q.get("regularMarketPrice", 0.0),
+                                "chg": q.get("regularMarketChangePercent", 0.0)
+                            }
+                    except: pass
+
+                # 💥 核心交集過濾：重新掃描您的戰報，只有屬於「大盤真實主攻族群 (true_market_top_ind)」的精選股才准進入跑馬燈！
                 for sym, info in ticker_to_info.items():
                     ind_clean = info["industry"].replace("上市", "").replace("上櫃", "").strip()
-                    if ind_clean == top_1_ind:
+                    
+                    # 比如全市場半導體在噴，且您的戰報裡剛好有這檔半導體股，立刻抓出來
+                    if ind_clean == true_market_top_ind:
                         price = realtime_results.get(sym, {}).get("price", 0.0)
                         chg = realtime_results.get(sym, {}).get("chg", 0.0)
                         
-                        # 注入我們討論完畢的 JavaScript 跨分頁導航超連結
-                        stock_link = (
-                            f"<a href='javascript:void(0);' "
-                            f"onclick='goToStock(\"{info['code']}\")' "
-                            f"style='color: inherit; text-decoration: none; font-weight: bold; cursor: pointer;'>"
-                            f"{info['name']}({info['code']}) {price}元 ({'+' if chg>0 else ''}{round(chg,2)}%)"
-                            f"</a>"
-                        )
+                        # 完美相容本機 main.py 的 data-stock 智慧分身切碎導航超連結
+                        stock_link = f"<a href='#stock-{info['code']}' style='color: inherit; text-decoration: none;'>{info['name']}({info['code']}) {price}元 ({'+' if chg>0 else ''}{round(chg,2)}%)</a>"
                         tmp_stocks.append(stock_link)
             
-            # 防空轉防禦：若該族群剛好沒有標的（理論上不會，因為是由標的反推算出來的）
+            # 戰術防空轉
             if not tmp_stocks:
-                tmp_stocks = ["📡 暫無戰報指定族群個股發動"]
+                tmp_stocks = [f"📡 全市場主攻【{true_market_top_ind}】，但本次戰報標的暫無此族群個股發動"]
             
             # 印刻至實體硬碟快取檔
             update_cache({
                 "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {flow_text}",
                 "stocksText": " ｜ ".join(tmp_stocks)
             })
-            print(f"✅ [戰術回報] 成功鎖定主流【{top_1_ind}】，已篩選出同族群共 {len(tmp_stocks)} 檔個股注入跑馬燈！")
+            print("✅ [戰術回報] 全市場真實資金流向與精選戰報交集篩選已完美寫入硬碟快取！")
         else:
             update_cache({"fundsText": "⚠️ 雲端阻擋", "stocksText": f"pCloud 拒絕連線 (狀態碼: {res_json.status_code})"})
             
