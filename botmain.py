@@ -142,6 +142,7 @@ def fetch_realtime_data(stock_code):
 # ==========================================================
 # 🚀 專為開機與網頁探子設計的強制刷新引擎 (大盤真實產業流向解碼版)
 # ==========================================================
+
 def execute_force_refresh():
     global live_data_cache
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
