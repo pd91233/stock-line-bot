@@ -25,6 +25,48 @@ import matplotlib
 matplotlib.use('Agg')
 import mplfinance as mpf
 
+
+# ==========================================================
+# 📰 情報偵蒐引擎：新聞與市場流向 (新增)
+# ==========================================================
+def fetch_cnyes_news():
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        url = "https://api.cnyes.com/media/api/v1/newslist/category/tw_stock?limit=3"
+        res = requests.get(url, headers=headers, timeout=4).json()
+        items = res.get("items", {}).get("data", [])
+        news_list = []
+        for item in items:
+            title = item.get("title", "").strip()
+            news_id = item.get("newsId")
+            if title:
+                clean_title = title.replace('"', '').replace("'", "")
+                if news_id:
+                    news_list.append(f"<a href='https://news.cnyes.com/news/id/{news_id}' target='_blank' style='color: #fda4af;'>📰 快訊：{clean_title}</a>")
+                else:
+                    news_list.append(f"<span style='color: #fda4af;'>📰 快訊：{clean_title}</span>")
+        return " ｜ ".join(news_list) + " ｜ " if news_list else ""
+    except: return ""
+
+def get_market_leader():
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        class_res = requests.get("https://tw.stock.yahoo.com/class", headers=headers, timeout=8)
+        soup = BeautifulSoup(class_res.text, 'html.parser')
+        target_industries = ["半導體", "電腦週邊", "電子零組件", "通信網路", "光電業", "生技醫療", "金融保險", "鋼鐵工業", "航運業", "建材營造"]
+        leaderboard = {}
+        for ind in target_industries:
+            ind_element = soup.find(text=re.compile(ind))
+            if ind_element:
+                pct_match = re.search(r'([+-]?\d+\.\d+)%', ind_element.find_parent().get_text())
+                if pct_match: leaderboard[ind] = float(pct_match.group(1))
+        if leaderboard:
+            top = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)[0]
+            return f"🔥 資金主攻：【{top[0]}】({top[1]}%)"
+    except: pass
+    return "🔥 資金主攻：【半導體】"
+
+
 app = Flask(__name__)
 
 # 🛡️ 戰術快取配置
@@ -290,8 +332,8 @@ def execute_force_refresh():
             
             # 💥 視覺焦點對齊：大盤 ➔ 資金主攻 ➔ 新聞快訊
             update_cache({
-                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {flow_text} ｜ {news_headline}",
-                "stocksText": " ｜ ".join(tmp_stocks)
+                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {get_market_leader()} ｜ {fetch_cnyes_news()}",
+                "stocksText": " | ".join([f"{s['name']}({s['code']}) {s['z']}元 ({'+' if s['chg']>0 else ''}{s['chg']}%)" for s in ai_payload])
             })
             print("✅ [戰術回報] 全市場真實資金流向與精選戰報交集篩選已完美寫入硬碟快取！")
         else:
