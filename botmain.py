@@ -129,12 +129,13 @@ def fetch_realtime_data(stock_code):
     return f"{yahoo_price}\n{yahoo_ma}"
 
 # ==========================================================
-# 🚀 專為開機與網頁探子設計的強制刷新引擎 (加裝翻譯官裝甲)
+# 🚀 專為開機與網頁探子設計的強制刷新引擎 (升級為 Yahoo 破甲彈)
 # ==========================================================
 def execute_force_refresh():
     global live_data_cache
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
+        # 1. 抓取大盤
         twii_chg = 0.0
         try:
             yh_res = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/^TWII?range=1d&interval=1d", headers=headers, timeout=5).json()
@@ -144,6 +145,7 @@ def execute_force_refresh():
             if prev_idx > 0: twii_chg = ((curr_idx - prev_idx) / prev_idx) * 100
         except: pass
 
+        # 2. 抓取 pCloud 彈藥庫名單
         timestamp_v = datetime.datetime.now().strftime("%H%M%S")
         json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={timestamp_v}"
         res_json = requests.get(json_url, timeout=5)
@@ -151,36 +153,43 @@ def execute_force_refresh():
         if res_json.status_code == 200 and res_json.text:
             raw_data = res_json.json()
             if raw_data:
-                # 💥 【戰術修正 1：翻譯官機制】 將 pCloud 的 List 陣列轉換為 Render 看得懂的 Dict
                 if isinstance(raw_data, list):
                     monitor_data = {str(item.get("代碼")): {"name": item.get("商品", item.get("代碼"))} for item in raw_data if "代碼" in item}
                 else:
                     monitor_data = raw_data
                 
-                req = requests.Session()
                 tmp_stocks = []
-                # 僅快速撈取前 5 檔個股現價
+                # 3. 💥 改用穩定的 Yahoo API 抓取前 5 檔個股現價，徹底繞過證交所 IP 封鎖
                 for code, info in list(monitor_data.items())[:5]:
                     try:
-                        url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{code}.tw&_={int(time.time() * 1000)}"
-                        res = req.get(url, timeout=2).json()
-                        if not res.get('msgArray'):
-                            url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_{code}.tw&_={int(time.time() * 1000)}"
-                            res = req.get(url, timeout=2).json()
-                        if res.get('msgArray'):
-                            d = res['msgArray'][0]
-                            z = float(d.get('z', 0) if d.get('z', '-') != '-' else d.get('y', 0))
-                            y = float(d.get('y', z))
-                            chg = round(((z - y) / y) * 100, 2) if y > 0 else 0.0
-                            tmp_stocks.append(f"{info.get('name', code)}({code}) {z}元 ({'+' if chg>0 else ''}{chg}%)")
-                    except: continue
+                        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=1d"
+                        res = requests.get(url, headers=headers, timeout=3).json()
+                        if not res.get('chart', {}).get('result'): # 如果上市找不到，找上櫃
+                            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TWO?range=1d&interval=1d"
+                            res = requests.get(url, headers=headers, timeout=3).json()
+                            
+                        meta = res['chart']['result'][0]['meta']
+                        z = meta['regularMarketPrice']
+                        y = meta['chartPreviousClose']
+                        chg = round(((z - y) / y) * 100, 2) if y > 0 else 0.0
+                        tmp_stocks.append(f"{info.get('name', code)}({code}) {z}元 ({'+' if chg>0 else ''}{chg}%)")
+                    except Exception as e: 
+                        continue
                 
+                # 4. 寫入記憶體並回報
                 if tmp_stocks:
                     live_data_cache = {
                         "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% | 📡 全時相雷達聯網中",
                         "stocksText": " | ".join(tmp_stocks)
                     }
-                    print("✅ [戰術回報] 開機跑馬燈數據已成功強制灌錄完畢！")
+                    print("✅ [戰術回報] 開機跑馬燈數據已成功強制灌錄完畢！(Yahoo 通道)")
+                else:
+                    # 🛡️ 就算抓不到，也要把錯誤顯示出來，不准卡在系統剛啟動
+                    live_data_cache = {
+                        "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% | 📡 全時相雷達聯網中",
+                        "stocksText": "⚠️ 雲端報價抓取失敗，請確認標的是否休市"
+                    }
+                    print("⚠️ [戰術警告] 讀取名單成功，但 Yahoo 報價皆抓取失敗。")
     except Exception as e:
         print(f"❌ 開機刷新失敗: {e}")
 
