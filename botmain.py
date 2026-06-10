@@ -207,20 +207,21 @@ def execute_force_refresh():
             tmp_stocks = []
             
             for sym, info in ticker_to_info.items():
+                # 即使沒抓到報價，也預設顯示 0.00% 以防顯示「連線中」
+                price = 0.0
+                chg = 0.0
+                
                 if sym in realtime_results:
                     price = realtime_results[sym]["price"]
                     chg = realtime_results[sym]["chg"]
-                    
-                    # 淨化族群名稱 (除去"上市"、"上櫃"字眼，讓畫面更精簡 scannable)
-                    ind_clean = info["industry"].replace("上市", "").replace("上櫃", "")
-                    
-                    if ind_clean not in industry_stats:
-                        industry_stats[ind_clean] = []
-                    industry_stats[ind_clean].append(chg)
-                    
-                    # 挑選前 5 檔放進個股跑馬燈展示
-                    if len(tmp_stocks) < 5:
-                        tmp_stocks.append(f"{info['name']}({info['code']}) {price}元 ({'+' if chg>0 else ''}{round(chg,2)}%)")
+                
+                ind_clean = info["industry"].replace("上市", "").replace("上櫃", "").strip()
+                if ind_clean not in industry_stats: industry_stats[ind_clean] = []
+                industry_stats[ind_clean].append(chg)
+                
+                if len(tmp_stocks) < 5:
+                    # 改為確保一定會顯示名稱，即使報價為 0
+                    tmp_stocks.append(f"{info['name']}({info['code']}) {price}元 ({'+' if chg>0 else ''}{round(chg,2)}%)")
             
             # 計算各族群平均漲幅
             industry_avg = {}
