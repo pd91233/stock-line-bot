@@ -267,9 +267,9 @@ def execute_force_refresh():
             except Exception as e_news:
                 print(f"⚠️ 即時頭條抓取失聯: {e_news}")
 
-            # 印刻至實體硬碟快取檔
+# 印刻至實體硬碟快取檔
             update_cache({
-                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {news_text}{flow_text}",
+                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {fetch_cnyes_news()}{flow_text}",
                 "stocksText": " ｜ ".join(tmp_stocks)
             })
             print("✅ [戰術回報] 全市場真實資金流向與精選戰報交集篩選已完美寫入硬碟快取！")
@@ -490,3 +490,22 @@ if __name__ == "__main__":
     options = {'bind': '0.0.0.0:10000', 'workers': 1, 'threads': 2, 'timeout': 120}
     StandaloneApplication(app, options).run()
     print("雷達掃描引擎已啟動")
+
+
+def fetch_cnyes_news():
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+    try:
+        url = "https://api.cnyes.com/media/api/v1/newslist/category/tw_stock?limit=3"
+        res = requests.get(url, headers=headers, timeout=4).json()
+        items = res.get("items", {}).get("data", [])
+        news_list = []
+        for item in items:
+            title = item.get("title", "").strip()
+            if title:
+                clean_title = title.replace('"', '').replace("'", "")[:24]
+                news_list.append(f"<span style='color: #fda4af;'>📰 快訊：{clean_title}...</span>")
+        if news_list:
+            return " ｜ ".join(news_list) + " ｜ "
+    except:
+        pass
+    return ""
