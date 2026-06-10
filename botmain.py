@@ -156,16 +156,14 @@ def execute_force_refresh():
         except: pass
 
         print("🕵️‍♂️ [大盤偵蒐] 2. 潛入 Yahoo 類股大本營，精算全市場即時資金流向排行...")
-        true_market_top_ind = "半導體" # 安全防呆預設值
+        true_market_top_ind = "半導體" 
         true_market_top_chg = 0.0
         
         try:
-            # 💥 直接爬取全台股真實類股大盤網頁
             class_res = requests.get("https://tw.stock.yahoo.com/class", headers=headers, timeout=8)
             if class_res.status_code == 200:
                 soup = BeautifulSoup(class_res.text, 'html.parser')
                 
-                # 💥 升級為 30 大產業全域掃描陣列，徹底粉碎看盤盲區
                 target_industries = [
                     "半導體", "電腦週邊", "電子零組件", "通信網路", "光電業", "電子通路", "資訊服務", "其他電子", "數位雲端",
                     "生技醫療", "金融保險", 
@@ -174,19 +172,15 @@ def execute_force_refresh():
                 ]
                 leaderboard = {}
                 
-                # 智慧型模糊匹配：找出全市場各大產業板塊目前的真實即時漲幅
                 for ind in target_industries:
-                    # 搜尋網頁中包含產業名稱的區塊
                     ind_element = soup.find(text=re.compile(ind))
                     if ind_element:
-                        # 向上尋找其父容器，抓取同區塊內的百分比%文字
                         parent_box = ind_element.find_parent()
                         box_text = parent_box.get_text() if parent_box else ""
                         pct_match = re.search(r'([+-]?\d+\.\d+)%', box_text)
                         if pct_match:
                             leaderboard[ind] = float(pct_match.group(1))
                 
-                # 多頭排列：排出全台股真正的即時最強主攻產業
                 if leaderboard:
                     sorted_market_ind = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)
                     true_market_top_ind = sorted_market_ind[0][0]
@@ -204,7 +198,7 @@ def execute_force_refresh():
         tmp_stocks = []
         flow_text = f"🔥 資金主攻：【{true_market_top_ind}】({'+' if true_market_top_chg>0 else ''}{round(true_market_top_chg,2)}%)"
         
- if res_json.status_code == 200:
+        if res_json.status_code == 200:
             raw_data = res_json.json()
             if isinstance(raw_data, list):
                 ticker_to_info = {}
