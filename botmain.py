@@ -140,7 +140,7 @@ def fetch_realtime_data(stock_code):
     return f"{yahoo_price}\n{yahoo_ma}"
 
 # ==========================================================
-# 🚀 專為開機與網頁探子設計的強制刷新引擎 (極速批量爬取 ＋ 資金流向演算版)
+# 🚀 專為開機與網頁探子設計的強制刷新引擎 (精確族群過濾 ＋ 跨分頁連結版)
 # ==========================================================
 def execute_force_refresh():
     global live_data_cache
@@ -162,30 +162,25 @@ def execute_force_refresh():
         
         if res_json.status_code == 200:
             raw_data = res_json.json()
-            if not isinstance(raw_data, list):
-                print("⚠️ 戰術警告：pCloud 檔案非預期的陣列格式。")
-                return
+            if not isinstance(raw_data, list): return
                 
-            print(f"📡 成功載入 {len(raw_data)} 檔核心戰略標的，開始重組通訊格式...")
-            
             ticker_to_info = {}
             symbols_to_fetch = []
             
-            # 解析上市/上櫃後綴，包裝成 Yahoo 批量接口
+            # 格式化代碼
             for item in raw_data:
                 code = str(item.get("代碼", "")).strip()
                 name = item.get("商品", "").strip()
                 industry = item.get("產業", "").strip()
                 if not code: continue
                 
-                # 自動判定市場，精準指派後綴
                 suffix = ".TWO" if "上櫃" in industry else ".TW"
                 symbol = f"{code}{suffix}"
                 
                 ticker_to_info[symbol] = {"code": code, "name": name, "industry": industry}
                 symbols_to_fetch.append(symbol)
             
-            # 💥 核心戰術：分批(每批40檔)向 Yahoo 索要即時報價，1秒之內即可全部完成！
+            # 分批向 Yahoo 索要即時報價
             realtime_results = {}
             chunk_size = 40
             for i in range(0, len(symbols_to_fetch), chunk_size):
@@ -197,57 +192,64 @@ def execute_force_refresh():
                     quotes = q_res.get("quoteResponse", {}).get("result", [])
                     for q in quotes:
                         sym = q.get("symbol")
-                        price = q.get("regularMarketPrice", 0.0)
-                        chg_pct = q.get("regularMarketChangePercent", 0.0)
-                        realtime_results[sym] = {"price": price, "chg": chg_pct}
+                        realtime_results[sym] = {
+                            "price": q.get("regularMarketPrice", 0.0),
+                            "chg": q.get("regularMarketChangePercent", 0.0)
+                        }
                 except: pass
             
-            # 💥 核心演算法：群體共振，計算真實資金熱力
+            # 第一階段計算：統計各族群的平均漲幅
             industry_stats = {}
-            tmp_stocks = []
-            
             for sym, info in ticker_to_info.items():
-                # 即使沒抓到報價，也預設顯示 0.00% 以防顯示「連線中」
-                price = 0.0
-                chg = 0.0
-                
-                if sym in realtime_results:
-                    price = realtime_results[sym]["price"]
-                    chg = realtime_results[sym]["chg"]
-                
+                chg = realtime_results.get(sym, {}).get("chg", 0.0)
                 ind_clean = info["industry"].replace("上市", "").replace("上櫃", "").strip()
-                if ind_clean not in industry_stats: industry_stats[ind_clean] = []
-                industry_stats[ind_clean].append(chg)
                 
-                if len(tmp_stocks) < 5:
-                    # 改為確保一定會顯示名稱，即使報價為 0
-                    tmp_stocks.append(f"{info['name']}({info['code']}) {price}元 ({'+' if chg>0 else ''}{round(chg,2)}%)")
+                if ind_clean not in industry_stats:
+                    industry_stats[ind_clean] = []
+                industry_stats[ind_clean].append(chg)
             
-            # 計算各族群平均漲幅
-            industry_avg = {}
-            for ind, chgs in industry_stats.items():
-                if chgs:
-                    industry_avg[ind] = sum(chgs) / len(chgs)
-            
-            # 依據漲幅進行多頭排列，找出最強族群
+            industry_avg = {ind: sum(chgs)/len(chgs) for ind, chgs in industry_stats.items() if chgs}
             sorted_ind = sorted(industry_avg.items(), key=lambda x: x[1], reverse=True)
             
-            # 4. 組裝頂級資金流向文字
+            # 第二階段核心：決定主攻族群，並精確篩選該族群的股票
             flow_text = "🔥 資金流向：市場籌碼觀望"
-            if sorted_ind:
-                top_1 = sorted_ind[0]
-                flow_text = f"🔥 資金主攻：【{top_1[0]}】({'+' if top_1[1]>0 else ''}{round(top_1[1],2)}%)"
-                # 如果有第二強且是紅盤的族群，列為副攻
-                if len(sorted_ind) > 1 and sorted_ind[1][1] > 0:
-                    top_2 = sorted_ind[1]
-                    flow_text += f" ｜ 🚀 強勢副攻：【{top_2[0]}】(+{round(top_2[1],2)}%)"
+            tmp_stocks = []
             
-            # 5. 印刻至實體硬碟快取檔
+            if sorted_ind:
+                top_1_ind = sorted_ind[0][0]  # 例如："半導體"
+                top_1_chg = sorted_ind[0][1]
+                flow_text = f"🔥 資金主攻：【{top_1_ind}】({'+' if top_1_chg>0 else ''}{round(top_1_chg,2)}%)"
+                
+                if len(sorted_ind) > 1 and sorted_ind[1][1] > 0:
+                    flow_text += f" ｜ 🚀 強勢副攻：【{sorted_ind[1][0]}】(+{round(sorted_ind[1][1],2)}%)"
+                
+                # 💥 戰術修正點：重新掃描清單，只有屬於「主攻族群 (top_1_ind)」的股票才准入選跑馬燈
+                for sym, info in ticker_to_info.items():
+                    ind_clean = info["industry"].replace("上市", "").replace("上櫃", "").strip()
+                    if ind_clean == top_1_ind:
+                        price = realtime_results.get(sym, {}).get("price", 0.0)
+                        chg = realtime_results.get(sym, {}).get("chg", 0.0)
+                        
+                        # 注入我們討論完畢的 JavaScript 跨分頁導航超連結
+                        stock_link = (
+                            f"<a href='javascript:void(0);' "
+                            f"onclick='goToStock(\"{info['code']}\")' "
+                            f"style='color: inherit; text-decoration: none; font-weight: bold; cursor: pointer;'>"
+                            f"{info['name']}({info['code']}) {price}元 ({'+' if chg>0 else ''}{round(chg,2)}%)"
+                            f"</a>"
+                        )
+                        tmp_stocks.append(stock_link)
+            
+            # 防空轉防禦：若該族群剛好沒有標的（理論上不會，因為是由標的反推算出來的）
+            if not tmp_stocks:
+                tmp_stocks = ["📡 暫無戰報指定族群個股發動"]
+            
+            # 印刻至實體硬碟快取檔
             update_cache({
                 "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {flow_text}",
                 "stocksText": " ｜ ".join(tmp_stocks)
             })
-            print("✅ [戰術回報] 資金熱力流向與批量報價已成功寫入硬碟快取！")
+            print(f"✅ [戰術回報] 成功鎖定主流【{top_1_ind}】，已篩選出同族群共 {len(tmp_stocks)} 檔個股注入跑馬燈！")
         else:
             update_cache({"fundsText": "⚠️ 雲端阻擋", "stocksText": f"pCloud 拒絕連線 (狀態碼: {res_json.status_code})"})
             
