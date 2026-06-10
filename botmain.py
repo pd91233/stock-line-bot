@@ -264,7 +264,8 @@ def execute_force_refresh():
                                 "price": q.get("regularMarketPrice", 0.0),
                                 "chg": q.get("regularMarketChangePercent", 0.0)
                             }
-                        except: pass
+                    except: 
+                        pass
 
                 for sym, info in ticker_to_info.items():
                     ind_clean = info["industry"].replace("上市", "").replace("上櫃", "").strip()
@@ -412,7 +413,7 @@ def market_patrol_loop():
                                     z = float(data.get('z', 0) if data.get('z', '-') != '-' else data.get('y', 0)) 
                                     o = float(data.get('o', z) if data.get('o', '-') != '-' else z)                  
                                     h = float(data.get('h', z) if data.get('h', '-') != '-' else z)                  
-                                    l = float(data.get('l', z) if data.get('l', '-') != '-' else z)                  
+                                    l = float(data.get('l', z) if data.get('l', '-') != '-' else l)                  
                                     v = float(data.get('v', 0) if data.get('v', '-') != '-' else 0)                  
                                     y = float(data.get('y', z))                                                                    
                                     chg = round(((z - y) / y) * 100, 2) if y > 0 else 0.0
