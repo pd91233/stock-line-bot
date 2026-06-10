@@ -300,7 +300,7 @@ def handle_message(event):
 # ==========================================================
             news_text = ""
             try:
-                # 呼叫鉅亨網官方免費即時新聞接口，限制只取最實時的 3 條，0.1秒即可秒殺完成
+                # 呼叫鉅亨網官方免費即時新聞接口，限制只取最實時的 3 條
                 news_url = "https://api.cnyes.com/media/api/v1/newslist/category/tw_stock?limit=3"
                 news_res = requests.get(news_url, headers=headers, timeout=4).json()
                 news_items = news_res.get("items", {}).get("data", [])
@@ -309,7 +309,6 @@ def handle_message(event):
                 for item in news_items:
                     title = item.get("title", "").strip()
                     if title:
-                        # 淨化標題，剪掉可能破壞排版的雙引號，限制長度防止溢出
                         clean_title = title.replace('"', '').replace("'", "")[:24]
                         news_list.append(f"<span style='color: #fda4af;'>📰 快訊：{clean_title}...</span>")
                 
@@ -317,6 +316,13 @@ def handle_message(event):
                     news_text = " ｜ ".join(news_list) + " ｜ "
             except Exception as e_news:
                 print(f"⚠️ 即時頭條抓取失聯: {e_news}")
+
+            # 印刻至實體硬碟快取檔 (💥 請確保此行與上方的 news_text = "" 左邊完全對齊！)
+            update_cache({
+                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {news_text}{flow_text}",
+                "stocksText": " ｜ ".join(tmp_stocks)
+            })
+            print("✅ [戰術回報] 全市場真實資金流向與精選戰報交集篩選已完美寫入硬碟快取！")                
 
 
 # ==========================================================
