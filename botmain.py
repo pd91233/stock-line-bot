@@ -129,69 +129,71 @@ def fetch_realtime_data(stock_code):
     return f"{yahoo_price}\n{yahoo_ma}"
 
 # ==========================================================
-# 🚀 專為開機與網頁探子設計的強制刷新引擎 (升級為 Yahoo 破甲彈)
+# 🚀 專為開機與網頁探子設計的強制刷新引擎 (終極防護與除錯版)
 # ==========================================================
 def execute_force_refresh():
     global live_data_cache
-    headers = {"User-Agent": "Mozilla/5.0"}
+    # 💥 換上最高級的真人瀏覽器偽裝裝甲
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+    
     try:
-        # 1. 抓取大盤
+        print("🕵️‍♂️ [偵蒐行動] 1. 準備抓取大盤...")
         twii_chg = 0.0
         try:
             yh_res = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/^TWII?range=1d&interval=1d", headers=headers, timeout=5).json()
-            yh_meta = yh_res['chart']['result'][0]['meta']
-            curr_idx = yh_meta['regularMarketPrice']
-            prev_idx = yh_meta['chartPreviousClose']
-            if prev_idx > 0: twii_chg = ((curr_idx - prev_idx) / prev_idx) * 100
+            twii_chg = ((yh_res['chart']['result'][0]['meta']['regularMarketPrice'] - yh_res['chart']['result'][0]['meta']['chartPreviousClose']) / yh_res['chart']['result'][0]['meta']['chartPreviousClose']) * 100
         except: pass
 
-        # 2. 抓取 pCloud 彈藥庫名單
+        print("🕵️‍♂️ [偵蒐行動] 2. 準備潛入 pCloud 下載名單...")
         timestamp_v = datetime.datetime.now().strftime("%H%M%S")
         json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={timestamp_v}"
-        res_json = requests.get(json_url, timeout=5)
         
-        if res_json.status_code == 200 and res_json.text:
+        # 💥 關鍵修復：下載名單時「必須」掛上 headers，否則會被當成惡意爬蟲阻擋！
+        res_json = requests.get(json_url, headers=headers, timeout=10)
+        print(f"📡 pCloud 回應狀態碼: {res_json.status_code}")
+        
+        if res_json.status_code == 200:
             raw_data = res_json.json()
-            if raw_data:
-                if isinstance(raw_data, list):
-                    monitor_data = {str(item.get("代碼")): {"name": item.get("商品", item.get("代碼"))} for item in raw_data if "代碼" in item}
-                else:
-                    monitor_data = raw_data
-                
-                tmp_stocks = []
-                # 3. 💥 改用穩定的 Yahoo API 抓取前 5 檔個股現價，徹底繞過證交所 IP 封鎖
-                for code, info in list(monitor_data.items())[:5]:
-                    try:
-                        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=1d"
-                        res = requests.get(url, headers=headers, timeout=3).json()
-                        if not res.get('chart', {}).get('result'): # 如果上市找不到，找上櫃
-                            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TWO?range=1d&interval=1d"
-                            res = requests.get(url, headers=headers, timeout=3).json()
-                            
-                        meta = res['chart']['result'][0]['meta']
-                        z = meta['regularMarketPrice']
-                        y = meta['chartPreviousClose']
-                        chg = round(((z - y) / y) * 100, 2) if y > 0 else 0.0
-                        tmp_stocks.append(f"{info.get('name', code)}({code}) {z}元 ({'+' if chg>0 else ''}{chg}%)")
-                    except Exception as e: 
-                        continue
-                
-                # 4. 寫入記憶體並回報
-                if tmp_stocks:
-                    live_data_cache = {
-                        "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% | 📡 全時相雷達聯網中",
-                        "stocksText": " | ".join(tmp_stocks)
-                    }
-                    print("✅ [戰術回報] 開機跑馬燈數據已成功強制灌錄完畢！(Yahoo 通道)")
-                else:
-                    # 🛡️ 就算抓不到，也要把錯誤顯示出來，不准卡在系統剛啟動
-                    live_data_cache = {
-                        "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% | 📡 全時相雷達聯網中",
-                        "stocksText": "⚠️ 雲端報價抓取失敗，請確認標的是否休市"
-                    }
-                    print("⚠️ [戰術警告] 讀取名單成功，但 Yahoo 報價皆抓取失敗。")
+            print(f"📡 名單下載成功，長度: {len(raw_data)}")
+            
+            if isinstance(raw_data, list):
+                monitor_data = {str(item.get("代碼")): {"name": item.get("商品", item.get("代碼"))} for item in raw_data if "代碼" in item}
+            else: monitor_data = raw_data
+            
+            tmp_stocks = []
+            print("🕵️‍♂️ [偵蒐行動] 3. 準備抓取 Yahoo 個股報價...")
+            for code, info in list(monitor_data.items())[:5]:
+                try:
+                    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=1d"
+                    res = requests.get(url, headers=headers, timeout=5).json()
+                    if not res.get('chart', {}).get('result'): 
+                        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TWO?range=1d&interval=1d"
+                        res = requests.get(url, headers=headers, timeout=5).json()
+                        
+                    meta = res['chart']['result'][0]['meta']
+                    z = meta['regularMarketPrice']
+                    y = meta['chartPreviousClose']
+                    chg = round(((z - y) / y) * 100, 2) if y > 0 else 0.0
+                    tmp_stocks.append(f"{info.get('name', code)}({code}) {z}元 ({'+' if chg>0 else ''}{chg}%)")
+                    print(f"✅ 成功獲取: {code}")
+                except Exception as e: 
+                    print(f"⚠️ 抓取 {code} 失敗: {e}")
+                    continue
+            
+            if tmp_stocks:
+                live_data_cache = {"fundsText": f"📊 加權指數 {round(twii_chg, 2)}% | 📡 全時相雷達聯網中", "stocksText": " | ".join(tmp_stocks)}
+                print("✅ [戰術回報] 任務大獲全勝，記憶體已更新！")
+            else:
+                # 💥 死亡回報：就算抓不到股票，也要告訴統帥是 Yahoo 的問題
+                live_data_cache = {"fundsText": "⚠️ 報價異常", "stocksText": "Yahoo API 拒絕連線或查無資料"}
+        else:
+            # 💥 死亡回報：告訴統帥是 pCloud 擋住了
+            live_data_cache = {"fundsText": "⚠️ 雲端阻擋", "stocksText": f"pCloud 拒絕連線 (HTTP狀態碼: {res_json.status_code})"}
+            
     except Exception as e:
-        print(f"❌ 開機刷新失敗: {e}")
+        # 💥 死亡回報：程式寫錯或網路斷線
+        live_data_cache = {"fundsText": "❌ 嚴重當機", "stocksText": f"錯誤代碼: {str(e)}"}
+        print(f"❌ 致命錯誤: {e}")
 
 # ==========================================================
 # 📡 6. Webhook 通道與戰情接口
