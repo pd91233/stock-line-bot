@@ -95,7 +95,7 @@ def get_stock_dict():
 threading.Thread(target=get_stock_dict).start()
 
 # ==========================================================
-# 📰 3. 獨立新聞抓取引擎 (寄生大盤全自動解碼)
+# 📰 3. 獨立新聞抓取引擎 (老老實實解放完整標題＋真實連結)
 # ==========================================================
 def fetch_cnyes_news():
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
@@ -106,9 +106,14 @@ def fetch_cnyes_news():
         news_list = []
         for item in items:
             title = item.get("title", "").strip()
+            news_id = item.get("newsId") # 💥 抓取鉅亨官方新聞唯一 ID
             if title:
-                clean_title = title.replace('"', '').replace("'", "")[:24]
-                news_list.append(f"<span style='color: #fda4af;'>📰 快訊：{clean_title}...</span>")
+                clean_title = title.replace('"', '').replace("'", "")
+                if news_id:
+                    # 💥 封裝成標準超連結，並套用粉紅色主題，點擊直接開新分頁看新聞
+                    news_list.append(f"<a href='https://news.cnyes.com/news/id/{news_id}' target='_blank' style='color: #fda4af; text-decoration: underline;'>📰 快訊：{clean_title}</a>")
+                else:
+                    news_list.append(f"<span style='color: #fda4af;'>📰 快訊：{clean_title}</span>")
         if news_list:
             return " ｜ ".join(news_list) + " ｜ "
     except:
@@ -116,7 +121,7 @@ def fetch_cnyes_news():
     return ""
 
 # ==========================================================
-# 📊 4. 雙通道個股即時行情 analysis 中心
+# 📊 4. 雙通道個股即時行情分析中心
 # ==========================================================
 def fetch_realtime_data(stock_code):
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -283,7 +288,7 @@ def execute_force_refresh():
             # 🚀 執行新聞空投寄生
             news_headline = fetch_cnyes_news()
             
-            # 💥 戰術修正：大盤 ➔ 資金主攻 ➔ 新聞快訊
+            # 💥 視覺焦點對齊：大盤 ➔ 資金主攻 ➔ 新聞快訊
             update_cache({
                 "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {flow_text} ｜ {news_headline}",
                 "stocksText": " ｜ ".join(tmp_stocks)
