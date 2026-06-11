@@ -216,6 +216,12 @@ def fetch_fundamental_data():
             fundamental_focus_cache = temp_focus
             
         print(f"✅ [基本面引擎] 掃描完成！全市場 {len(temp_full)} 檔，偵測到近期公佈營收 {len(fundamental_focus_cache)} 檔。", flush=True)
+
+        current_cache = read_cache()
+        current_cache["fundamental_focus"] = fundamental_focus_cache
+        current_cache["fundamental_full"] = fundamental_full_cache
+        update_cache(current_cache)
+        print("✅ [基本面引擎] 財報數據已成功寫入 JSON 彈藥庫！", flush=True)
         
     except Exception as e:
         print(f"❌ [基本面引擎] 營收抓取失敗，遭遇政府防火牆阻擋！錯誤詳情: {e}", flush=True)
