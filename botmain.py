@@ -632,6 +632,20 @@ class StandaloneApplication:
                 return self.application
         FlaskGunicornApp(self.application, self.options).run()
 
+# 💓 戰情室心跳維持引擎：每 5 分鐘對自己戳一下，防止被 Render 強制休眠
+def keep_alive():
+    while True:
+        try:
+            requests.get("https://stock-line-bot-c8em.onrender.com")
+            print("💓 心跳送出，戰情室保持清醒中...")
+        except:
+            pass
+        time.sleep(300) # 每 300 秒 (5分鐘) 戳一次
+
+# 啟動心跳線
+threading.Thread(target=keep_alive, daemon=True).start()
+
+
 if __name__ == "__main__":
     options = {'bind': '0.0.0.0:10000', 'workers': 1, 'threads': 2, 'timeout': 120}
     StandaloneApplication(app, options).run()
