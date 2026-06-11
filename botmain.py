@@ -143,6 +143,56 @@ revenue_history_cache = {}  # 記憶體：負責存放每檔股票上一期的�
 fundamental_focus_cache = [] # 戰術狙擊區快取 (48小時內有變更)
 fundamental_full_cache = []  # 全域戰略區快取 (全市場 2000 檔)
 
+
+# ==========================================================
+# ⚡ [升級版] 當沖雷達：5分K 盤中創高爆量突破偵測引擎
+# ==========================================================
+intraday_breakout_cache = [] # 儲存最新的爆量快訊
+
+def detect_intraday_breakout(code, name):
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        # 抓取近一天的 5 分K 數據
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=5m"
+        res = requests.get(url, headers=headers, timeout=3).json()
+        
+        # 雙市場容錯切換 (上市轉上櫃)
+        if not res.get('chart', {}).get('result'):
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TWO?range=1d&interval=5m"
+            res = requests.get(url, headers=headers, timeout=3).json()
+            if not res.get('chart', {}).get('result'): return None
+            
+        result = res['chart']['result'][0]
+        volumes = result['indicators']['quote'][0]['volume']
+        closes = result['indicators']['quote'][0]['close']
+        highs = result['indicators']['quote'][0]['high'] # 💥 新增：抓取盤中高點資料
+        
+        # 過濾空值
+        valid_vols = [v for v in volumes if v is not None]
+        valid_closes = [c for c in closes if c is not None]
+        valid_highs = [h for h in highs if h is not None]
+        
+        if len(valid_vols) > 5 and len(valid_highs) > 5:
+            current_vol = valid_vols[-1]
+            avg_vol_5 = sum(valid_vols[-6:-1]) / 5  # 前 25 分鐘均量
+            current_px = valid_closes[-1]
+            prev_px = valid_closes[-2]
+            
+            # 💥 戰術升級：找出「今天開盤到上一根 K 棒為止」的盤中最高價
+            intraday_high_before_now = max(valid_highs[:-1])
+            
+            # 條件 1：單根量大於前段均量 3 倍 (爆量)
+            # 條件 2：收盤價大於上一根 (推升)
+            # 條件 3：最新價突破今日前面的盤中高點 (創日高突破)
+            if avg_vol_5 > 0 and current_vol > (avg_vol_5 * 3) and current_px > prev_px:
+                if current_px >= intraday_high_before_now:
+                    current_time = datetime.datetime.now().strftime("%H:%M")
+                    return f"[{current_time}] ⚡ {name}({code}) 帶量突破盤中新高！現價 {current_px} (爆量 {int(current_vol)} 張)"
+    except Exception as e:
+        pass
+    return None
+
+
 def fetch_fundamental_data():
     global revenue_history_cache, fundamental_focus_cache, fundamental_full_cache
     import sys
@@ -355,7 +405,8 @@ def execute_force_refresh():
                 "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {flow_text} ｜ {news_headline}",
                 "stocksText": display_stocks,
                 "fundamental_focus": fundamental_focus_cache,
-                "fundamental_full": fundamental_full_cache
+                "fundamental_full": fundamental_full_cache,
+                "intraday_alerts": intraday_breakout_cache[:10] # 💥 裝載當沖快訊彈藥 (只保留最新10筆)
             })
             print("✅ [戰術回報] 變數防護版寫入成功，財報數據已同步封裝！")
             
@@ -515,6 +566,12 @@ def market_patrol_loop():
                                         "veto_triggered": veto_triggered, "veto_reason": veto_reason
                                     }
                                     ai_payload.append(stock_payload)
+
+# ⚡ 觸發當沖爆量雷達
+                                    alert_msg = detect_intraday_breakout(code, name)
+                                    if alert_msg and alert_msg not in intraday_breakout_cache:
+                                        intraday_breakout_cache.insert(0, alert_msg) # 把最新快訊插在最前面
+
                                 time.sleep(1) 
                             except: 
                                 continue
@@ -533,7 +590,8 @@ def market_patrol_loop():
                                 "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {flow_text} ｜ {news_headline}",
                                 "stocksText": " ｜ ".join([f"{s['name']}({s['code']}) {s['z']}元 ({'+' if s['chg']>0 else ''}{s['chg']}%)" for s in final_display_list]),
                                 "fundamental_focus": fundamental_focus_cache,
-                                "fundamental_full": fundamental_full_cache
+                                "fundamental_full": fundamental_full_cache,
+                                "intraday_alerts": intraday_breakout_cache[:10] # 💥 裝載當沖快訊彈藥 (只保留最新10筆)
                             })
 
                 time.sleep(60) 
