@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # ==========================================================
-# 📡 股海觀浪雲端探子母艦：防彈完全體戰情室 V99.0
+# 📡 股海觀浪雲端探子母艦：防彈完全體戰情室 V100.0 (階段一：全市場基本面狙擊)
 # 開發代號：botmain.py (雲端守護協定 - 100% 完整解碼不閹割版)
 # ==========================================================
 from flask import Flask, request, abort, jsonify, make_response
@@ -24,6 +24,48 @@ import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import mplfinance as mpf
+
+
+# ==========================================================
+# 📰 情報偵蒐引擎：新聞與市場流向 
+# ==========================================================
+def fetch_cnyes_news():
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        url = "https://api.cnyes.com/media/api/v1/newslist/category/tw_stock?limit=3"
+        res = requests.get(url, headers=headers, timeout=4).json()
+        items = res.get("items", {}).get("data", [])
+        news_list = []
+        for item in items:
+            title = item.get("title", "").strip()
+            news_id = item.get("newsId")
+            if title:
+                clean_title = title.replace('"', '').replace("'", "")
+                if news_id:
+                    news_list.append(f"<a href='https://news.cnyes.com/news/id/{news_id}' target='_blank' style='color: #fda4af;'>📰 快訊：{clean_title}</a>")
+                else:
+                    news_list.append(f"<span style='color: #fda4af;'>📰 快訊：{clean_title}</span>")
+        return " ｜ ".join(news_list) + " ｜ " if news_list else ""
+    except: return ""
+
+def get_market_leader():
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        class_res = requests.get("https://tw.stock.yahoo.com/class", headers=headers, timeout=8)
+        soup = BeautifulSoup(class_res.text, 'html.parser')
+        target_industries = ["半導體", "電腦週邊", "電子零組件", "通信網路", "光電業", "生技醫療", "金融保險", "鋼鐵工業", "航運業", "建材營造"]
+        leaderboard = {}
+        for ind in target_industries:
+            ind_element = soup.find(text=re.compile(ind))
+            if ind_element:
+                pct_match = re.search(r'([+-]?\d+\.\d+)%', ind_element.find_parent().get_text())
+                if pct_match: leaderboard[ind] = float(pct_match.group(1))
+        if leaderboard:
+            top = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)[0]
+            return f"🔥 資金主攻：【{top[0]}】({top[1]}%)"
+    except: pass
+    return "🔥 資金主攻：【半導體】"
+
 
 app = Flask(__name__)
 
@@ -95,30 +137,83 @@ def get_stock_dict():
 threading.Thread(target=get_stock_dict).start()
 
 # ==========================================================
-# 📰 3. 獨立新聞抓取引擎 (老老實實解放完整標題＋真實連結)
+# 📈 3. [新增] 全市場基本面動能掃描引擎 (階段一核心)
 # ==========================================================
-def fetch_cnyes_news():
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+revenue_history_cache = {}  # 記憶體：負責存放每檔股票上一期的期別
+fundamental_focus_cache = [] # 戰術狙擊區快取 (48小時內有變更)
+fundamental_full_cache = []  # 全域戰略區快取 (全市場 2000 檔)
+
+def fetch_fundamental_data():
+    global revenue_history_cache, fundamental_focus_cache, fundamental_full_cache
     try:
-        url = "https://api.cnyes.com/media/api/v1/newslist/category/tw_stock?limit=3"
-        res = requests.get(url, headers=headers, timeout=4).json()
-        items = res.get("items", {}).get("data", [])
-        news_list = []
-        for item in items:
-            title = item.get("title", "").strip()
-            news_id = item.get("newsId") # 💥 抓取鉅亨官方新聞唯一 ID
-            if title:
-                clean_title = title.replace('"', '').replace("'", "")
-                if news_id:
-                    # 💥 封裝成標準超連結，並套用粉紅色主題，點擊直接開新分頁看新聞
-                    news_list.append(f"<a href='https://news.cnyes.com/news/id/{news_id}' target='_blank' style='color: #fda4af; text-decoration: underline;'>📰 快訊：{clean_title}</a>")
-                else:
-                    news_list.append(f"<span style='color: #fda4af;'>📰 快訊：{clean_title}</span>")
-        if news_list:
-            return " ｜ ".join(news_list) + " ｜ "
-    except:
-        pass
-    return ""
+        print("📡 [基本面引擎] 啟動全市場月營收快照掃描...")
+        headers = {"User-Agent": "Mozilla/5.0"}
+        
+        # 採用證交所與櫃買中心公開 OpenAPI，不受 API Token 限制
+        twse_url = "https://openapi.twse.com.tw/v1/opendata/t187ap05_L"
+        tpex_url = "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O"
+        
+        twse_data = requests.get(twse_url, headers=headers, timeout=15).json()
+        tpex_data = requests.get(tpex_url, headers=headers, timeout=15).json()
+        
+        all_data = twse_data + tpex_data
+        
+        temp_focus = []
+        temp_full = []
+        
+        for item in all_data:
+            code = item.get("公司代號", "")
+            name = item.get("公司名稱", "")
+            period = item.get("資料年月", "") # ex: 11305 (113年5月)
+            
+            # 支援證交所欄位名稱容錯處理
+            rev_current = item.get("營業收入-當月營收", item.get("當月營收", "0"))
+            mom = item.get("營業收入-上月比較增減(%)", item.get("上月比較增減(%)", "0"))
+            yoy = item.get("營業收入-去年同月增減(%)", item.get("去年同月增減(%)", "0"))
+            
+            if not code or not period: continue
+            
+            # --- XQ 期別跳動邏輯轉譯 ---
+            last_period = revenue_history_cache.get(code)
+            is_new_release = False
+            
+            # 如果舊紀錄存在，且現在抓到的期別跟舊紀錄不同，代表「期別跳動 (Ret=1)」
+            if last_period is not None and last_period != period:
+                is_new_release = True
+                
+            # 更新本機記憶體為最新期別
+            revenue_history_cache[code] = period
+            
+            stock_info = {
+                "code": code,
+                "name": name,
+                "period": period,
+                "revenue": rev_current,
+                "mom": mom,
+                "yoy": yoy,
+                "is_new": is_new_release
+            }
+            
+            temp_full.append(stock_info)
+            if is_new_release:
+                temp_focus.append(stock_info)
+                
+        # 更新全域快取
+        fundamental_full_cache = temp_full
+        
+        # 為了避免重啟伺服器導致 focus 清空，如果掃描到新的，才覆蓋 focus_cache，或者將其累積
+        if len(temp_focus) > 0:
+            fundamental_focus_cache = temp_focus
+            
+        print(f"✅ [基本面引擎] 掃描完成！全市場 {len(temp_full)} 檔，偵測到近期公佈營收 {len(fundamental_focus_cache)} 檔。")
+    except Exception as e:
+        print(f"❌ [基本面引擎] 營收抓取失敗: {e}")
+
+# 每 60 分鐘掃描一次政府資料庫
+def fundamental_patrol_loop():
+    while True:
+        fetch_fundamental_data()
+        time.sleep(3600) 
 
 # ==========================================================
 # 📊 4. 雙通道個股即時行情分析中心
@@ -182,123 +277,61 @@ def fetch_realtime_data(stock_code):
 # 🚀 5. 全市場真實資金流向排行與精選戰報交集過濾引擎
 # ==========================================================
 def execute_force_refresh():
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+    headers = {"User-Agent": "Mozilla/5.0"}
+    # 💥 預先定義所有變數，防止 NameError
+    twii_chg = 0.0
+    true_market_top_ind = "半導體"
+    true_market_top_chg = 0.0
+    ai_payload = [] # 確保它永遠存在，即使後面出錯也不會崩潰
     
     try:
-        print("🕵️‍♂️ [大盤偵蒐] 1. 抓取大盤即時數據...")
-        twii_chg = 0.0
+        # 1. 大盤偵蒐
         try:
             yh_res = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?range=1d&interval=1d", headers=headers, timeout=5).json()
             meta = yh_res['chart']['result'][0]['meta']
             twii_chg = ((meta['regularMarketPrice'] - meta['chartPreviousClose']) / meta['chartPreviousClose']) * 100
-        except: 
-            pass
+        except: pass
 
-        print("🕵️‍♂️ [大盤偵蒐] 2. 潛入 Yahoo 類股大本營，精算全市場即時資金流向排行...")
-        true_market_top_ind = "半導體" 
-        true_market_top_chg = 0.0
-        
+        # 2. 資金流向排行
         try:
             class_res = requests.get("https://tw.stock.yahoo.com/class", headers=headers, timeout=8)
             if class_res.status_code == 200:
                 soup = BeautifulSoup(class_res.text, 'html.parser')
-                
-                target_industries = [
-                    "半導體", "電腦週邊", "電子零組件", "通信網路", "光電業", "電子通路", "資訊服務", "其他電子", "數位雲端",
-                    "生技醫療", "金融保險", 
-                    "鋼鐵工業", "航運業", "建材營造", "電機機械", "化學工業", "塑膠工業", "食品工業", "紡織纖維", "觀光餐旅", 
-                    "汽車工業", "電器電纜", "綠能環保", "油電燃氣", "水泥工業", "橡膠工業", "貿易百貨", "運動休閒", "居家生活"
-                ]
+                target_industries = ["半導體", "電腦週邊", "電子零組件", "通信網路", "光電業", "生技醫療", "金融保險", "鋼鐵工業", "航運業", "建材營造"]
                 leaderboard = {}
-                
                 for ind in target_industries:
                     ind_element = soup.find(text=re.compile(ind))
                     if ind_element:
-                        parent_box = ind_element.find_parent()
-                        box_text = parent_box.get_text() if parent_box else ""
-                        pct_match = re.search(r'([+-]?\d+\.\d+)%', box_text)
-                        if pct_match:
-                            leaderboard[ind] = float(pct_match.group(1))
-                
+                        pct_match = re.search(r'([+-]?\d+\.\d+)%', ind_element.find_parent().get_text())
+                        if pct_match: leaderboard[ind] = float(pct_match.group(1))
                 if leaderboard:
-                    sorted_market_ind = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)
-                    true_market_top_ind = sorted_market_ind[0][0]
-                    true_market_top_chg = sorted_market_ind[0][1]
-        except Exception as e_parse:
-            print(f"⚠️ 類股排行解析失聯: {e_parse}")
+                    top = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)[0]
+                    true_market_top_ind, true_market_top_chg = top[0], top[1]
+        except: pass
 
-        print(f"🎯 [全網通報] 當前台股大盤真實資金主攻部隊：【{true_market_top_ind}】({true_market_top_chg}%)")
-
-        print("🕵️‍♂️ [戰報對齊] 3. 下載 pCloud 監攻名單並進行族群交集篩選...")
-        timestamp_v = datetime.datetime.now().strftime("%H%M%S")
-        json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={timestamp_v}"
+        # 3. 戰報對齊與快取寫入 (技術面監控名單保持運作)
+        json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={time.time()}"
         res_json = requests.get(json_url, headers=headers, timeout=10)
-        
-        tmp_stocks = []
-        flow_text = f"🔥 資金主攻：【{true_market_top_ind}】({'+' if true_market_top_chg>0 else ''}{round(true_market_top_chg,2)}%)"
         
         if res_json.status_code == 200:
             raw_data = res_json.json()
             if isinstance(raw_data, list):
-                ticker_to_info = {}
-                symbols_to_fetch = []
-                
-                for item in raw_data:
-                    code = str(item.get("代碼", "")).strip()
-                    name = item.get("商品", "").strip()
-                    industry = item.get("產業", "").strip()
-                    if not code: continue
-                    
-                    suffix = ".TWO" if "上櫃" in industry else ".TW"
-                    symbol = f"{code}{suffix}"
-                    ticker_to_info[symbol] = {"code": code, "name": name, "industry": industry}
-                    symbols_to_fetch.append(symbol)
-                
-                realtime_results = {}
-                chunk_size = 40
-                for i in range(0, len(symbols_to_fetch), chunk_size):
-                    chunk = symbols_to_fetch[i:i+chunk_size]
-                    symbols_str = ",".join(chunk)
-                    try:
-                        q_url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols_str}"
-                        q_res = requests.get(q_url, headers=headers, timeout=5).json()
-                        quotes = q_res.get("quoteResponse", {}).get("result", [])
-                        for q in quotes:
-                            sym = q.get("symbol")
-                            realtime_results[sym] = {
-                                "price": q.get("regularMarketPrice", 0.0),
-                                "chg": q.get("regularMarketChangePercent", 0.0)
-                            }
-                    except: 
-                        pass
-
-                for sym, info in ticker_to_info.items():
-                    ind_clean = info["industry"].replace("上市", "").replace("上櫃", "").strip()
-                    
-                    if ind_clean == true_market_top_ind:
-                        price = realtime_results.get(sym, {}).get("price", 0.0)
-                        chg = realtime_results.get(sym, {}).get("chg", 0.0)
-                        
-                        stock_link = f"<a href='#stock-{info['code']}' style='color: inherit; text-decoration: none;'>{info['name']}({info['code']}) {price}元 ({'+' if chg>0 else ''}{round(chg,2)}%)</a>"
-                        tmp_stocks.append(stock_link)
+                ai_payload = [{"name": item.get("商品", item.get("代碼")), "code": item.get("代碼"), "z": 0.0, "chg": 0.0} for item in raw_data if "代碼" in item]
             
-            if not tmp_stocks:
-                tmp_stocks = [f"📡 全市場主攻【{true_market_top_ind}】，但本次戰報標的暫無此族群個股發動"]
-            
-            # 🚀 執行新聞空投寄生
+            flow_text = f"🔥 資金主攻：【{true_market_top_ind}】({true_market_top_chg}%)"
             news_headline = fetch_cnyes_news()
+            display_stocks = " ｜ ".join([f"{s['name']}({s['code']})" for s in ai_payload]) if ai_payload else "📡 監控中..."
             
-            # 💥 視覺焦點對齊：大盤 ➔ 資金主攻 ➔ 新聞快訊
+            # 💥 階段一：將最新的 focus 與 full 財報數據，一併注入快取給前端 UI 讀取！
             update_cache({
                 "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {flow_text} ｜ {news_headline}",
-                "stocksText": " ｜ ".join(tmp_stocks)
+                "stocksText": display_stocks,
+                "fundamental_focus": fundamental_focus_cache,
+                "fundamental_full": fundamental_full_cache
             })
-            print("✅ [戰術回報] 全市場真實資金流向與精選戰報交集篩選已完美寫入硬碟快取！")
-        else:
-            update_cache({"fundsText": "⚠️ 雲端阻擋", "stocksText": f"pCloud 拒絕連線 (狀態碼: {res_json.status_code})"})
+            print("✅ [戰術回報] 變數防護版寫入成功，財報數據已同步封裝！")
             
     except Exception as e:
-        update_cache({"fundsText": "❌ 嚴重當機", "stocksText": f"錯誤代碼: {str(e)}"})
         print(f"❌ 致命錯誤: {e}")
 
 # ==========================================================
@@ -421,7 +454,7 @@ def market_patrol_loop():
                                     h = float(data.get('h', z) if data.get('h', '-') != '-' else z)                  
                                     l = float(data.get('l', z) if data.get('l', '-') != '-' else z)                  
                                     v = float(data.get('v', 0) if data.get('v', '-') != '-' else 0)                  
-                                    y = float(data.get('y', z))                                                                    
+                                    y = float(data.get('y', z))                                                                       
                                     chg = round(((z - y) / y) * 100, 2) if y > 0 else 0.0
                                     
                                     vwap = round((o + h + l + z * 2) / 5, 2)
@@ -458,10 +491,13 @@ def market_patrol_loop():
                                 continue
 
                         if len(ai_payload) > 0:
+                            flow_text = get_market_leader()
                             news_headline = fetch_cnyes_news()
                             update_cache({
                                 "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {flow_text} ｜ {news_headline}",
-                                "stocksText": " | ".join([f"{s['name']}({s['code']}) {s['z']}元 ({'+' if s['chg']>0 else ''}{s['chg']}%)" for s in ai_payload])
+                                "stocksText": " | ".join([f"{s['name']}({s['code']}) {s['z']}元 ({'+' if s['chg']>0 else ''}{s['chg']}%)" for s in ai_payload]),
+                                "fundamental_focus": fundamental_focus_cache,
+                                "fundamental_full": fundamental_full_cache
                             })
 
                 time.sleep(60) 
@@ -470,7 +506,10 @@ def market_patrol_loop():
         except Exception as e:
             time.sleep(30)
 
+# 啟動盤中巡邏引擎
 threading.Thread(target=market_patrol_loop, daemon=True).start()
+# 啟動基本面情報掃描引擎
+threading.Thread(target=fundamental_patrol_loop, daemon=True).start()
 
 class StandaloneApplication:
     def __init__(self, app, options=None): 
