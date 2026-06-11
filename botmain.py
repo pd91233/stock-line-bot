@@ -567,10 +567,19 @@ def market_patrol_loop():
                                     }
                                     ai_payload.append(stock_payload)
 
-# ⚡ 觸發當沖爆量雷達
+                                    # ⚡ 觸發當沖爆量雷達
                                     alert_msg = detect_intraday_breakout(code, name)
                                     if alert_msg and alert_msg not in intraday_breakout_cache:
                                         intraday_breakout_cache.insert(0, alert_msg) # 把最新快訊插在最前面
+                                    # 💥 統帥神級戰術：直接啟動「全頻群發 (Broadcast)」無腦轟炸！
+                                        try:
+                                            # 注意：broadcast 是 LINE Messaging API 的高權限功能
+                                            from linebot.models import TextSendMessage
+                                            push_text = f"🚨 【戰情室快訊】\n{alert_msg}"
+                                            line_bot_api.broadcast(TextSendMessage(text=push_text))
+                                            print(f"✅ 已全頻群發快訊：{name}")
+                                        except Exception as push_err:
+                                            print(f"⚠️ LINE 群發發射失敗: {push_err}")
 
                                 time.sleep(1) 
                             except: 
