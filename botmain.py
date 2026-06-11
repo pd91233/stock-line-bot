@@ -333,7 +333,18 @@ def execute_force_refresh():
         if res_json.status_code == 200:
             raw_data = res_json.json()
             if isinstance(raw_data, list):
-                ai_payload = [{"name": item.get("商品", item.get("代碼")), "code": item.get("代碼"), "z": 0.0, "chg": 0.0} for item in raw_data if "代碼" in item]
+                # 💥 修正：進行「資金主攻族群」與「監控名單」的交集篩選
+                matched_items = []
+                for item in raw_data:
+                    if "代碼" not in item: continue
+                    # 抓取該股票的產業別 (相容 'ind' 或 '產業' 欄位)
+                    stock_ind = str(item.get("ind", item.get("產業", "")))
+                    if true_market_top_ind in stock_ind:
+                        matched_items.append(item)
+                
+                # 如果交集成功，跑馬燈只顯示主攻部隊；若無交集，為避免空窗，顯示前 15 檔
+                target_list = matched_items if len(matched_items) > 0 else raw_data[:15]
+                ai_payload = [{"name": item.get("商品", item.get("代碼")), "code": item.get("代碼"), "z": 0.0, "chg": 0.0} for item in target_list]
             
             flow_text = f"🔥 資金主攻：【{true_market_top_ind}】({true_market_top_chg}%)"
             news_headline = fetch_cnyes_news()
@@ -433,7 +444,7 @@ def market_patrol_loop():
                     raw_data = res_json.json()
                     if raw_data:
                         if isinstance(raw_data, list):
-                            monitor_data = {str(item.get("代碼")): {"name": item.get("商品", item.get("代碼"))} for item in raw_data if "代碼" in item}
+                            monitor_data = {str(item.get("代碼")): {"name": item.get("商品", item.get("代碼")), "ind": str(item.get("ind", item.get("產業", "")))} for item in raw_data if "代碼" in item}
                         else:
                             monitor_data = raw_data
 
@@ -498,6 +509,7 @@ def market_patrol_loop():
 
                                     stock_payload = {
                                         "code": code, "name": name, "type": info.get('type', 'core'),
+                                        "ind": info.get('ind', ''), # 💥 補上產業欄位，作為交集雷達的關鍵特徵
                                         "z": z, "chg": chg, "vwap": vwap, "v_ratio": v_ratio, "shadow_pct": shadow_pct,
                                         "ma5": ma5_val, "ma10": ma10_val, "ma20": info.get('ma20', z), "kd5": info.get('kd5', z),
                                         "veto_triggered": veto_triggered, "veto_reason": veto_reason
@@ -509,10 +521,17 @@ def market_patrol_loop():
 
                         if len(ai_payload) > 0:
                             flow_text = get_market_leader()
+                            match = re.search(r'【(.*?)】', flow_text)
+                            top_ind = match.group(1) if match else "半導體"
+                            
+                            # 💥 盤中雷達動態交集篩選
+                            matched_payload = [s for s in ai_payload if top_ind in s.get('ind', '')]
+                            final_display_list = matched_payload if len(matched_payload) > 0 else ai_payload[:15]
+
                             news_headline = fetch_cnyes_news()
                             update_cache({
                                 "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {flow_text} ｜ {news_headline}",
-                                "stocksText": " | ".join([f"{s['name']}({s['code']}) {s['z']}元 ({'+' if s['chg']>0 else ''}{s['chg']}%)" for s in ai_payload]),
+                                "stocksText": " ｜ ".join([f"{s['name']}({s['code']}) {s['z']}元 ({'+' if s['chg']>0 else ''}{s['chg']}%)" for s in final_display_list]),
                                 "fundamental_focus": fundamental_focus_cache,
                                 "fundamental_full": fundamental_full_cache
                             })
