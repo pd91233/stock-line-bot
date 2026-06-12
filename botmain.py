@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# ==========================================================
+# =========================================================
 # 📡 股海觀浪雲端探子母艦：防彈完全體戰情室 V100.0 (階段一：全市場基本面狙擊)
 # 開發代號：botmain.py (雲端守護協定 - 100% 完整解碼不閹割版)
-# ==========================================================
+# =========================================================
 from flask import Flask, request, abort, jsonify, make_response
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
