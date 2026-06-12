@@ -195,27 +195,44 @@ def detect_intraday_breakout(code, name):
 
 def fetch_fundamental_data():
     global fundamental_full_cache
+    print("📡 [基本面引擎] 啟動證交所公開直連...", flush=True)
     try:
-        print("📡 [基本面引擎] 啟動數據巡邏...", flush=True) 
         headers = {"User-Agent": "Mozilla/5.0"}
+        # 證交所官網公開的營收與基本面數據路徑
+        url = "https://openapi.twse.com.tw/v1/opendata/t187ap05_L"
         
-        # 嘗試抓取財報
-        fin_url = "https://openapi.twse.com.tw/v1/opendata/t187ap06_L"
-        response = requests.get(fin_url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=15)
         
-        # 💥 加入防呆：檢查是否成功回應
         if response.status_code == 200:
-            fin_data = response.json()
-            fin_map = {item["公司代號"]: item for item in fin_data}
+            data = response.json()
+            # 轉換欄位名稱以符合我們的前端需求
+            temp_list = []
+            for item in data:
+                # 這裡對齊前端需要的變數名稱
+                stock = {
+                    "code": item.get("公司代號"),
+                    "name": item.get("公司名稱"),
+                    "ind": item.get("產業別"),
+                    "revenue": item.get("營業收入-當月營收", 0),
+                    "yoy": item.get("營業收入-去年同月增減(%)", 0),
+                    "close": "-", # 等後續補接
+                    "eps": "-",   # 等後續補接
+                    "pe": "-"     # 等後續補接
+                }
+                temp_list.append(stock)
             
-            # 若數據抓取成功，更新快取
-            # (這裡保持您原本的邏輯，將 fin_map 寫入 cache...)
-            print("✅ [基本面引擎] 財報同步成功！", flush=True)
+            fundamental_full_cache = temp_list
+            
+            # 同步更新快取
+            current_cache = read_cache()
+            current_cache["fundamental_full"] = fundamental_full_cache
+            update_cache(current_cache)
+            print(f"✅ [基本面引擎] 成功抓取 {len(temp_list)} 筆數據！", flush=True)
         else:
-            print(f"⚠️ [基本面引擎] 觀測站回應異常 (代碼: {response.status_code})，暫時使用舊數據", flush=True)
-            
+            print(f"❌ [基本面引擎] 證交所回應錯誤: {response.status_code}", flush=True)
+
     except Exception as e:
-        print(f"❌ [基本面引擎] 財報同步失敗: {e}，維持現狀以保持系統穩定", flush=True)
+        print(f"❌ [基本面引擎] 數據鏈路嚴重故障: {e}", flush=True)
 
 
 
