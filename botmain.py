@@ -567,14 +567,15 @@ def market_patrol_loop():
                                     }
                                     ai_payload.append(stock_payload)
 
+                                    # ⚡ 觸發當沖爆量雷達
                                     # ⚡ 觸發當沖爆量雷達 (強制演習模式)
-                                    alert_msg = detect_intraday_breakout(code, name)
-                                    # ======= 🛠️ 以下為演習測試代碼，測試完請刪除 =======
-                                    if alert_msg is None:
-                                        import random
-                                        if random.random() < 0.05: # 有 5% 的機率隨機觸發假訊號
-                                             alert_msg = f"⚡ 【演習】{name}({code}) 帶量突破盤中新高！現價 999 (爆量 8888 張)"
-                                    # =====================================================
+alert_msg = detect_intraday_breakout(code, name)
+# ======= 🛠️ 以下為演習測試代碼，測試完請刪除 =======
+if alert_msg is None:
+    import random
+    if random.random() < 0.05: # 有 5% 的機率隨機觸發假訊號
+        alert_msg = f"⚡ 【演習】{name}({code}) 帶量突破盤中新高！現價 999 (爆量 8888 張)"
+# =====================================================
                                     if alert_msg and alert_msg not in intraday_breakout_cache:
                                         intraday_breakout_cache.insert(0, alert_msg) # 把最新快訊插在最前面
                                     # 💥 統帥神級戰術：直接啟動「全頻群發 (Broadcast)」無腦轟炸！
@@ -615,10 +616,75 @@ def market_patrol_loop():
         except Exception as e:
             time.sleep(30)
 
+
+# ==========================================================
+# ⚡ 8. [新增] 專屬當沖連續掃描引擎 (每分鐘無情掃描)
+# ==========================================================
+def continuous_radar_loop():
+    print("📡 [當沖雷達] 連續掃描引擎啟動，每 60 秒巡邏一次...")
+    while True:
+        try:
+            # 抓取您的監控清單
+            headers = {"User-Agent": "Mozilla/5.0"}
+            json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={int(time.time())}"
+            res_json = requests.get(json_url, headers=headers, timeout=5)
+            
+            if res_json.status_code == 200:
+                raw_data = res_json.json()
+                
+                for item in raw_data:
+                    if "代碼" not in item: continue
+                    code = str(item["代碼"])
+                    name = item.get("商品", code)
+                    
+                    # 進行爆量偵測
+                    # ⚡ 觸發當沖爆量雷達 (強制演習模式)
+alert_msg = detect_intraday_breakout(code, name)
+# ======= 🛠️ 以下為演習測試代碼，測試完請刪除 =======
+if alert_msg is None:
+    import random
+    if random.random() < 0.05: # 有 5% 的機率隨機觸發假訊號
+        alert_msg = f"⚡ 【演習】{name}({code}) 帶量突破盤中新高！現價 999 (爆量 8888 張)"
+# =====================================================
+                    
+                    # ======= 🛠️ 演習測試代碼 (強制觸發器) =======
+                    if alert_msg is None:
+                        import random
+                        if random.random() < 0.05: # 5% 機率發射假訊號
+                            alert_msg = f"⚡ 【演習測試】{name}({code}) 帶量突破盤中新高！現價 999 (爆量 8888 張)"
+                    # ============================================
+
+                    # 如果有快訊，且還沒報過
+                    if alert_msg and alert_msg not in intraday_breakout_cache:
+                        intraday_breakout_cache.insert(0, alert_msg)
+                        
+                        # 1. 寫入快取讓網頁跑馬燈更新
+                        current_cache = read_cache()
+                        current_cache["intraday_alerts"] = intraday_breakout_cache[:10]
+                        update_cache(current_cache)
+                        
+                        # 2. 💥 LINE 實時全頻群發
+                        try:
+                            from linebot.models import TextSendMessage
+                            line_bot_api.broadcast(TextSendMessage(text=f"🚨 【戰情室快訊】\n{alert_msg}"))
+                            print(f"✅ 已全頻群發快訊：{name}")
+                        except Exception as e:
+                            print(f"⚠️ LINE 群發失敗: {e}")
+                    
+                    time.sleep(1) # 避免對 Yahoo 發送太快被鎖定
+        except Exception as e:
+            print(f"雷達巡邏異常: {e}")
+        
+        time.sleep(60) # 💥 核心：每 60 秒必定重新掃描一次！
+
+
+
 # 啟動盤中巡邏引擎
 threading.Thread(target=market_patrol_loop, daemon=True).start()
 # 啟動基本面情報掃描引擎
 threading.Thread(target=fundamental_patrol_loop, daemon=True).start()
+# 💥 啟動當沖雷達連續掃描引擎
+threading.Thread(target=continuous_radar_loop, daemon=True).start()
 
 class StandaloneApplication:
     def __init__(self, app, options=None): 
