@@ -569,13 +569,13 @@ def market_patrol_loop():
 
                                     # ⚡ 觸發當沖爆量雷達
                                     # ⚡ 觸發當沖爆量雷達 (強制演習模式)
-alert_msg = detect_intraday_breakout(code, name)
-# ======= 🛠️ 以下為演習測試代碼，測試完請刪除 =======
-if alert_msg is None:
-    import random
-    if random.random() < 0.05: # 有 5% 的機率隨機觸發假訊號
-        alert_msg = f"⚡ 【演習】{name}({code}) 帶量突破盤中新高！現價 999 (爆量 8888 張)"
-# =====================================================
+                                    alert_msg = detect_intraday_breakout(code, name)
+                                    # ======= 🛠️ 以下為演習測試代碼，測試完請刪除 =======
+                                    if alert_msg is None:
+                                        import random
+                                        if random.random() < 0.05: # 有 5% 的機率隨機觸發假訊號
+                                            alert_msg = f"⚡ 【演習】{name}({code}) 帶量突破盤中新高！現價 999 (爆量 8888 張)"
+                                    # =====================================================
                                     if alert_msg and alert_msg not in intraday_breakout_cache:
                                         intraday_breakout_cache.insert(0, alert_msg) # 把最新快訊插在最前面
                                     # 💥 統帥神級戰術：直接啟動「全頻群發 (Broadcast)」無腦轟炸！
