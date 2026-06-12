@@ -639,13 +639,13 @@ def continuous_radar_loop():
                     
                     # 進行爆量偵測
                     # ⚡ 觸發當沖爆量雷達 (強制演習模式)
-alert_msg = detect_intraday_breakout(code, name)
-# ======= 🛠️ 以下為演習測試代碼，測試完請刪除 =======
-if alert_msg is None:
-    import random
-    if random.random() < 0.05: # 有 5% 的機率隨機觸發假訊號
-        alert_msg = f"⚡ 【演習】{name}({code}) 帶量突破盤中新高！現價 999 (爆量 8888 張)"
-# =====================================================
+            alert_msg = detect_intraday_breakout(code, name)
+            # ======= 🛠️ 以下為演習測試代碼，測試完請刪除 =======
+            if alert_msg is None:
+                import random
+                if random.random() < 0.05: # 有 5% 的機率隨機觸發假訊號
+                    alert_msg = f"⚡ 【演習】{name}({code}) 帶量突破盤中新高！現價 999 (爆量 8888 張)"
+            # =====================================================
                     
                     # ======= 🛠️ 演習測試代碼 (強制觸發器) =======
                     if alert_msg is None:
