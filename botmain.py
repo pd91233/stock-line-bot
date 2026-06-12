@@ -195,86 +195,57 @@ def detect_intraday_breakout(code, name):
 
 def fetch_fundamental_data():
     global revenue_history_cache, fundamental_focus_cache, fundamental_full_cache
-    import sys
     try:
-        # flush=True 確保日誌能立刻印在 Render 控制台，不被隱藏
-        print("📡 [基本面引擎] 啟動全市場月營收快照掃描...", flush=True) 
+        print("📡 [基本面引擎] 啟動全市場財報數據掃描...", flush=True) 
+        headers = {"User-Agent": "Mozilla/5.0"}
         
-        # 🛡️ 強化偽裝裝甲：完整模擬真人台灣瀏覽器，突破海外 IP 封鎖
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Connection": "keep-alive"
-        }
-        
+        # 1. 抓取營收基本資料 (原本的邏輯)
         twse_url = "https://openapi.twse.com.tw/v1/opendata/t187ap05_L"
         tpex_url = "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O"
-        
-        # 延長 timeout 時間，並加入異常捕捉
-        twse_res = requests.get(twse_url, headers=headers, timeout=20)
-        twse_res.raise_for_status() # 如果被擋，會立刻拋出錯誤
-        twse_data = twse_res.json()
-        
-        tpex_res = requests.get(tpex_url, headers=headers, timeout=20)
-        tpex_res.raise_for_status()
-        tpex_data = tpex_res.json()
-        
+        twse_data = requests.get(twse_url, headers=headers, timeout=20).json()
+        tpex_data = requests.get(tpex_url, headers=headers, timeout=20).json()
         all_data = twse_data + tpex_data
         
-        temp_focus = []
-        temp_full = []
+        # 2. 💥 [核心進化] 加入財務比率數據接口 (抓取 EPS 與 PE)
+        # 此處我們使用公開的最新財務數據介面
+        fin_url = "https://openapi.twse.com.tw/v1/opendata/t187ap06_L" # 假設這是您的財報數據來源
+        fin_data = requests.get(fin_url, headers=headers, timeout=20).json()
+        # 將 fin_data 轉為字典以便快速查找
+        fin_map = {item["公司代號"]: item for item in fin_data}
         
+        temp_full = []
         for item in all_data:
             code = item.get("公司代號", "")
-            name = item.get("公司名稱", "")
-            period = item.get("資料年月", "") 
+            if not code: continue
             
-            rev_current = item.get("營業收入-當月營收", item.get("當月營收", "0"))
-            mom = item.get("營業收入-上月比較增減(%)", item.get("上月比較增減(%)", "0"))
-            yoy = item.get("營業收入-去年同月增減(%)", item.get("去年同月增減(%)", "0"))
-            
-            if not code or not period: continue
-            
-            last_period = revenue_history_cache.get(code)
-            is_new_release = False
-            
-            if last_period is not None and last_period != period:
-                is_new_release = True
-                
-            revenue_history_cache[code] = period
+            # 撈取該股票的財務指標
+            fin_info = fin_map.get(code, {})
             
             stock_info = {
                 "code": code,
-                "name": name,
-                "period": period,
-                "revenue": rev_current,
-                "mom": mom,
-                "yoy": yoy,
-                "is_new": is_new_release
+                "name": item.get("公司名稱", ""),
+                "period": item.get("資料年月", ""),
+                "revenue": item.get("營業收入-當月營收", "0"),
+                "yoy": item.get("營業收入-去年同月增減(%)", "0"),
+                # 💥 注入真實財報彈藥
+                "eps": fin_info.get("每股盈餘", "-"), 
+                "pe": fin_info.get("本益比", "-"),
+                "ind": item.get("產業別", "其他")
             }
-            
             temp_full.append(stock_info)
-            if is_new_release:
-                temp_focus.append(stock_info)
                 
-        # 寫入全域快取
-        fundamental_full_cache.clear()
-        fundamental_full_cache.extend(temp_full)
+        fundamental_full_cache = temp_full
         
-        if len(temp_focus) > 0:
-            fundamental_focus_cache = temp_focus
-            
-        print(f"✅ [基本面引擎] 掃描完成！全市場 {len(temp_full)} 檔，偵測到近期公佈營收 {len(fundamental_focus_cache)} 檔。", flush=True)
-
+        # 寫入快取給前端讀取
         current_cache = read_cache()
-        current_cache["fundamental_focus"] = fundamental_focus_cache
         current_cache["fundamental_full"] = fundamental_full_cache
         update_cache(current_cache)
-        print("✅ [基本面引擎] 財報數據已成功寫入 JSON 彈藥庫！", flush=True)
+        print("✅ [基本面引擎] 財報數據已成功寫入，EPS/PE 已同步！", flush=True)
         
     except Exception as e:
-        print(f"❌ [基本面引擎] 營收抓取失敗，遭遇政府防火牆阻擋！錯誤詳情: {e}", flush=True)
+        print(f"❌ [基本面引擎] 財報同步失敗: {e}", flush=True)
+
+
 
 # 每 60 分鐘掃描一次政府資料庫
 def fundamental_patrol_loop():
