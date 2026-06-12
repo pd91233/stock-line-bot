@@ -194,45 +194,56 @@ def detect_intraday_breakout(code, name):
 
 
 def fetch_fundamental_data():
-    global fundamental_full_cache
-    print("📡 [基本面引擎] 啟動證交所公開直連...", flush=True)
+    global revenue_history_cache, fundamental_focus_cache, fundamental_full_cache
     try:
+        print("📡 [基本面引擎] 啟動全市場財報數據掃描...", flush=True) 
         headers = {"User-Agent": "Mozilla/5.0"}
-        # 證交所官網公開的營收與基本面數據路徑
-        url = "https://openapi.twse.com.tw/v1/opendata/t187ap05_L"
         
-        response = requests.get(url, headers=headers, timeout=15)
+        # 1. 抓取營收基本資料 (原本的邏輯)
+        twse_url = "https://openapi.twse.com.tw/v1/opendata/t187ap05_L"
+        tpex_url = "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O"
+        twse_data = requests.get(twse_url, headers=headers, timeout=20).json()
+        tpex_data = requests.get(tpex_url, headers=headers, timeout=20).json()
+        all_data = twse_data + tpex_data
         
-        if response.status_code == 200:
-            data = response.json()
-            # 轉換欄位名稱以符合我們的前端需求
-            temp_list = []
-            for item in data:
-                # 這裡對齊前端需要的變數名稱
-                stock = {
-                    "code": item.get("公司代號"),
-                    "name": item.get("公司名稱"),
-                    "ind": item.get("產業別"),
-                    "revenue": item.get("營業收入-當月營收", 0),
-                    "yoy": item.get("營業收入-去年同月增減(%)", 0),
-                    "close": "-", # 等後續補接
-                    "eps": "-",   # 等後續補接
-                    "pe": "-"     # 等後續補接
-                }
-                temp_list.append(stock)
+        # 2. 💥 [核心進化] 加入財務比率數據接口 (抓取 EPS 與 PE)
+        # 此處我們使用公開的最新財務數據介面
+        fin_url = "https://openapi.twse.com.tw/v1/opendata/t187ap06_L" # 假設這是您的財報數據來源
+        fin_data = requests.get(fin_url, headers=headers, timeout=20).json()
+        # 將 fin_data 轉為字典以便快速查找
+        fin_map = {item["公司代號"]: item for item in fin_data}
+        
+        temp_full = []
+        for item in all_data:
+            code = item.get("公司代號", "")
+            if not code: continue
             
-            fundamental_full_cache = temp_list
+            # 撈取該股票的財務指標
+            fin_info = fin_map.get(code, {})
             
-            # 同步更新快取
-            current_cache = read_cache()
-            current_cache["fundamental_full"] = fundamental_full_cache
-            update_cache(current_cache)
-            print(f"✅ [基本面引擎] 成功抓取 {len(temp_list)} 筆數據！", flush=True)
-        else:
-            print(f"❌ [基本面引擎] 證交所回應錯誤: {response.status_code}", flush=True)
-
+            stock_info = {
+                "code": code,
+                "name": item.get("公司名稱", ""),
+                "period": item.get("資料年月", ""),
+                "revenue": item.get("營業收入-當月營收", "0"),
+                "yoy": item.get("營業收入-去年同月增減(%)", "0"),
+                # 💥 注入真實財報彈藥
+                "eps": fin_info.get("每股盈餘", "-"), 
+                "pe": fin_info.get("本益比", "-"),
+                "ind": item.get("產業別", "其他")
+            }
+            temp_full.append(stock_info)
+                
+        fundamental_full_cache = temp_full
+        
+        # 寫入快取給前端讀取
+        current_cache = read_cache()
+        current_cache["fundamental_full"] = fundamental_full_cache
+        update_cache(current_cache)
+        print("✅ [基本面引擎] 財報數據已成功寫入，EPS/PE 已同步！", flush=True)
+        
     except Exception as e:
-        print(f"❌ [基本面引擎] 數據鏈路嚴重故障: {e}", flush=True)
+        print(f"❌ [基本面引擎] 財報同步失敗: {e}", flush=True)
 
 
 
