@@ -197,31 +197,46 @@ def fetch_fundamental_data():
     global revenue_history_cache, fundamental_focus_cache, fundamental_full_cache
     import sys
     try:
-        # flush=True 確保日誌能立刻印在 Render 控制台，不被隱藏
-        print("📡 [基本面引擎] 啟動全市場月營收快照掃描...", flush=True) 
+        print("📡 [基本面引擎] 啟動全市場財報與估值掃描 (擴充 EPS 與本益比)...", flush=True) 
         
-        # 🛡️ 強化偽裝裝甲：完整模擬真人台灣瀏覽器，突破海外 IP 封鎖
+        # 🛡️ 強化偽裝裝甲：完整模擬真人台灣瀏覽器
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json",
             "Connection": "keep-alive"
         }
         
+        # 1. 抓取營收 (上市 + 上櫃)
         twse_url = "https://openapi.twse.com.tw/v1/opendata/t187ap05_L"
         tpex_url = "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O"
         
-        # 延長 timeout 時間，並加入異常捕捉
-        twse_res = requests.get(twse_url, headers=headers, timeout=20)
-        twse_res.raise_for_status() # 如果被擋，會立刻拋出錯誤
-        twse_data = twse_res.json()
-        
-        tpex_res = requests.get(tpex_url, headers=headers, timeout=20)
-        tpex_res.raise_for_status()
-        tpex_data = tpex_res.json()
-        
+        twse_data = requests.get(twse_url, headers=headers, timeout=20).json()
+        tpex_data = requests.get(tpex_url, headers=headers, timeout=20).json()
         all_data = twse_data + tpex_data
         
+        # 💥 2. 擴充彈藥庫：抓取 EPS (上市 + 上櫃綜合損益表)
+        eps_map = {}
+        try:
+            eps_L = requests.get("https://openapi.twse.com.tw/v1/opendata/t187ap14_L", headers=headers, timeout=10).json()
+            eps_O = requests.get("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap14_O", headers=headers, timeout=10).json()
+            for e in eps_L + eps_O:
+                eps_map[e.get("公司代號")] = e.get("基本每股盈餘（元）", "-")
+        except Exception as ex:
+            print(f"⚠️ [EPS 引擎] 抓取異常: {ex}", flush=True)
+
+        # 💥 3. 擴充彈藥庫：抓取本益比 (上市 + 上櫃每日盤後資訊)
+        pe_map = {}
+        try:
+            pe_L = requests.get("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_d", headers=headers, timeout=10).json()
+            for p in pe_L:
+                pe_map[p.get("Code")] = p.get("PEratio", "-")
+                
+            pe_O = requests.get("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis", headers=headers, timeout=10).json()
+            for p in pe_O:
+                pe_map[p.get("SecuritiesCompanyCode")] = p.get("PERatio", "-")
+        except Exception as ex:
+            print(f"⚠️ [本益比引擎] 抓取異常: {ex}", flush=True)
+
         temp_focus = []
         temp_full = []
         
@@ -244,6 +259,7 @@ def fetch_fundamental_data():
                 
             revenue_history_cache[code] = period
             
+            # 💥 4. 將 EPS 與 PE 掛載進股票字典中，送往前端！
             stock_info = {
                 "code": code,
                 "name": name,
@@ -251,6 +267,8 @@ def fetch_fundamental_data():
                 "revenue": rev_current,
                 "mom": mom,
                 "yoy": yoy,
+                "eps": eps_map.get(code, "-"), # 注入 EPS
+                "pe": pe_map.get(code, "-"),   # 注入 PE
                 "is_new": is_new_release
             }
             
@@ -265,7 +283,7 @@ def fetch_fundamental_data():
         if len(temp_focus) > 0:
             fundamental_focus_cache = temp_focus
             
-        print(f"✅ [基本面引擎] 掃描完成！全市場 {len(temp_full)} 檔，偵測到近期公佈營收 {len(fundamental_focus_cache)} 檔。", flush=True)
+        print(f"✅ [基本面引擎] 掃描完成！全市場 {len(temp_full)} 檔，已全數配發 EPS 與本益比數據。", flush=True)
 
         current_cache = read_cache()
         current_cache["fundamental_focus"] = fundamental_focus_cache
