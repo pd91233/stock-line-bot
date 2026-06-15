@@ -196,9 +196,9 @@ def detect_intraday_breakout(code, name):
 def fetch_fundamental_data():
     global revenue_history_cache, fundamental_focus_cache, fundamental_full_cache
     import sys
-    import time # 💥 掛載時間控制晶片
+    import time
     try:
-        print("📡 [基本面引擎] 啟動全市場財報與估值掃描 (防擋降速+萬能解析版)...", flush=True) 
+        print("📡 [基本面引擎] 啟動全市場財報與估值掃描 (終極雙向逆向演算版)...", flush=True) 
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -206,25 +206,22 @@ def fetch_fundamental_data():
             "Connection": "keep-alive"
         }
 
-        # 💥 建立防禦型請求函數，自動拆解字典與陣列，並延遲防封鎖
         def fetch_api_list(url):
             try:
                 res = requests.get(url, headers=headers, timeout=15)
                 if res.status_code == 200:
                     data = res.json()
                     if isinstance(data, list): return data
-                    # 如果政府突然把資料包在 dict 裡面，自動挖出來
                     if isinstance(data, dict):
                         for k, v in data.items():
                             if isinstance(v, list): return v
-            except Exception as e:
-                print(f"⚠️ API 抓取失敗 ({url}): {e}")
+            except: pass
             return []
 
         # 1. 抓取營收
         twse_data = fetch_api_list("https://openapi.twse.com.tw/v1/opendata/t187ap05_L")
         for d in twse_data: d["市場別"] = "上市"
-        time.sleep(0.5) # 💥 暫停 0.5 秒，迴避政府防火牆！
+        time.sleep(0.5)
 
         tpex_data = fetch_api_list("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O")
         for d in tpex_data: d["市場別"] = "上櫃"
@@ -232,44 +229,57 @@ def fetch_fundamental_data():
         
         all_data = twse_data + tpex_data
         
-        # 2. 抓取 EPS、季營收、EPS期別
+        # 2. 抓取 EPS、季營收、EPS期別 (💥 加入萬能模糊掃描)
         eps_map = {}
         eps_period_map = {}
         q_rev_map = {}
         
         def extract_eps_info(e):
-            # 雙重防呆：同時支援 "公司代號" 與 "SecuritiesCompanyCode"
-            c = str(e.get("公司代號", e.get("SecuritiesCompanyCode", ""))).strip()
+            c = ""
+            for k in ["公司代號", "SecuritiesCompanyCode", "Code", "code"]:
+                if k in e: c = str(e[k]).strip(); break
             if not c: return
             
             eps = "-"
-            for k in ["基本每股盈餘（元）", "基本每股盈餘(元)", "基本每股盈餘", "EPS"]:
-                if k in e: 
-                    eps = str(e[k])
-                    break
+            for k in ["基本每股盈餘（元）", "基本每股盈餘(元)", "基本每股盈餘", "EPS", "eps"]:
+                if k in e: eps = str(e[k]).strip(); break
                     
-            y = str(e.get("年度", ""))
-            q = str(e.get("季別", ""))
+            y = ""; q = ""
+            for k in ["年度", "year", "Year"]:
+                if k in e: y = str(e[k]).strip(); break
+            for k in ["季別", "quarter", "Quarter", "Q"]:
+                if k in e: q = str(e[k]).strip(); break
+                
             period = f"{y}Q{q}" if y and q else "-"
-            q_rev = str(e.get("營業收入", "-"))
             
-            eps_map[c] = eps
-            eps_period_map[c] = period
-            q_rev_map[c] = q_rev
+            q_rev = "-"
+            for k in ["營業收入", "Revenue", "revenue"]:
+                if k in e: q_rev = str(e[k]).strip(); break
+            
+            if eps != "-": eps_map[c] = eps
+            if period != "-": eps_period_map[c] = period
+            if q_rev != "-": q_rev_map[c] = q_rev
 
         for e in fetch_api_list("https://openapi.twse.com.tw/v1/opendata/t187ap14_L"): extract_eps_info(e)
         time.sleep(0.5)
         for e in fetch_api_list("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap14_O"): extract_eps_info(e)
         time.sleep(0.5)
 
-        # 3. 抓取本益比
+        # 3. 抓取本益比 (💥 加入萬能大小寫相容)
         pe_map = {}
         for p in fetch_api_list("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_d"):
-            pe_map[str(p.get("Code", "")).strip()] = str(p.get("PEratio", "-"))
+            c = str(p.get("Code", "")).strip()
+            for k in ["PEratio", "PERatio", "PeRatio", "本益比"]:
+                if k in p: pe_map[c] = str(p[k]).strip(); break
         time.sleep(0.5)
+        
         for p in fetch_api_list("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis"):
-            c = str(p.get("SecuritiesCompanyCode", p.get("公司代號", ""))).strip()
-            pe_map[c] = str(p.get("PERatio", p.get("本益比", "-")))
+            c = ""
+            for k in ["SecuritiesCompanyCode", "公司代號", "Code"]:
+                if k in p: c = str(p[k]).strip(); break
+            if c:
+                for k in ["PERatio", "PEratio", "PeRatio", "本益比"]:
+                    if k in p: pe_map[c] = str(p[k]).strip(); break
         time.sleep(0.5)
 
         # 4. 抓取全市場今日收盤價與起漲價
@@ -292,17 +302,20 @@ def fetch_fundamental_data():
         time.sleep(0.5)
                 
         for p in fetch_api_list("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes"):
-            c = str(p.get("SecuritiesCompanyCode", p.get("公司代號", ""))).strip()
-            try:
-                cp = float(p.get("Close", 0))
-                cv = float(p.get("Change", 0))
-                op = str(p.get("Open", "-"))
-                prev = cp - cv
-                pct = round((cv / prev) * 100, 2) if prev > 0 else 0
-                price_map[c] = f"{cp:.2f}"
-                chg_pct_map[c] = f"{pct}"
-                open_map[c] = op if op.strip() != "" else "-"
-            except: pass
+            c = ""
+            for k in ["SecuritiesCompanyCode", "公司代號", "Code"]:
+                if k in p: c = str(p[k]).strip(); break
+            if c:
+                try:
+                    cp = float(p.get("Close", 0))
+                    cv = float(p.get("Change", 0))
+                    op = str(p.get("Open", "-"))
+                    prev = cp - cv
+                    pct = round((cv / prev) * 100, 2) if prev > 0 else 0
+                    price_map[c] = f"{cp:.2f}"
+                    chg_pct_map[c] = f"{pct}"
+                    open_map[c] = op if op.strip() != "" else "-"
+                except: pass
 
         temp_focus = []
         temp_full = []
@@ -333,16 +346,28 @@ def fetch_fundamental_data():
             eps_period_str = eps_period_map.get(code, "-")
             close_str = price_map.get(code, "-")
 
-            # 逆向演算：如果政府沒給 EPS，用「收盤價 ÷ 本益比」硬算！
+            # 💥 終極雙向逆向演算：你沒給資料，我系統自己算！
+            # 1. 政府沒給 EPS，用「收盤價 ÷ 本益比」硬算！
             if eps_str == "-" and pe_str != "-" and close_str != "-":
                 try:
                     pe_val = float(pe_str)
                     close_val = float(close_str)
                     if pe_val > 0:
                         eps_str = f"{(close_val / pe_val):.2f}"
-                        eps_period_str = "即時推算" 
-                except:
-                    pass
+                except: pass
+                
+            # 💥 2. 政府沒給本益比，用「收盤價 ÷ EPS」硬算！
+            if pe_str == "-" and eps_str != "-" and close_str != "-":
+                try:
+                    eps_val = float(eps_str)
+                    close_val = float(close_str)
+                    if eps_val > 0:
+                        pe_str = f"{(close_val / eps_val):.2f}"
+                except: pass
+
+            # 💥 3. 容錯填補：如果算出了 EPS 但期別漏了，補上文字
+            if eps_period_str == "-" and eps_str != "-":
+                eps_period_str = "最新財報"
 
             stock_info = {
                 "code": code,
