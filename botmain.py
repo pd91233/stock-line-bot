@@ -197,7 +197,7 @@ def fetch_fundamental_data():
     global revenue_history_cache, fundamental_focus_cache, fundamental_full_cache
     import sys
     try:
-        print("📡 [基本面引擎] 啟動全市場財報與估值掃描 (終極逆向演算版)...", flush=True) 
+        print("📡 [基本面引擎] 啟動全市場財報與估值掃描 (新增季營收與期別)...", flush=True) 
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -205,30 +205,48 @@ def fetch_fundamental_data():
             "Connection": "keep-alive"
         }
         
-        # 1. 抓取營收
+        # 1. 抓取營收 (這裡自帶「出表日期」)
         twse_data = requests.get("https://openapi.twse.com.tw/v1/opendata/t187ap05_L", headers=headers, timeout=20).json()
         tpex_data = requests.get("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O", headers=headers, timeout=20).json()
         all_data = twse_data + tpex_data
         
-        # 2. 抓取 EPS (加入多種欄位名稱防呆辨識)
+        # 💥 2. 抓取 EPS、季營收、EPS期別
         eps_map = {}
-        def extract_eps(e):
+        eps_period_map = {}
+        q_rev_map = {}
+        
+        def extract_eps_info(e):
+            c = str(e.get("公司代號", "")).strip()
+            # 抓 EPS
+            eps = "-"
             for k in ["基本每股盈餘（元）", "基本每股盈餘(元)", "基本每股盈餘", "EPS"]:
-                if k in e: return str(e[k])
-            return "-"
+                if k in e: 
+                    eps = str(e[k])
+                    break
+            # 抓 EPS 期別
+            y = str(e.get("年度", ""))
+            q = str(e.get("季別", ""))
+            period = f"{y}Q{q}" if y and q else "-"
+            # 抓 季營收
+            q_rev = str(e.get("營業收入", "-"))
+            
+            if c:
+                eps_map[c] = eps
+                eps_period_map[c] = period
+                q_rev_map[c] = q_rev
 
         try:
             twse_eps = requests.get("https://openapi.twse.com.tw/v1/opendata/t187ap14_L", headers=headers, timeout=15).json()
             if isinstance(twse_eps, list):
                 for e in twse_eps:
-                    if isinstance(e, dict): eps_map[str(e.get("公司代號", "")).strip()] = extract_eps(e)
+                    if isinstance(e, dict): extract_eps_info(e)
         except: pass
         
         try:
             tpex_eps = requests.get("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap14_O", headers=headers, timeout=15).json()
             if isinstance(tpex_eps, list):
                 for e in tpex_eps:
-                    if isinstance(e, dict): eps_map[str(e.get("公司代號", "")).strip()] = extract_eps(e)
+                    if isinstance(e, dict): extract_eps_info(e)
         except: pass
 
         # 3. 抓取本益比
@@ -247,10 +265,10 @@ def fetch_fundamental_data():
                     if isinstance(p, dict): pe_map[str(p.get("SecuritiesCompanyCode", "")).strip()] = str(p.get("PERatio", "-"))
         except: pass
 
-        # 4. 抓取全市場今日收盤價與漲跌幅 (💥新增抓取起始開盤價)
+        # 4. 抓取全市場今日收盤價與起漲價
         price_map = {}
         chg_pct_map = {}
-        open_map = {} # 新增開盤價字典
+        open_map = {}
         try:
             twse_price = requests.get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", headers=headers, timeout=15).json()
             if isinstance(twse_price, list):
@@ -260,7 +278,7 @@ def fetch_fundamental_data():
                         try:
                             cp = float(p.get("ClosingPrice", 0))
                             cv = float(p.get("Change", 0))
-                            op = str(p.get("OpeningPrice", "-")) # 抓取上市開盤價
+                            op = str(p.get("OpeningPrice", "-"))
                             prev = cp - cv
                             pct = round((cv / prev) * 100, 2) if prev > 0 else 0
                             price_map[c] = f"{cp:.2f}"
@@ -276,7 +294,7 @@ def fetch_fundamental_data():
                         try:
                             cp = float(p.get("Close", 0))
                             cv = float(p.get("Change", 0))
-                            op = str(p.get("Open", "-")) # 抓取上櫃開盤價
+                            op = str(p.get("Open", "-"))
                             prev = cp - cv
                             pct = round((cv / prev) * 100, 2) if prev > 0 else 0
                             price_map[c] = f"{cp:.2f}"
@@ -293,6 +311,7 @@ def fetch_fundamental_data():
             if not code: continue
             
             period = item.get("資料年月", "") 
+            data_date = item.get("出表日期", "-") # 💥 抓取資料日期
             rev_current = item.get("營業收入-當月營收", item.get("當月營收", "0"))
             mom = item.get("營業收入-上月比較增減(%)", item.get("上月比較增減(%)", "0"))
             yoy = item.get("營業收入-去年同月增減(%)", item.get("去年同月增減(%)", "0"))
@@ -304,31 +323,36 @@ def fetch_fundamental_data():
             
             pe_str = pe_map.get(code, "-")
             eps_str = eps_map.get(code, "-")
+            eps_period_str = eps_period_map.get(code, "-")
             close_str = price_map.get(code, "-")
 
-            # 💥 終極殺招：如果政府沒給 EPS，我們用「收盤價 ÷ 本益比」硬算出來！
+            # 逆向演算：如果政府沒給 EPS，用「收盤價 ÷ 本益比」硬算！
             if eps_str == "-" and pe_str != "-" and close_str != "-":
                 try:
                     pe_val = float(pe_str)
                     close_val = float(close_str)
                     if pe_val > 0:
                         eps_str = f"{(close_val / pe_val):.2f}"
+                        eps_period_str = "即時推算" # 標示為推算
                 except:
                     pass
 
-            # 5. 精準對接：把「起始股價(open)」接上管線！
+            # 💥 將新欄位全部封裝！
             stock_info = {
                 "code": code,
                 "name": item.get("公司名稱", ""),
                 "ind": item.get("產業別", "未知產業"),
                 "period": period,
+                "data_date": data_date,             # 新增: 資料日期
                 "revenue": rev_current,
+                "q_rev": q_rev_map.get(code, "-"),  # 新增: 季營收
                 "mom": mom,
                 "yoy": yoy,
                 "eps": eps_str,
+                "eps_period": eps_period_str,       # 新增: EPS期別
                 "pe": pe_str,
                 "close": close_str,
-                "open": open_map.get(code, "-"), # 💥 補上起始股價！
+                "open": open_map.get(code, "-"),
                 "chg": chg_pct_map.get(code, "-"),
                 "is_new": is_new_release
             }
@@ -344,7 +368,7 @@ def fetch_fundamental_data():
         current_cache["fundamental_focus"] = fundamental_focus_cache
         current_cache["fundamental_full"] = fundamental_full_cache
         update_cache(current_cache)
-        print("✅ [基本面引擎] 財報與股價數據已成功寫入！(含EPS逆向演算)", flush=True)
+        print("✅ [基本面引擎] 財報與股價數據已成功寫入！", flush=True)
         
     except Exception as e:
         print(f"❌ [基本面引擎] 發生嚴重錯誤: {e}", flush=True)
