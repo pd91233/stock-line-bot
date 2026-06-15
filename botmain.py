@@ -197,7 +197,7 @@ def fetch_fundamental_data():
     global revenue_history_cache, fundamental_focus_cache, fundamental_full_cache
     import sys
     try:
-        print("📡 [基本面引擎] 啟動全市場財報與估值掃描 (強化容錯版)...", flush=True) 
+        print("📡 [基本面引擎] 啟動全市場財報與估值掃描 (極致防護版)...", flush=True) 
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -210,62 +210,77 @@ def fetch_fundamental_data():
         tpex_data = requests.get("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O", headers=headers, timeout=20).json()
         all_data = twse_data + tpex_data
         
-        # 💥 2. 抓取 EPS (上市上櫃拆開，強制轉字串，防止一邊死掉全掛)
+        # 💥 2. 抓取 EPS (加入型別檢查與去空白防護)
         eps_map = {}
         try:
-            for e in requests.get("https://openapi.twse.com.tw/v1/opendata/t187ap14_L", headers=headers, timeout=15).json():
-                eps_map[str(e.get("公司代號", ""))] = str(e.get("基本每股盈餘（元）", "-"))
+            twse_eps = requests.get("https://openapi.twse.com.tw/v1/opendata/t187ap14_L", headers=headers, timeout=15).json()
+            if isinstance(twse_eps, list):
+                for e in twse_eps:
+                    if isinstance(e, dict): eps_map[str(e.get("公司代號", "")).strip()] = str(e.get("基本每股盈餘（元）", "-"))
         except Exception as ex: print(f"⚠️ 上市EPS失敗: {ex}", flush=True)
         
         try:
-            for e in requests.get("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap14_O", headers=headers, timeout=15).json():
-                eps_map[str(e.get("公司代號", ""))] = str(e.get("基本每股盈餘（元）", "-"))
+            tpex_eps = requests.get("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap14_O", headers=headers, timeout=15).json()
+            if isinstance(tpex_eps, list):
+                for e in tpex_eps:
+                    if isinstance(e, dict): eps_map[str(e.get("公司代號", "")).strip()] = str(e.get("基本每股盈餘（元）", "-"))
         except Exception as ex: print(f"⚠️ 上櫃EPS失敗: {ex}", flush=True)
 
-        # 💥 3. 抓取本益比 (拆開抓取，強制轉字串)
+        # 💥 3. 抓取本益比 (加入型別檢查防護)
         pe_map = {}
         try:
-            for p in requests.get("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_d", headers=headers, timeout=15).json():
-                pe_map[str(p.get("Code", ""))] = str(p.get("PEratio", "-"))
+            twse_pe = requests.get("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_d", headers=headers, timeout=15).json()
+            if isinstance(twse_pe, list):
+                for p in twse_pe:
+                    if isinstance(p, dict): pe_map[str(p.get("Code", "")).strip()] = str(p.get("PEratio", "-"))
         except Exception as ex: print(f"⚠️ 上市PE失敗: {ex}", flush=True)
         
         try:
-            for p in requests.get("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis", headers=headers, timeout=15).json():
-                pe_map[str(p.get("SecuritiesCompanyCode", ""))] = str(p.get("PERatio", "-"))
+            tpex_pe = requests.get("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis", headers=headers, timeout=15).json()
+            if isinstance(tpex_pe, list):
+                for p in tpex_pe:
+                    if isinstance(p, dict): pe_map[str(p.get("SecuritiesCompanyCode", "")).strip()] = str(p.get("PERatio", "-"))
         except Exception as ex: print(f"⚠️ 上櫃PE失敗: {ex}", flush=True)
 
         # 4. 抓取全市場今日收盤價與漲跌幅
         price_map = {}
         chg_pct_map = {}
         try:
-            for p in requests.get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", headers=headers, timeout=15).json():
-                c = str(p.get("Code", ""))
-                try:
-                    cp = float(p.get("ClosingPrice", 0))
-                    cv = float(p.get("Change", 0))
-                    prev = cp - cv
-                    pct = round((cv / prev) * 100, 2) if prev > 0 else 0
-                    price_map[c] = f"{cp:.2f}"
-                    chg_pct_map[c] = f"{pct}"
-                except: pass
+            twse_price = requests.get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", headers=headers, timeout=15).json()
+            if isinstance(twse_price, list):
+                for p in twse_price:
+                    if isinstance(p, dict):
+                        c = str(p.get("Code", "")).strip()
+                        try:
+                            cp = float(p.get("ClosingPrice", 0))
+                            cv = float(p.get("Change", 0))
+                            prev = cp - cv
+                            pct = round((cv / prev) * 100, 2) if prev > 0 else 0
+                            price_map[c] = f"{cp:.2f}"
+                            chg_pct_map[c] = f"{pct}"
+                        except: pass
                 
-            for p in requests.get("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes", headers=headers, timeout=15).json():
-                c = str(p.get("SecuritiesCompanyCode", ""))
-                try:
-                    cp = float(p.get("Close", 0))
-                    cv = float(p.get("Change", 0))
-                    prev = cp - cv
-                    pct = round((cv / prev) * 100, 2) if prev > 0 else 0
-                    price_map[c] = f"{cp:.2f}"
-                    chg_pct_map[c] = f"{pct}"
-                except: pass
+            tpex_price = requests.get("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes", headers=headers, timeout=15).json()
+            if isinstance(tpex_price, list):
+                for p in tpex_price:
+                    if isinstance(p, dict):
+                        c = str(p.get("SecuritiesCompanyCode", "")).strip()
+                        try:
+                            cp = float(p.get("Close", 0))
+                            cv = float(p.get("Change", 0))
+                            prev = cp - cv
+                            pct = round((cv / prev) * 100, 2) if prev > 0 else 0
+                            price_map[c] = f"{cp:.2f}"
+                            chg_pct_map[c] = f"{pct}"
+                        except: pass
         except Exception as ex: print(f"⚠️ 股價抓取異常: {ex}", flush=True)
 
         temp_focus = []
         temp_full = []
         
         for item in all_data:
-            code = str(item.get("公司代號", ""))
+            # 💥 確保營收代號也去空白，才能與 EPS 對接！
+            code = str(item.get("公司代號", "")).strip()
             if not code: continue
             
             period = item.get("資料年月", "") 
@@ -278,7 +293,7 @@ def fetch_fundamental_data():
                 is_new_release = True
             revenue_history_cache[code] = period
             
-            # 💥 5. 精準對接：確保前端拿到的都是純文字或數字
+            # 5. 精準對接：完全排除雜訊
             stock_info = {
                 "code": code,
                 "name": item.get("公司名稱", ""),
@@ -286,7 +301,7 @@ def fetch_fundamental_data():
                 "revenue": rev_current,
                 "mom": mom,
                 "yoy": yoy,
-                "eps": eps_map.get(code, "-"), # 這裡一定抓得到資料了
+                "eps": eps_map.get(code, "-"),
                 "pe": pe_map.get(code, "-"),
                 "close": price_map.get(code, "-"),
                 "chg": chg_pct_map.get(code, "-"),
