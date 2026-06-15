@@ -247,9 +247,10 @@ def fetch_fundamental_data():
                     if isinstance(p, dict): pe_map[str(p.get("SecuritiesCompanyCode", "")).strip()] = str(p.get("PERatio", "-"))
         except: pass
 
-        # 4. 抓取全市場今日收盤價與漲跌幅
+        # 4. 抓取全市場今日收盤價與漲跌幅 (💥新增抓取起始開盤價)
         price_map = {}
         chg_pct_map = {}
+        open_map = {} # 新增開盤價字典
         try:
             twse_price = requests.get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", headers=headers, timeout=15).json()
             if isinstance(twse_price, list):
@@ -259,10 +260,12 @@ def fetch_fundamental_data():
                         try:
                             cp = float(p.get("ClosingPrice", 0))
                             cv = float(p.get("Change", 0))
+                            op = str(p.get("OpeningPrice", "-")) # 抓取上市開盤價
                             prev = cp - cv
                             pct = round((cv / prev) * 100, 2) if prev > 0 else 0
                             price_map[c] = f"{cp:.2f}"
                             chg_pct_map[c] = f"{pct}"
+                            open_map[c] = op if op.strip() != "" else "-"
                         except: pass
                 
             tpex_price = requests.get("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes", headers=headers, timeout=15).json()
@@ -273,10 +276,12 @@ def fetch_fundamental_data():
                         try:
                             cp = float(p.get("Close", 0))
                             cv = float(p.get("Change", 0))
+                            op = str(p.get("Open", "-")) # 抓取上櫃開盤價
                             prev = cp - cv
                             pct = round((cv / prev) * 100, 2) if prev > 0 else 0
                             price_map[c] = f"{cp:.2f}"
                             chg_pct_map[c] = f"{pct}"
+                            open_map[c] = op if op.strip() != "" else "-"
                         except: pass
         except: pass
 
@@ -311,9 +316,11 @@ def fetch_fundamental_data():
                 except:
                     pass
 
+            # 5. 精準對接：把「起始股價(open)」接上管線！
             stock_info = {
                 "code": code,
                 "name": item.get("公司名稱", ""),
+                "ind": item.get("產業別", "未知產業"),
                 "period": period,
                 "revenue": rev_current,
                 "mom": mom,
@@ -321,6 +328,7 @@ def fetch_fundamental_data():
                 "eps": eps_str,
                 "pe": pe_str,
                 "close": close_str,
+                "open": open_map.get(code, "-"), # 💥 補上起始股價！
                 "chg": chg_pct_map.get(code, "-"),
                 "is_new": is_new_release
             }
