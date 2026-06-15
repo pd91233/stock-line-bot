@@ -205,9 +205,21 @@ def fetch_fundamental_data():
             "Connection": "keep-alive"
         }
         
-        # 1. 抓取營收 (這裡自帶「出表日期」)
-        twse_data = requests.get("https://openapi.twse.com.tw/v1/opendata/t187ap05_L", headers=headers, timeout=20).json()
-        tpex_data = requests.get("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O", headers=headers, timeout=20).json()
+        # 1. 抓取營收 (這裡自帶「出表日期」，並自動貼上上市/上櫃標籤)
+        try:
+            twse_data = requests.get("https://openapi.twse.com.tw/v1/opendata/t187ap05_L", headers=headers, timeout=20).json()
+            if isinstance(twse_data, list):
+                for d in twse_data: d["市場別"] = "上市"
+            else: twse_data = []
+        except: twse_data = []
+
+        try:
+            tpex_data = requests.get("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O", headers=headers, timeout=20).json()
+            if isinstance(tpex_data, list):
+                for d in tpex_data: d["市場別"] = "上櫃"
+            else: tpex_data = []
+        except: tpex_data = []
+        
         all_data = twse_data + tpex_data
         
         # 💥 2. 抓取 EPS、季營收、EPS期別
@@ -348,14 +360,15 @@ def fetch_fundamental_data():
                 "code": code,
                 "name": item.get("公司名稱", ""),
                 "ind": item.get("產業別", "未知產業"),
+                "market": item.get("市場別", "未知"),  # 💥 補上這行：提供給前端的上市櫃過濾按鈕使用！
                 "period": period,
-                "data_date": data_date,             # 新增: 資料日期
+                "data_date": data_date,             
                 "revenue": rev_current,
-                "q_rev": q_rev_map.get(code, "-"),  # 新增: 季營收
+                "q_rev": q_rev_map.get(code, "-"),  
                 "mom": mom,
                 "yoy": yoy,
                 "eps": eps_str,
-                "eps_period": eps_period_str,       # 新增: EPS期別
+                "eps_period": eps_period_str,       
                 "pe": pe_str,
                 "close": close_str,
                 "open": open_map.get(code, "-"),
