@@ -197,102 +197,113 @@ def fetch_fundamental_data():
     global revenue_history_cache, fundamental_focus_cache, fundamental_full_cache
     import sys
     try:
-        print("📡 [基本面引擎] 啟動全市場財報與估值掃描 (擴充 EPS 與本益比)...", flush=True) 
+        print("📡 [基本面引擎] 啟動全市場財報與估值掃描 (擴充 EPS、PE 與 收盤價)...", flush=True) 
         
-        # 🛡️ 強化偽裝裝甲：完整模擬真人台灣瀏覽器
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Accept": "application/json",
             "Connection": "keep-alive"
         }
         
-        # 1. 抓取營收 (上市 + 上櫃)
-        twse_url = "https://openapi.twse.com.tw/v1/opendata/t187ap05_L"
-        tpex_url = "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O"
-        
-        twse_data = requests.get(twse_url, headers=headers, timeout=20).json()
-        tpex_data = requests.get(tpex_url, headers=headers, timeout=20).json()
+        # 1. 抓取營收
+        twse_data = requests.get("https://openapi.twse.com.tw/v1/opendata/t187ap05_L", headers=headers, timeout=20).json()
+        tpex_data = requests.get("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O", headers=headers, timeout=20).json()
         all_data = twse_data + tpex_data
         
-        # 💥 2. 擴充彈藥庫：抓取 EPS (上市 + 上櫃綜合損益表)
+        # 2. 抓取 EPS
         eps_map = {}
         try:
-            eps_L = requests.get("https://openapi.twse.com.tw/v1/opendata/t187ap14_L", headers=headers, timeout=10).json()
-            eps_O = requests.get("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap14_O", headers=headers, timeout=10).json()
-            for e in eps_L + eps_O:
+            for e in requests.get("https://openapi.twse.com.tw/v1/opendata/t187ap14_L", headers=headers, timeout=10).json() + \
+                     requests.get("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap14_O", headers=headers, timeout=10).json():
                 eps_map[e.get("公司代號")] = e.get("基本每股盈餘（元）", "-")
-        except Exception as ex:
-            print(f"⚠️ [EPS 引擎] 抓取異常: {ex}", flush=True)
+        except: pass
 
-        # 💥 3. 擴充彈藥庫：抓取本益比 (上市 + 上櫃每日盤後資訊)
+        # 3. 抓取本益比
         pe_map = {}
         try:
-            pe_L = requests.get("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_d", headers=headers, timeout=10).json()
-            for p in pe_L:
+            for p in requests.get("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_d", headers=headers, timeout=10).json():
                 pe_map[p.get("Code")] = p.get("PEratio", "-")
-                
-            pe_O = requests.get("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis", headers=headers, timeout=10).json()
-            for p in pe_O:
+            for p in requests.get("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis", headers=headers, timeout=10).json():
                 pe_map[p.get("SecuritiesCompanyCode")] = p.get("PERatio", "-")
-        except Exception as ex:
-            print(f"⚠️ [本益比引擎] 抓取異常: {ex}", flush=True)
+        except: pass
+
+        # 💥 4. 抓取全市場今日收盤價與漲跌幅
+        price_map = {}
+        chg_pct_map = {}
+        try:
+            # 解析上市股價
+            for p in requests.get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", headers=headers, timeout=10).json():
+                c = p.get("Code")
+                try:
+                    cp = float(p.get("ClosingPrice", 0))
+                    cv = float(p.get("Change", 0))
+                    prev = cp - cv
+                    pct = round((cv / prev) * 100, 2) if prev > 0 else 0
+                    price_map[c] = f"{cp:.2f}"
+                    chg_pct_map[c] = f"{pct}"
+                except: pass
+                
+            # 解析上櫃股價
+            for p in requests.get("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes", headers=headers, timeout=10).json():
+                c = p.get("SecuritiesCompanyCode")
+                try:
+                    cp = float(p.get("Close", 0))
+                    cv = float(p.get("Change", 0))
+                    prev = cp - cv
+                    pct = round((cv / prev) * 100, 2) if prev > 0 else 0
+                    price_map[c] = f"{cp:.2f}"
+                    chg_pct_map[c] = f"{pct}"
+                except: pass
+        except Exception as ex: 
+            print(f"⚠️ [股價引擎] 抓取異常: {ex}", flush=True)
 
         temp_focus = []
         temp_full = []
         
         for item in all_data:
             code = item.get("公司代號", "")
-            name = item.get("公司名稱", "")
-            period = item.get("資料年月", "") 
+            if not code: continue
             
+            period = item.get("資料年月", "") 
             rev_current = item.get("營業收入-當月營收", item.get("當月營收", "0"))
             mom = item.get("營業收入-上月比較增減(%)", item.get("上月比較增減(%)", "0"))
             yoy = item.get("營業收入-去年同月增減(%)", item.get("去年同月增減(%)", "0"))
             
-            if not code or not period: continue
-            
-            last_period = revenue_history_cache.get(code)
             is_new_release = False
-            
-            if last_period is not None and last_period != period:
+            if revenue_history_cache.get(code) is not None and revenue_history_cache.get(code) != period:
                 is_new_release = True
-                
             revenue_history_cache[code] = period
             
-            # 💥 4. 將 EPS 與 PE 掛載進股票字典中，送往前端！
+            # 💥 5. 將所有數據完美封裝送往前端
             stock_info = {
                 "code": code,
-                "name": name,
+                "name": item.get("公司名稱", ""),
                 "period": period,
                 "revenue": rev_current,
                 "mom": mom,
                 "yoy": yoy,
-                "eps": eps_map.get(code, "-"), # 注入 EPS
-                "pe": pe_map.get(code, "-"),   # 注入 PE
+                "eps": eps_map.get(code, "-"),
+                "pe": pe_map.get(code, "-"),
+                "close": price_map.get(code, "-"), # 注入雲端收盤價
+                "chg": chg_pct_map.get(code, "-"), # 注入雲端漲跌幅
                 "is_new": is_new_release
             }
             
             temp_full.append(stock_info)
-            if is_new_release:
-                temp_focus.append(stock_info)
+            if is_new_release: temp_focus.append(stock_info)
                 
-        # 寫入全域快取
         fundamental_full_cache.clear()
         fundamental_full_cache.extend(temp_full)
-        
-        if len(temp_focus) > 0:
-            fundamental_focus_cache = temp_focus
-            
-        print(f"✅ [基本面引擎] 掃描完成！全市場 {len(temp_full)} 檔，已全數配發 EPS 與本益比數據。", flush=True)
+        if len(temp_focus) > 0: fundamental_focus_cache = temp_focus
 
         current_cache = read_cache()
         current_cache["fundamental_focus"] = fundamental_focus_cache
         current_cache["fundamental_full"] = fundamental_full_cache
         update_cache(current_cache)
-        print("✅ [基本面引擎] 財報數據已成功寫入 JSON 彈藥庫！", flush=True)
+        print("✅ [基本面引擎] 財報與股價數據已成功寫入！", flush=True)
         
     except Exception as e:
-        print(f"❌ [基本面引擎] 營收抓取失敗，遭遇政府防火牆阻擋！錯誤詳情: {e}", flush=True)
+        print(f"❌ [基本面引擎] 發生錯誤: {e}", flush=True)
 
 # 每 60 分鐘掃描一次政府資料庫
 def fundamental_patrol_loop():
