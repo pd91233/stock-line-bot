@@ -324,20 +324,6 @@ def fetch_fundamental_data():
             yoy = item.get("營業收入-去年同月增減(%)", item.get("去年同月增減(%)", "0"))
             
             is_new_release = False
-
-
-            for item in all_data:
-            code = str(item.get("公司代號", "")).strip()
-            if not code: continue
-            
-            period = item.get("資料年月", "") 
-            raw_date = item.get("出表日期", "-") # 抓取原始民國日期
-            
-
-
-            rev_current = item.get("營業收入-當月營收", item.get("當月營收", "0"))
-            
-            is_new_release = False
             if revenue_history_cache.get(code) is not None and revenue_history_cache.get(code) != period:
                 is_new_release = True
             revenue_history_cache[code] = period
@@ -358,7 +344,6 @@ def fetch_fundamental_data():
                 except:
                     pass
 
-            # 💥 將新欄位全部封裝！
             stock_info = {
                 "code": code,
                 "name": item.get("公司名稱", ""),
