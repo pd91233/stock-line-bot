@@ -245,6 +245,8 @@ def fetch_fundamental_data():
     except Exception as e:
         print(f"❌ [基本面引擎] 財報同步失敗: {e}", flush=True)
 
+
+
 # 每 60 分鐘掃描一次政府資料庫
 def fundamental_patrol_loop():
     while True:
