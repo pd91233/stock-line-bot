@@ -311,10 +311,19 @@ def fetch_fundamental_data():
             if not code: continue
             
             period = item.get("資料年月", "") 
-            data_date = item.get("出表日期", "-") # 💥 抓取資料日期
+            raw_date = item.get("出表日期", "-") # 抓取原始民國日期
+            
+            # 💥 日期西元化轉換器 (將 1150614 轉為 2026-06-14)
+            data_date = raw_date
+            if len(raw_date) == 7 and raw_date.isdigit():
+                g_year = str(int(raw_date[:3]) + 1911)
+                data_date = f"{g_year}-{raw_date[3:5]}-{raw_date[5:7]}"
+
             rev_current = item.get("營業收入-當月營收", item.get("當月營收", "0"))
             mom = item.get("營業收入-上月比較增減(%)", item.get("上月比較增減(%)", "0"))
             yoy = item.get("營業收入-去年同月增減(%)", item.get("去年同月增減(%)", "0"))
+            
+            is_new_release = False
 
 
             for item in all_data:
@@ -324,11 +333,7 @@ def fetch_fundamental_data():
             period = item.get("資料年月", "") 
             raw_date = item.get("出表日期", "-") # 抓取原始民國日期
             
-            # 💥 日期西元化轉換器 (將 1150614 轉為 2026-06-14)
-            data_date = raw_date
-            if len(raw_date) == 7 and raw_date.isdigit():
-                g_year = str(int(raw_date[:3]) + 1911)
-                data_date = f"{g_year}-{raw_date[3:5]}-{raw_date[5:7]}"
+
 
             rev_current = item.get("營業收入-當月營收", item.get("當月營收", "0"))
             
