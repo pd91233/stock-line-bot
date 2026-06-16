@@ -790,7 +790,7 @@ def continuous_radar_loop():
 
 
 # ==========================================================
-# 🕵️‍♂️ 9. 單兵 X 光透視鏡：個股歷史縱深情報管線 (API)
+# 🕵️‍♂️ 9. 單兵 X光透視鏡：個股歷史縱深情報管線 (API)
 # ==========================================================
 @app.route("/api/stock_detail", methods=['GET'])
 def get_stock_detail():
@@ -808,17 +808,23 @@ def get_stock_detail():
         }
         
         headers = {"User-Agent": "Mozilla/5.0"}
+        import datetime
         now = datetime.datetime.now()
         
-        # --- 1. 抓取歷史股價 (Yahoo Finance, 近 60 個交易日) ---
+        # --- 1. 抓取歷史股價 (裝備防護罩與備用切換引擎) ---
         import yfinance as yf
-        ticker_str = f"{code}.TW"
-        hist = yf.Ticker(ticker_str).history(period="3mo")
-        if hist.empty:
-            ticker_str = f"{code}.TWO"
+        hist = None
+        try:
+            ticker_str = f"{code}.TW"
             hist = yf.Ticker(ticker_str).history(period="3mo")
+            if hist.empty:
+                hist = yf.Ticker(f"{code}.TWO").history(period="3mo")
+        except Exception as e:
+            # 被限流也不怕，我們直接攔截錯誤
+            print(f"⚠️ [Yahoo引擎遭遇防空砲火 限流]: {e}", flush=True)
             
-        if not hist.empty:
+        # 如果 Yahoo 成功抓到資料
+        if hist is not None and not hist.empty:
             for date, row in hist.iterrows():
                 result["price_trend"].append({
                     "date": date.strftime("%Y-%m-%d"),
@@ -828,18 +834,36 @@ def get_stock_detail():
                     "close": round(row['Close'], 2),
                     "volume": int(row['Volume'])
                 })
+        # 💥 雙引擎切換：如果 Yahoo 失敗或沒資料，立刻啟動 FinMind 抓股價！
+        else:
+            print(f"🔄 [啟動 FinMind 備用股價引擎]...", flush=True)
+            try:
+                start_date_price = (now - datetime.timedelta(days=90)).strftime("%Y-%m-%d")
+                url_price = f"https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id={code}&start_date={start_date_price}"
+                res_price = requests.get(url_price, headers=headers, timeout=10).json()
+                if res_price.get("msg") == "success":
+                    for item in res_price.get("data", []):
+                        result["price_trend"].append({
+                            "date": item.get("date"),
+                            "open": item.get("open", 0),
+                            "high": item.get("max", 0),
+                            "low": item.get("min", 0),
+                            "close": item.get("close", 0),
+                            "volume": item.get("Trading_Volume", 0)
+                        })
+            except Exception as e:
+                print(f"⚠️ [備用股價引擎也失效]: {e}", flush=True)
                 
         # --- 2. 抓取歷史月營收 (FinMind, 近 3 年) ---
-        # 往回推 1000 天大約是 3 年
         start_date_rev = (now - datetime.timedelta(days=1000)).strftime("%Y-%m-%d")
         url_rev = f"https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockMonthRevenue&data_id={code}&start_date={start_date_rev}"
         try:
             res_rev = requests.get(url_rev, headers=headers, timeout=10).json()
             if res_rev.get("msg") == "success":
                 rev_data = res_rev.get("data", [])
-                rev_data = sorted(rev_data, key=lambda x: x['date']) # 確保依照時間排序
+                rev_data = sorted(rev_data, key=lambda x: x['date']) 
                 for item in rev_data:
-                    rev_k = int(item.get("revenue", 0) / 1000) # 轉為千元
+                    rev_k = int(item.get("revenue", 0) / 1000) 
                     d_str = item.get("revenue_year", 0)
                     m_str = str(item.get("revenue_month", 0)).zfill(2)
                     
@@ -857,25 +881,23 @@ def get_stock_detail():
             res_eps = requests.get(url_eps, headers=headers, timeout=10).json()
             if res_eps.get("msg") == "success":
                 eps_data = res_eps.get("data", [])
-                # 只過濾出 EPS 項目
                 eps_items = [x for x in eps_data if x.get("type") == "EPS"]
                 eps_items = sorted(eps_items, key=lambda x: x['date'])
                 
                 for item in eps_items:
                     date_str = item.get("date", "")
-                    month = int(date_str[5:7])
-                    year = date_str[:4]
-                    # 判斷季別
-                    q = "Q1" if month <= 3 else "Q2" if month <= 6 else "Q3" if month <= 9 else "Q4"
-                    
-                    result["eps_trend"].append({
-                        "period": f"{year}{q}",
-                        "eps": item.get("value", 0)
-                    })
+                    if len(date_str) >= 7:
+                        month = int(date_str[5:7])
+                        year = date_str[:4]
+                        q = "Q1" if month <= 3 else "Q2" if month <= 6 else "Q3" if month <= 9 else "Q4"
+                        
+                        result["eps_trend"].append({
+                            "period": f"{year}{q}",
+                            "eps": item.get("value", 0)
+                        })
         except Exception as e:
             print(f"⚠️ [{code} EPS抓取失敗]: {e}", flush=True)
             
-        # 允許跨網域存取 (CORS)，這樣我們的前端網頁才能順利呼叫
         response = make_response(jsonify(result))
         response.headers['Access-Control-Allow-Origin'] = '*'
         return response
