@@ -816,9 +816,9 @@ def get_stock_detail():
         hist = None
         try:
             ticker_str = f"{code}.TW"
-            hist = yf.Ticker(ticker_str).history(period="2y")
+            hist = yf.Ticker(ticker_str).history(period="max") # 💥 解除封印，抓取全部歷史
             if hist.empty:
-                hist = yf.Ticker(f"{code}.TWO").history(period="2y")
+                hist = yf.Ticker(f"{code}.TWO").history(period="max")
         except Exception as e:
             # 被限流也不怕，我們直接攔截錯誤
             print(f"⚠️ [Yahoo引擎遭遇防空砲火 限流]: {e}", flush=True)
@@ -838,7 +838,7 @@ def get_stock_detail():
         else:
             print(f"🔄 [啟動 FinMind 備用股價引擎]...", flush=True)
             try:
-                start_date_price = (now - datetime.timedelta(days=1800)).strftime("%Y-%m-%d")
+                start_date_price = (now - datetime.timedelta(days=2000)).strftime("%Y-%m-%d")
                 url_price = f"https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id={code}&start_date={start_date_price}"
                 res_price = requests.get(url_price, headers=headers, timeout=10).json()
                 if res_price.get("msg") == "success":
