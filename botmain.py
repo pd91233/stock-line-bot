@@ -922,7 +922,7 @@ def keep_alive():
         time.sleep(300) # 每 300 秒 (5分鐘) 戳一次
 
 # 啟動心跳線
-threading.Thread(target=keep_alive, daemon=True).start()清
+threading.Thread(target=keep_alive, daemon=True).start()
 
 
 if __name__ == "__main__":
