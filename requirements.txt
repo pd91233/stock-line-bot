@@ -7,3 +7,4 @@ matplotlib
 mplfinance
 gunicorn
 beautifulsoup4
+yfinance
