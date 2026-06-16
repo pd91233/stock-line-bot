@@ -797,6 +797,9 @@ def continuous_radar_loop():
 # 💥 二階加速：建立全域記憶體快取 (LRU Cache)
 stock_detail_cache = {}
 
+# 💥 拆彈關鍵：把裝備放在最外面，不要讓執行緒搶奪！
+import yfinance as yf
+
 @app.route("/api/stock_detail", methods=['GET'])
 def get_stock_detail():
     code = request.args.get('code')
@@ -804,7 +807,6 @@ def get_stock_detail():
         return jsonify({"error": "未提供股票代號"}), 400
         
     try:
-        # 💥 二階加速啟動：如果今天已經查過這檔股票，0.01秒直接從記憶體拿給他！
         if code in stock_detail_cache:
             print(f"⚡ [極速快取命中] 瞬間載入 {code} 歷史情報！", flush=True)
             response = make_response(jsonify(stock_detail_cache[code]))
@@ -816,12 +818,10 @@ def get_stock_detail():
         headers = {"User-Agent": "Mozilla/5.0"}
         now = datetime.datetime.now()
 
-        # 定義三個傳令兵的任務任務
         def fetch_price():
-            import yfinance as yf
             prices = []
             try:
-                # 💥 主要引擎：Yahoo Finance (5年)
+                # 💥 主要引擎：Yahoo Finance (5年) - 已經在外面 import 過了，直接用！
                 hist = yf.Ticker(f"{code}.TW").history(period="5y")
                 if hist.empty: hist = yf.Ticker(f"{code}.TWO").history(period="5y")
                 
@@ -855,7 +855,6 @@ def get_stock_detail():
                             })
                 except Exception as e:
                     print(f"⚠️ [備用股價引擎也失效]: {e}", flush=True)
-                    
             return prices
 
         def fetch_revenue():
@@ -902,9 +901,13 @@ def get_stock_detail():
             result["revenue_trend"] = future_rev.result()
             result["eps_trend"] = future_eps.result()
 
-        # 將辛苦抓回來的資料存入記憶體快取 (最多只記最近的 50 檔，避免記憶體爆掉)
+        # 💥 安全地清理快取，避免多執行緒衝突
         if len(stock_detail_cache) > 50:
-            stock_detail_cache.pop(next(iter(stock_detail_cache)))
+            try:
+                first_key = list(stock_detail_cache.keys())[0]
+                del stock_detail_cache[first_key]
+            except: pass
+            
         stock_detail_cache[code] = result
 
         response = make_response(jsonify(result))
