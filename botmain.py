@@ -789,6 +789,102 @@ def continuous_radar_loop():
         time.sleep(60) # 💥 核心：每 60 秒必定重新掃描一次！
 
 
+# ==========================================================
+# 🕵️‍♂️ 9. 單兵 X 光透視鏡：個股歷史縱深情報管線 (API)
+# ==========================================================
+@app.route("/api/stock_detail", methods=['GET'])
+def get_stock_detail():
+    code = request.args.get('code')
+    if not code:
+        return jsonify({"error": "未提供股票代號"}), 400
+        
+    try:
+        print(f"📡 [X光透視鏡] 啟動！正在掃描 {code} 的歷史縱深情報...", flush=True)
+        result = {
+            "code": code,
+            "price_trend": [],
+            "revenue_trend": [],
+            "eps_trend": []
+        }
+        
+        headers = {"User-Agent": "Mozilla/5.0"}
+        now = datetime.datetime.now()
+        
+        # --- 1. 抓取歷史股價 (Yahoo Finance, 近 60 個交易日) ---
+        import yfinance as yf
+        ticker_str = f"{code}.TW"
+        hist = yf.Ticker(ticker_str).history(period="3mo")
+        if hist.empty:
+            ticker_str = f"{code}.TWO"
+            hist = yf.Ticker(ticker_str).history(period="3mo")
+            
+        if not hist.empty:
+            for date, row in hist.iterrows():
+                result["price_trend"].append({
+                    "date": date.strftime("%Y-%m-%d"),
+                    "open": round(row['Open'], 2),
+                    "high": round(row['High'], 2),
+                    "low": round(row['Low'], 2),
+                    "close": round(row['Close'], 2),
+                    "volume": int(row['Volume'])
+                })
+                
+        # --- 2. 抓取歷史月營收 (FinMind, 近 3 年) ---
+        # 往回推 1000 天大約是 3 年
+        start_date_rev = (now - datetime.timedelta(days=1000)).strftime("%Y-%m-%d")
+        url_rev = f"https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockMonthRevenue&data_id={code}&start_date={start_date_rev}"
+        try:
+            res_rev = requests.get(url_rev, headers=headers, timeout=10).json()
+            if res_rev.get("msg") == "success":
+                rev_data = res_rev.get("data", [])
+                rev_data = sorted(rev_data, key=lambda x: x['date']) # 確保依照時間排序
+                for item in rev_data:
+                    rev_k = int(item.get("revenue", 0) / 1000) # 轉為千元
+                    d_str = item.get("revenue_year", 0)
+                    m_str = str(item.get("revenue_month", 0)).zfill(2)
+                    
+                    result["revenue_trend"].append({
+                        "date": f"{d_str}-{m_str}", 
+                        "revenue": rev_k,
+                        "yoy": item.get("revenue_YearOnYear_ratio", 0)
+                    })
+        except Exception as e:
+            print(f"⚠️ [{code} 營收抓取失敗]: {e}", flush=True)
+
+        # --- 3. 抓取歷史 EPS (FinMind, 近 3 年季報) ---
+        url_eps = f"https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockFinancialStatements&data_id={code}&start_date={start_date_rev}"
+        try:
+            res_eps = requests.get(url_eps, headers=headers, timeout=10).json()
+            if res_eps.get("msg") == "success":
+                eps_data = res_eps.get("data", [])
+                # 只過濾出 EPS 項目
+                eps_items = [x for x in eps_data if x.get("type") == "EPS"]
+                eps_items = sorted(eps_items, key=lambda x: x['date'])
+                
+                for item in eps_items:
+                    date_str = item.get("date", "")
+                    month = int(date_str[5:7])
+                    year = date_str[:4]
+                    # 判斷季別
+                    q = "Q1" if month <= 3 else "Q2" if month <= 6 else "Q3" if month <= 9 else "Q4"
+                    
+                    result["eps_trend"].append({
+                        "period": f"{year}{q}",
+                        "eps": item.get("value", 0)
+                    })
+        except Exception as e:
+            print(f"⚠️ [{code} EPS抓取失敗]: {e}", flush=True)
+            
+        # 允許跨網域存取 (CORS)，這樣我們的前端網頁才能順利呼叫
+        response = make_response(jsonify(result))
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response
+        
+    except Exception as e:
+        print(f"❌ [X光透視鏡] 發生嚴重錯誤: {e}", flush=True)
+        return jsonify({"error": str(e)}), 500
+
+
 
 # 啟動盤中巡邏引擎
 threading.Thread(target=market_patrol_loop, daemon=True).start()
@@ -826,7 +922,7 @@ def keep_alive():
         time.sleep(300) # 每 300 秒 (5分鐘) 戳一次
 
 # 啟動心跳線
-threading.Thread(target=keep_alive, daemon=True).start()
+threading.Thread(target=keep_alive, daemon=True).start()清
 
 
 if __name__ == "__main__":
