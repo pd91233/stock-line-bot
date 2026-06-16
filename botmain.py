@@ -819,12 +819,12 @@ def get_stock_detail():
         # 定義三個傳令兵的任務任務
         def fetch_price():
             import yfinance as yf
+            prices = []
             try:
-                # 💥 限制為 5 年 (5y)，避免 20 年資料塞爆伺服器
+                # 💥 主要引擎：Yahoo Finance (5年)
                 hist = yf.Ticker(f"{code}.TW").history(period="5y")
                 if hist.empty: hist = yf.Ticker(f"{code}.TWO").history(period="5y")
                 
-                prices = []
                 if not hist.empty:
                     for date, row in hist.iterrows():
                         prices.append({
@@ -833,8 +833,30 @@ def get_stock_detail():
                             "low": round(row['Low'], 2), "close": round(row['Close'], 2),
                             "volume": int(row['Volume'])
                         })
-                return prices
-            except: return []
+            except Exception as e:
+                print(f"⚠️ [Yahoo引擎被擋]: {e}", flush=True)
+
+            # 💥 備用引擎：如果 Yahoo 被擋或沒資料，瞬間切換 FinMind 抓 5 年！
+            if len(prices) == 0:
+                print(f"🔄 [啟動 FinMind 備用股價引擎]...", flush=True)
+                try:
+                    start_date_price = (now - datetime.timedelta(days=2000)).strftime("%Y-%m-%d")
+                    url_price = f"https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id={code}&start_date={start_date_price}"
+                    res_price = requests.get(url_price, headers=headers, timeout=10).json()
+                    if res_price.get("msg") == "success":
+                        for item in res_price.get("data", []):
+                            prices.append({
+                                "date": item.get("date"),
+                                "open": item.get("open", 0),
+                                "high": item.get("max", 0),
+                                "low": item.get("min", 0),
+                                "close": item.get("close", 0),
+                                "volume": item.get("Trading_Volume", 0)
+                            })
+                except Exception as e:
+                    print(f"⚠️ [備用股價引擎也失效]: {e}", flush=True)
+                    
+            return prices
 
         def fetch_revenue():
             try:
