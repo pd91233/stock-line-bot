@@ -317,6 +317,22 @@ def fetch_fundamental_data():
                     open_map[c] = op if op.strip() != "" else "-"
                 except: pass
 
+
+        # ==========================================================
+        # 👇 👇 👇 動作 1：請將下面這段程式碼，完整插入在這個位置 👇 👇 👇
+        # ==========================================================
+        
+        # 5. 抓取證交所隱藏版月均價 (完美的 20MA 近似值)
+        ma20_map = {}
+        for p in fetch_api_list("https://openapi.twse.com.tw/v1/exchangeReport/FMNPTK"):
+            c = str(p.get("Code", "")).strip()
+            ma20_map[c] = str(p.get("AveragePrice", "-")).strip()
+        time.sleep(0.5)
+
+        # ==========================================================
+        # 👆 👆 👆 動作 1：插入結束 👆 👆 👆
+        # ==========================================================
+
         temp_focus = []
         temp_full = []
         
@@ -344,6 +360,20 @@ def fetch_fundamental_data():
             eps_str = eps_map.get(code, "-")
             eps_period_str = eps_period_map.get(code, "-")
             close_str = price_map.get(code, "-")
+
+
+            # 👇 動作 2：在這裡補上演算法 👇
+            # 💥 神級虧轉盈判定演算法 (本季賺錢，但四季總和為負無本益比)
+            is_turnaround = False
+            try:
+                if eps_str != "-" and float(eps_str) > 0 and pe_str == "-":
+                    is_turnaround = True
+            except:
+                pass
+            
+            ma20_str = ma20_map.get(code, "-")
+            # 👆 動作 2 結束 👆
+
 
             # 💥 終極雙向逆向演算：你沒給資料，我系統自己算！
             # 1. 政府沒給 EPS，用「收盤價 ÷ 本益比」硬算！
@@ -385,7 +415,10 @@ def fetch_fundamental_data():
                 "close": close_str,
                 "open": open_map.get(code, "-"),
                 "chg": chg_pct_map.get(code, "-"),
-                "is_new": is_new_release
+                "is_new": is_new_release,
+                # 👇 動作 3：補上這兩行 👇
+                "turnaround": is_turnaround,  # 💥 新增虧轉盈標記
+                "ma20": ma20_str              # 💥 新增 20MA 數值
             }
             
             temp_full.append(stock_info)
