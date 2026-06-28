@@ -319,14 +319,13 @@ def fetch_fundamental_data():
 
 
         # ==========================================================
-        # 👇 👇 👇 動作 1：請將下面這段程式碼，完整插入在這個位置 👇 👇 👇
+        # 👇 動作 1 (修正版)：抓取證交所官方月均價 (20MA近似值)
         # ==========================================================
-        
-        # 5. 抓取證交所隱藏版月均價 (完美的 20MA 近似值)
         ma20_map = {}
-        for p in fetch_api_list("https://openapi.twse.com.tw/v1/exchangeReport/FMNPTK"):
+        for p in fetch_api_list("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL"):
             c = str(p.get("Code", "")).strip()
-            ma20_map[c] = str(p.get("AveragePrice", "-")).strip()
+            # 官方正確的月均價欄位名稱為 MonthlyAveragePrice
+            ma20_map[c] = str(p.get("MonthlyAveragePrice", "-")).strip()
         time.sleep(0.5)
 
         # ==========================================================
