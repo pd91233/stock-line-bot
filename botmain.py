@@ -332,6 +332,27 @@ def fetch_fundamental_data():
         # 👆 👆 👆 動作 1：插入結束 👆 👆 👆
         # ==========================================================
 
+
+
+        # ==========================================================
+        # 💥 動作 1.5 (本機算力流)：讀取統帥從本機送上來的 pCloud 上櫃均線補給包
+        # ==========================================================
+        try:
+            # 加入時間戳防止雲端快取抓到舊檔
+            pcloud_ma20_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/ma20_cache.json?t={int(time.time())}"
+            res_ma20 = requests.get(pcloud_ma20_url, headers=headers, timeout=5)
+            if res_ma20.status_code == 200:
+                local_ma20_data = res_ma20.json()
+                # 將本機算出來的數值，融合進字典中 (不覆蓋已有的上市準確資料)
+                for code, val in local_ma20_data.items():
+                    if code not in ma20_map or ma20_map[code] == "-":
+                        ma20_map[code] = val
+                print(f"✅ [本機支援成功] 成功從 pCloud 讀取並融合了 {len(local_ma20_data)} 筆均線資料！", flush=True)
+        except Exception as e:
+            print(f"⚠️ [本機支援未連線] 無法讀取 pCloud 均線補給包: {e}", flush=True)
+        # ==========================================================
+
+
         temp_focus = []
         temp_full = []
         
