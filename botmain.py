@@ -193,6 +193,70 @@ def detect_intraday_breakout(code, name):
     return None
 
 
+import re
+
+# ==========================================================
+# 🕵️‍♂️ [新增] 重大訊息解碼獵犬 (專獵「自結EPS」與「注意股」)
+# ==========================================================
+self_assessed_cache = []
+
+def fetch_material_info():
+    global self_assessed_cache
+    print("🕵️‍♂️ [解碼獵犬] 開始掃描全市場重大訊息...", flush=True)
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        news_list = []
+        
+        # 1. 抓取上市與上櫃當日重大訊息 API
+        urls = [
+            "https://openapi.twse.com.tw/v1/opendata/t187ap04_L", # 上市
+            "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap04_O" # 上櫃
+        ]
+        
+        raw_data = []
+        for url in urls:
+            try:
+                res = requests.get(url, headers=headers, timeout=10)
+                if res.status_code == 200:
+                    raw_data.extend(res.json())
+            except: pass
+            
+        # 2. 啟動正則表達式 (Regex) 掃描器
+        for item in raw_data:
+            subject = str(item.get("主旨", ""))
+            desc = str(item.get("說明", ""))
+            
+            # 戰術過濾：只抓標題含有「注意交易」、「自結」、「獲利」的公告
+            if "注意交易" in subject or "自結" in subject or "EPS" in subject or "盈餘" in subject:
+                code = str(item.get("公司代號", ""))
+                name = str(item.get("公司名稱", ""))
+                date_str = f"{item.get('發言日期', '')} {item.get('發言時間', '')}"
+                
+                # 💥 核心解碼：用 Regex 從密密麻麻的內文中把 EPS 數字挖出來！
+                # 尋找「每股盈餘 0.87」或「EPS -0.15」這種格式
+                eps_match = re.search(r'(?:每股盈餘|EPS|每股虧損).*?([+-]?\d+\.\d+)', desc, re.IGNORECASE)
+                
+                eps_val = float(eps_match.group(1)) if eps_match else None
+                
+                # 如果有挖到數字，或者標題極度重要，就收錄進戰報
+                if eps_val is not None or "注意交易資訊標準" in subject:
+                    news_list.append({
+                        "date": date_str,
+                        "code": code,
+                        "name": name,
+                        "subject": subject,
+                        "eps": eps_val if eps_val is not None else 0.0,
+                        "desc": desc[:100] # 預留給 AI 分析用的內文片段
+                    })
+                    
+        # 將最新的 30 筆公告存入快取
+        self_assessed_cache = news_list[:30]
+        print(f"✅ [解碼獵犬] 成功捕獲 {len(self_assessed_cache)} 筆自結/注意股公告！", flush=True)
+        
+    except Exception as e:
+        print(f"⚠️ [解碼獵犬] 掃描異常: {e}", flush=True)
+
+
 def fetch_fundamental_data():
     global revenue_history_cache, fundamental_focus_cache, fundamental_full_cache
     import sys
@@ -461,7 +525,14 @@ def fetch_fundamental_data():
 def fundamental_patrol_loop():
     while True:
         fetch_fundamental_data()
-        time.sleep(3600) 
+        fetch_material_info() # 💥 放狗咬人！抓取重大訊息
+        
+        # 💥 將獵犬抓到的資料，寫入 live_data_cache.json 給前端讀取
+        current_cache = read_cache()
+        current_cache["self_assessed_news"] = self_assessed_cache
+        update_cache(current_cache)
+        
+        time.sleep(3600)
 
 # ==========================================================
 # 📊 4. 雙通道個股即時行情分析中心
