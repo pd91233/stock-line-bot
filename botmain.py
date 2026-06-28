@@ -249,8 +249,14 @@ def fetch_material_info():
                         "desc": desc[:100] # 預留給 AI 分析用的內文片段
                     })
                     
-        # 將最新的 30 筆公告存入快取
-        self_assessed_cache = news_list[:30]
+        # 💥 歷史記憶裝甲：只把「沒有重複」的新公告加進去
+        existing_subjects = [item["subject"] for item in self_assessed_cache]
+        for new_item in news_list:
+            if new_item["subject"] not in existing_subjects:
+                self_assessed_cache.insert(0, new_item) # 插在最前面
+                
+        # 確保記憶體不要無限膨脹，最多保留最新的 60 筆歷史紀錄
+        self_assessed_cache = self_assessed_cache[:60]
         print(f"✅ [解碼獵犬] 成功捕獲 {len(self_assessed_cache)} 筆自結/注意股公告！", flush=True)
         
     except Exception as e:
