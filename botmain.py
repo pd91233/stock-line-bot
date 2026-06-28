@@ -327,10 +327,9 @@ def fetch_fundamental_data():
             period = item.get("資料年月", "") 
             raw_date = item.get("出表日期", "-") 
             
-            data_date = raw_date
-            if len(raw_date) == 7 and raw_date.isdigit():
-                g_year = str(int(raw_date[:3]) + 1911)
-                data_date = f"{g_year}-{raw_date[3:5]}-{raw_date[5:7]}"
+            # 強制將分頁六的資料日期，更新為系統最新掃描的今天日期
+            import datetime
+            data_date = datetime.datetime.now().strftime("%Y-%m-%d")
 
             rev_current = item.get("營業收入-當月營收", item.get("當月營收", "0"))
             mom = item.get("營業收入-上月比較增減(%)", item.get("上月比較增減(%)", "0"))
