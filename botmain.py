@@ -292,13 +292,14 @@ def fetch_material_info():
             time_str = str(clean_item.get('發言時間', clean_item.get('SpkTime', clean_item.get('SPOKE_TIME', ''))))
             full_date = f"{date_str} {time_str}".strip()
             
-            # 💥 測試模式：全面放行所有公告，強制啟動 Gemini AI 分析！
-            if True:
+            # 🛡️ 戰術過濾：精準鎖定「注意股」與「自結財報」
+            if "注意" in subject or "自結" in subject or "EPS" in subject or "盈餘" in subject:
                 eps_match = re.search(r'(?:每股盈餘|EPS|每股虧損|每股盈餘\(虧損\)).*?([+-]?\d+\.\d+)', desc, re.IGNORECASE)
                 eps_val = float(eps_match.group(1)) if eps_match else 0.0
                 
-                # 💥 拆除內部檢查哨，無條件讓 Gemini 處理所有公告
-                if True:
+                # 只要符合條件，立刻呼叫 Gemini 進行深度解析！
+                if eps_val != 0.0 or "注意" in subject:
+                    
                     print(f"🤖 [AI 啟動] 正在分析 {code} {name} 的重大訊息...", flush=True)
                     
                     ai_rating = "⚪ 中性看待"
