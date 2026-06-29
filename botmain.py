@@ -203,8 +203,22 @@ self_assessed_cache = []
 
 # 💥 設定 Gemini API (將自動讀取 Render 環境變數)
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY", "請將您的_API_KEY_貼在這裡_或是設定在Render上"))
-# 💥 切換為最穩定、全區域支援的基礎大模型
-ai_model = genai.GenerativeModel('gemini-pro')
+# ==========================================================
+# 💥 戰術偵察：印出您的 API 金鑰真正有權限使用的模型清單
+# ==========================================================
+try:
+    print("🔍 [AI 兵器庫掃描] 正在盤點可用的 Gemini 模型...", flush=True)
+    for m in genai.list_models():
+        if 'generateContent' in m.supported_generation_methods:
+            print(f"✅ 授權模型: {m.name.replace('models/', '')}", flush=True)
+except Exception as e:
+    print(f"⚠️ [兵器庫掃描失敗] 請確認 API 金鑰是否正確: {e}", flush=True)
+
+# 💥 建立 AI 模型 (強制使用 Google 官方最新指定的 1.0 正式版全名)
+ai_model = genai.GenerativeModel('gemini-1.0-pro')
+
+
+
 
 def fetch_material_info():
     global self_assessed_cache
