@@ -239,8 +239,8 @@ def fetch_material_info():
             time_str = str(clean_item.get('發言時間', clean_item.get('SpkTime', clean_item.get('SPOKE_TIME', ''))))
             full_date = f"{date_str} {time_str}".strip()
             
-            # 戰術過濾：只要有「注意」或「自結」就抓
-            if "注意" in subject or "自結" in subject or "EPS" in subject or "盈餘" in subject:
+            # 💥 測試模式：全面放行所有公告，驗證 UI 面板是否正常運作！
+            if True:
                 # 挖取 EPS 數字
                 eps_match = re.search(r'(?:每股盈餘|EPS|每股虧損|每股盈餘\(虧損\)).*?([+-]?\d+\.\d+)', desc, re.IGNORECASE)
                 eps_val = float(eps_match.group(1)) if eps_match else 0.0
