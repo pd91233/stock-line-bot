@@ -241,20 +241,19 @@ def fetch_material_info():
             
             # 💥 測試模式：全面放行所有公告，驗證 UI 面板是否正常運作！
             if True:
-                # 挖取 EPS 數字
+                # 挖取 EPS 數字 (照常嘗試挖挖看，沒有就算了)
                 eps_match = re.search(r'(?:每股盈餘|EPS|每股虧損|每股盈餘\(虧損\)).*?([+-]?\d+\.\d+)', desc, re.IGNORECASE)
                 eps_val = float(eps_match.group(1)) if eps_match else 0.0
                 
-                # 只要挖到數字，或是標題有「注意」，就強制收錄
-                if eps_val != 0.0 or "注意" in subject:
-                    news_list.append({
-                        "date": full_date,
-                        "code": code,
-                        "name": name,
-                        "subject": subject,
-                        "eps": eps_val,
-                        "desc": desc[:200] # 擷取前200字給前端彈出視窗
-                    })
+                # 💥 內部檢查哨已拆除！無條件強制收錄進情報包！
+                news_list.append({
+                    "date": full_date,
+                    "code": code,
+                    "name": name,
+                    "subject": subject,
+                    "eps": eps_val,
+                    "desc": desc[:200]
+                })
                     
         # 💥 歷史記憶裝甲：比對現有快取，只把「新公告」塞進最前面
         existing_subjects = [item["subject"] for item in self_assessed_cache]
