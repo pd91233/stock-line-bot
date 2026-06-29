@@ -227,16 +227,19 @@ def fetch_material_info():
 
         news_list = []
         for item in raw_data:
-            # 💥 萬用裝甲：同時相容政府 API 的中文與英文欄位名稱！
-            subject = str(item.get("主旨", item.get("Subject", item.get("SPOKE_TITLE", ""))))
-            desc = str(item.get("說明", item.get("Description", item.get("CONTENT", ""))))
-            code = str(item.get("公司代號", item.get("Code", item.get("CO_ID", ""))))
-            name = str(item.get("公司名稱", item.get("Name", item.get("CO_NAME", ""))))
-            date_str = str(item.get('發言日期', item.get('SpkDate', item.get('SPOKE_DATE', ''))))
-            time_str = str(item.get('發言時間', item.get('SpkTime', item.get('SPOKE_TIME', ''))))
+            # 💥 無塵室淨化裝甲：強制清除政府 API 欄位名稱裡所有白痴的空白字元！
+            clean_item = {str(k).strip(): v for k, v in item.items()}
+            
+            # 使用淨化後的 clean_item 來讀取資料
+            subject = str(clean_item.get("主旨", clean_item.get("Subject", clean_item.get("SPOKE_TITLE", ""))))
+            desc = str(clean_item.get("說明", clean_item.get("Description", clean_item.get("CONTENT", ""))))
+            code = str(clean_item.get("公司代號", clean_item.get("Code", clean_item.get("CO_ID", ""))))
+            name = str(clean_item.get("公司名稱", clean_item.get("Name", clean_item.get("CO_NAME", ""))))
+            date_str = str(clean_item.get('發言日期', clean_item.get('SpkDate', clean_item.get('SPOKE_DATE', ''))))
+            time_str = str(clean_item.get('發言時間', clean_item.get('SpkTime', clean_item.get('SPOKE_TIME', ''))))
             full_date = f"{date_str} {time_str}".strip()
             
-            # 戰術過濾：放寬條件，只要有「注意」或「自結」就抓
+            # 戰術過濾：只要有「注意」或「自結」就抓
             if "注意" in subject or "自結" in subject or "EPS" in subject or "盈餘" in subject:
                 # 挖取 EPS 數字
                 eps_match = re.search(r'(?:每股盈餘|EPS|每股虧損|每股盈餘\(虧損\)).*?([+-]?\d+\.\d+)', desc, re.IGNORECASE)
