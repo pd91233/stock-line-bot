@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 import json
 import requests
 import os
+import google.generativeai as genai
 import re
 import itertools
 import io
@@ -196,18 +197,23 @@ def detect_intraday_breakout(code, name):
 import re
 
 # ==========================================================
-# 🕵️‍♂️ [升級版] 重大訊息解碼獵犬 (多波段雷達與歷史記憶)
+# 🧠 [旗艦版] 重大訊息解碼獵犬 (搭載 Gemini AI 分析引擎)
 # ==========================================================
 self_assessed_cache = []
 
+# 💥 設定 Gemini API (將自動讀取 Render 環境變數)
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY", "請將您的_API_KEY_貼在這裡_或是設定在Render上"))
+# 建立 AI 模型 (使用最快的 flash 模型)
+ai_model = genai.GenerativeModel('gemini-1.5-flash')
+
 def fetch_material_info():
     global self_assessed_cache
-    print("🕵️‍♂️ [解碼獵犬] 開始掃描全市場重大訊息...", flush=True)
+    print("🕵️‍♂️ [AI 獵犬] 開始掃描全市場重大訊息...", flush=True)
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
         urls = [
-            "https://openapi.twse.com.tw/v1/opendata/t187ap04_L", # 上市
-            "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap04_O" # 上櫃
+            "https://openapi.twse.com.tw/v1/opendata/t187ap04_L", 
+            "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap04_O" 
         ]
         
         raw_data = []
@@ -215,22 +221,14 @@ def fetch_material_info():
             try:
                 res = requests.get(url, headers=headers, timeout=10)
                 if res.status_code == 200:
-                    data = res.json()
-                    raw_data.extend(data)
-                    print(f"📡 從 {url[-10:]} 成功抓取 {len(data)} 筆原始公告", flush=True)
-            except Exception as e: 
-                print(f"⚠️ API 連線異常: {e}", flush=True)
-                
-        # 💥 戰術偵測：印出政府真實的欄位名稱，以防萬一
-        if len(raw_data) > 0:
-            print(f"🔍 [欄位偵測] 原始資料欄位為: {list(raw_data[0].keys())}", flush=True)
+                    raw_data.extend(res.json())
+            except: pass
 
         news_list = []
         for item in raw_data:
-            # 💥 無塵室淨化裝甲：強制清除政府 API 欄位名稱裡所有白痴的空白字元！
+            # 無塵室淨化欄位
             clean_item = {str(k).strip(): v for k, v in item.items()}
             
-            # 使用淨化後的 clean_item 來讀取資料
             subject = str(clean_item.get("主旨", clean_item.get("Subject", clean_item.get("SPOKE_TITLE", ""))))
             desc = str(clean_item.get("說明", clean_item.get("Description", clean_item.get("CONTENT", ""))))
             code = str(clean_item.get("公司代號", clean_item.get("Code", clean_item.get("CO_ID", ""))))
@@ -239,36 +237,82 @@ def fetch_material_info():
             time_str = str(clean_item.get('發言時間', clean_item.get('SpkTime', clean_item.get('SPOKE_TIME', ''))))
             full_date = f"{date_str} {time_str}".strip()
             
-            # 💥 測試模式：全面放行所有公告，驗證 UI 面板是否正常運作！
-            if True:
-                # 挖取 EPS 數字 (照常嘗試挖挖看，沒有就算了)
+            # 🛡️ 戰術過濾：精準鎖定「注意股」與「自結財報」
+            if "注意" in subject or "自結" in subject or "EPS" in subject or "盈餘" in subject:
                 eps_match = re.search(r'(?:每股盈餘|EPS|每股虧損|每股盈餘\(虧損\)).*?([+-]?\d+\.\d+)', desc, re.IGNORECASE)
                 eps_val = float(eps_match.group(1)) if eps_match else 0.0
                 
-                # 💥 內部檢查哨已拆除！無條件強制收錄進情報包！
-                news_list.append({
-                    "date": full_date,
-                    "code": code,
-                    "name": name,
-                    "subject": subject,
-                    "eps": eps_val,
-                    "desc": desc[:200]
-                })
+                # 只要符合條件，立刻呼叫 Gemini 進行深度解析！
+                if eps_val != 0.0 or "注意" in subject:
+                    print(f"🤖 [AI 啟動] 正在分析 {code} {name} 的重大訊息...", flush=True)
                     
-        # 💥 歷史記憶裝甲：比對現有快取，只把「新公告」塞進最前面
+                    ai_rating = "⚪ 中性看待"
+                    ai_analysis = "系統正在讀取原始公告..."
+                    last_year_eps = "-"
+                    yoy_eps = "-"
+                    turnaround = "-"
+                    est_yearly = "-"
+                    
+                    try:
+                        # 💥 對 Gemini 下達戰術萃取指令
+                        prompt = f"""
+                        你是一位頂尖台股分析師。請閱讀以下重大訊息，並以 JSON 格式輸出萃取結果。
+                        如果內文中找不到對應數字，請填 "-"。務必只輸出 JSON 格式，不要其他廢話。
+                        格式要求：
+                        {{
+                          "last_year_eps": "去年同月或同期EPS(數字)",
+                          "yoy_eps_growth": "EPS年增率(字串，包含%)",
+                          "turnaround": "是否轉虧為盈(是/否/持續虧損/持續獲利)",
+                          "est_yearly_eps": "預估全年EPS(數字或字串)",
+                          "ai_rating": "評級(🔴 強烈買進 / 🟡 值得觀察 / 🟢 需要小心 / ⚪ 中性看待)",
+                          "ai_analysis": "用四個段落(營運現況、獲利分析、產業風險、綜合評估)撰寫約200字白話文解析"
+                        }}
+                        重大訊息內容：{desc}
+                        """
+                        response = ai_model.generate_content(prompt)
+                        
+                        # 嘗試解析 AI 回傳的 JSON (去除可能的 markdown 標記)
+                        res_text = response.text.replace('```json', '').replace('```', '').strip()
+                        ai_data = json.loads(res_text)
+                        
+                        ai_rating = ai_data.get("ai_rating", ai_rating)
+                        ai_analysis = ai_data.get("ai_analysis", ai_analysis)
+                        last_year_eps = ai_data.get("last_year_eps", "-")
+                        yoy_eps = ai_data.get("yoy_eps_growth", "-")
+                        turnaround = ai_data.get("turnaround", "-")
+                        est_yearly = ai_data.get("est_yearly_eps", "-")
+                        print(f"✅ [AI 成功] {code} 財報數據萃取完畢！", flush=True)
+                        
+                    except Exception as e:
+                        print(f"⚠️ [AI 解析失敗] {e}", flush=True)
+
+                    news_list.append({
+                        "date": full_date,
+                        "code": code,
+                        "name": name,
+                        "subject": subject,
+                        "eps": eps_val,
+                        "desc": desc[:300],
+                        # 💥 把 AI 算出來的精華數據包裝進去！
+                        "ai_rating": ai_rating,
+                        "ai_analysis": ai_analysis,
+                        "last_year_eps": last_year_eps,
+                        "yoy_eps": yoy_eps,
+                        "turnaround": turnaround,
+                        "est_yearly": est_yearly
+                    })
+                    
+        # 歷史記憶裝甲
         existing_subjects = [item["subject"] for item in self_assessed_cache]
-        new_count = 0
         for new_item in news_list:
             if new_item["subject"] not in existing_subjects:
                 self_assessed_cache.insert(0, new_item)
-                new_count += 1
                 
-        # 確保記憶體最多保留 60 筆最新紀錄
         self_assessed_cache = self_assessed_cache[:60]
-        print(f"✅ [解碼獵犬] 成功新增 {new_count} 筆公告！歷史總記憶庫目前 {len(self_assessed_cache)} 筆。", flush=True)
         
     except Exception as e:
         print(f"⚠️ [解碼獵犬] 執行異常: {e}", flush=True)
+
 
 
 def fetch_fundamental_data():
