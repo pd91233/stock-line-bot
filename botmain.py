@@ -196,7 +196,7 @@ def detect_intraday_breakout(code, name):
 import re
 
 # ==========================================================
-# 🕵️‍♂️ [新增] 重大訊息解碼獵犬 (專獵「自結EPS」與「注意股」)
+# 🕵️‍♂️ [升級版] 重大訊息解碼獵犬 (多波段雷達與歷史記憶)
 # ==========================================================
 self_assessed_cache = []
 
@@ -205,9 +205,6 @@ def fetch_material_info():
     print("🕵️‍♂️ [解碼獵犬] 開始掃描全市場重大訊息...", flush=True)
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
-        news_list = []
-        
-        # 1. 抓取上市與上櫃當日重大訊息 API
         urls = [
             "https://openapi.twse.com.tw/v1/opendata/t187ap04_L", # 上市
             "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap04_O" # 上櫃
@@ -218,49 +215,58 @@ def fetch_material_info():
             try:
                 res = requests.get(url, headers=headers, timeout=10)
                 if res.status_code == 200:
-                    raw_data.extend(res.json())
-            except: pass
-            
-        # 2. 啟動正則表達式 (Regex) 掃描器
+                    data = res.json()
+                    raw_data.extend(data)
+                    print(f"📡 從 {url[-10:]} 成功抓取 {len(data)} 筆原始公告", flush=True)
+            except Exception as e: 
+                print(f"⚠️ API 連線異常: {e}", flush=True)
+                
+        # 💥 戰術偵測：印出政府真實的欄位名稱，以防萬一
+        if len(raw_data) > 0:
+            print(f"🔍 [欄位偵測] 原始資料欄位為: {list(raw_data[0].keys())}", flush=True)
+
+        news_list = []
         for item in raw_data:
-            subject = str(item.get("主旨", ""))
-            desc = str(item.get("說明", ""))
+            # 💥 萬用裝甲：同時相容政府 API 的中文與英文欄位名稱！
+            subject = str(item.get("主旨", item.get("Subject", item.get("SPOKE_TITLE", ""))))
+            desc = str(item.get("說明", item.get("Description", item.get("CONTENT", ""))))
+            code = str(item.get("公司代號", item.get("Code", item.get("CO_ID", ""))))
+            name = str(item.get("公司名稱", item.get("Name", item.get("CO_NAME", ""))))
+            date_str = str(item.get('發言日期', item.get('SpkDate', item.get('SPOKE_DATE', ''))))
+            time_str = str(item.get('發言時間', item.get('SpkTime', item.get('SPOKE_TIME', ''))))
+            full_date = f"{date_str} {time_str}".strip()
             
-            # 戰術過濾：只抓標題含有「注意交易」、「自結」、「獲利」的公告
-            if "注意交易" in subject or "自結" in subject or "EPS" in subject or "盈餘" in subject:
-                code = str(item.get("公司代號", ""))
-                name = str(item.get("公司名稱", ""))
-                date_str = f"{item.get('發言日期', '')} {item.get('發言時間', '')}"
+            # 戰術過濾：放寬條件，只要有「注意」或「自結」就抓
+            if "注意" in subject or "自結" in subject or "EPS" in subject or "盈餘" in subject:
+                # 挖取 EPS 數字
+                eps_match = re.search(r'(?:每股盈餘|EPS|每股虧損|每股盈餘\(虧損\)).*?([+-]?\d+\.\d+)', desc, re.IGNORECASE)
+                eps_val = float(eps_match.group(1)) if eps_match else 0.0
                 
-                # 💥 核心解碼：用 Regex 從密密麻麻的內文中把 EPS 數字挖出來！
-                # 尋找「每股盈餘 0.87」或「EPS -0.15」這種格式
-                eps_match = re.search(r'(?:每股盈餘|EPS|每股虧損).*?([+-]?\d+\.\d+)', desc, re.IGNORECASE)
-                
-                eps_val = float(eps_match.group(1)) if eps_match else None
-                
-                # 如果有挖到數字，或者標題極度重要，就收錄進戰報
-                if eps_val is not None or "注意交易資訊標準" in subject:
+                # 只要挖到數字，或是標題有「注意」，就強制收錄
+                if eps_val != 0.0 or "注意" in subject:
                     news_list.append({
-                        "date": date_str,
+                        "date": full_date,
                         "code": code,
                         "name": name,
                         "subject": subject,
-                        "eps": eps_val if eps_val is not None else 0.0,
-                        "desc": desc[:100] # 預留給 AI 分析用的內文片段
+                        "eps": eps_val,
+                        "desc": desc[:200] # 擷取前200字給前端彈出視窗
                     })
                     
-        # 💥 歷史記憶裝甲：只把「沒有重複」的新公告加進去
+        # 💥 歷史記憶裝甲：比對現有快取，只把「新公告」塞進最前面
         existing_subjects = [item["subject"] for item in self_assessed_cache]
+        new_count = 0
         for new_item in news_list:
             if new_item["subject"] not in existing_subjects:
-                self_assessed_cache.insert(0, new_item) # 插在最前面
+                self_assessed_cache.insert(0, new_item)
+                new_count += 1
                 
-        # 確保記憶體不要無限膨脹，最多保留最新的 60 筆歷史紀錄
+        # 確保記憶體最多保留 60 筆最新紀錄
         self_assessed_cache = self_assessed_cache[:60]
-        print(f"✅ [解碼獵犬] 成功捕獲 {len(self_assessed_cache)} 筆自結/注意股公告！", flush=True)
+        print(f"✅ [解碼獵犬] 成功新增 {new_count} 筆公告！歷史總記憶庫目前 {len(self_assessed_cache)} 筆。", flush=True)
         
     except Exception as e:
-        print(f"⚠️ [解碼獵犬] 掃描異常: {e}", flush=True)
+        print(f"⚠️ [解碼獵犬] 執行異常: {e}", flush=True)
 
 
 def fetch_fundamental_data():
