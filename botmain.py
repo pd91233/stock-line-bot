@@ -203,8 +203,8 @@ self_assessed_cache = []
 
 # 💥 設定 Gemini API (將自動讀取 Render 環境變數)
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY", "請將您的_API_KEY_貼在這裡_或是設定在Render上"))
-# 建立 AI 模型 (強制鎖定最新版 flash 模型)
-ai_model = genai.GenerativeModel('gemini-1.5-flash-latest')
+# 💥 切換為最穩定、全區域支援的基礎大模型
+ai_model = genai.GenerativeModel('gemini-pro')
 
 def fetch_material_info():
     global self_assessed_cache
