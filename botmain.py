@@ -690,9 +690,25 @@ def callback():
 
 @app.route("/live_data.json", methods=['GET'])
 def get_live_data():
-    response = make_response(jsonify(read_cache()))
+    global self_assessed_cache
+    
+    # 💥 偵測：如果記憶體是空的 (代表母艦剛睡醒)，立刻強制出動獵犬！
+    if not self_assessed_cache or len(self_assessed_cache) == 0:
+        print("⚠️ [緊急戰略] 母艦剛甦醒且無歷史情報，強制啟動解碼獵犬...", flush=True)
+        fetch_material_info()
+        
+    # 讀取現有快取，並將獵犬的情資寫入
+    current_cache = read_cache()
+    current_cache["self_assessed_news"] = self_assessed_cache
+    
+    # 順便存檔更新 (確保母艦內部資料同步)
+    update_cache(current_cache)
+    
+    # 💥 建立回應，並保留統帥原本的 CORS 與反快取防護盾
+    response = make_response(jsonify(current_cache))
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    
     return response
 
 @handler.add(MessageEvent, message=TextMessage)
