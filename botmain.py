@@ -1082,6 +1082,88 @@ def keep_alive():
 threading.Thread(target=keep_alive, daemon=True).start()
 
 
+
+# ==========================================================
+# ⚡ 當沖雷達：5分K 盤中創高爆量突破偵測引擎
+# ==========================================================
+intraday_breakout_cache = []
+
+def detect_intraday_breakout(code, name):
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=5m"
+        res = requests.get(url, headers=headers, timeout=3).json()
+        if not res.get('chart', {}).get('result'):
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TWO?range=1d&interval=5m"
+            res = requests.get(url, headers=headers, timeout=3).json()
+            if not res.get('chart', {}).get('result'): return None
+            
+        result = res['chart']['result'][0]
+        volumes = result['indicators']['quote'][0]['volume']
+        closes = result['indicators']['quote'][0]['close']
+        highs = result['indicators']['quote'][0]['high']
+        
+        valid_vols = [v for v in volumes if v is not None]
+        valid_closes = [c for c in closes if c is not None]
+        valid_highs = [h for h in highs if h is not None]
+        
+        if len(valid_vols) > 5 and len(valid_highs) > 5:
+            current_vol = valid_vols[-1]
+            avg_vol_5 = sum(valid_vols[-6:-1]) / 5
+            current_px = valid_closes[-1]
+            prev_px = valid_closes[-2]
+            intraday_high_before_now = max(valid_highs[:-1])
+            
+            if avg_vol_5 > 0 and current_vol > (avg_vol_5 * 3) and current_px > prev_px:
+                if current_px >= intraday_high_before_now:
+                    current_time = datetime.datetime.now().strftime("%H:%M")
+                    return f"[{current_time}] ⚡ {name}({code}) 帶量突破盤中新高！現價 {current_px} (爆量 {int(current_vol)} 張)"
+    except: pass
+    return None
+
+def continuous_radar_loop():
+    print("📡 [當沖雷達] 連續掃描引擎啟動，每 60 秒巡邏一次...")
+    import time
+    while True:
+        try:
+            # 抓取您的監控清單
+            headers = {"User-Agent": "Mozilla/5.0"}
+            json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={int(time.time())}"
+            res_json = requests.get(json_url, headers=headers, timeout=5)
+            
+            if res_json.status_code == 200:
+                raw_data = res_json.json()
+                for item in raw_data:
+                    if "代碼" not in item: continue
+                    code = str(item["代碼"])
+                    name = item.get("商品", code)
+                    
+                    alert_msg = detect_intraday_breakout(code, name)
+                    
+                    if alert_msg and alert_msg not in intraday_breakout_cache:
+                        intraday_breakout_cache.insert(0, alert_msg)
+                        
+                        # 將快訊寫入快取讓網頁跑馬燈更新
+                        current_cache = read_cache()
+                        current_cache["intraday_alerts"] = intraday_breakout_cache[:10]
+                        update_cache(current_cache)
+                        
+                        # 💥 LINE 實時全頻群發
+                        try:
+                            line_bot_api.broadcast(TextSendMessage(text=f"🚨 【戰情室快訊】\n{alert_msg}"))
+                            print(f"✅ 已全頻群發快訊：{name}")
+                        except Exception as e:
+                            print(f"⚠️ LINE 群發失敗: {e}")
+                    time.sleep(1)
+        except Exception as e:
+            print(f"雷達巡邏異常: {e}")
+        time.sleep(60)
+
+# 啟動當沖雷達連續掃描引擎
+threading.Thread(target=continuous_radar_loop, daemon=True).start()
+
+
+
 if __name__ == "__main__":
     options = {'bind': '0.0.0.0:10000', 'workers': 1, 'threads': 2, 'timeout': 120}
     StandaloneApplication(app, options).run()
