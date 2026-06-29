@@ -8,3 +8,5 @@ mplfinance
 gunicorn
 beautifulsoup4
 yfinance
+google-generativeai
+python-dotenv
