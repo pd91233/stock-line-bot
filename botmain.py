@@ -196,26 +196,67 @@ def detect_intraday_breakout(code, name):
 
 import re
 
+
+
+
 # ==========================================================
-# 🧠 [旗艦版] 重大訊息解碼獵犬 (搭載 Gemini AI 分析引擎)
+# 🧠 [終極防空版] 重大訊息解碼獵犬 (金鑰與模型智慧防錯安全對接)
 # ==========================================================
 self_assessed_cache = []
 
-# 💥 設定 Gemini API (將自動讀取 Render 環境變數)
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY", "請將您的_API_KEY_貼在這裡_或是設定在Render上"))
-# ==========================================================
-# 💥 戰術偵察：印出您的 API 金鑰真正有權限使用的模型清單
-# ==========================================================
-try:
-    print("🔍 [AI 兵器庫掃描] 正在盤點可用的 Gemini 模型...", flush=True)
-    for m in genai.list_models():
-        if 'generateContent' in m.supported_generation_methods:
-            print(f"✅ 授權模型: {m.name.replace('models/', '')}", flush=True)
-except Exception as e:
-    print(f"⚠️ [兵器庫掃描失敗] 請確認 API 金鑰是否正確: {e}", flush=True)
+# 💥 設定 Gemini API (確保抓取 Render 環境變數)
+gemini_key = os.environ.get("GEMINI_API_KEY", "")
+if not gemini_key or "請將您的" in gemini_key:
+    print("⚠️ [致命警告] Render 環境變數中的 GEMINI_API_KEY 似乎為空或未正確設定！", flush=True)
+else:
+    genai.configure(api_key=gemini_key)
 
-# 💥 建立 AI 模型 (強制使用 Google 官方最新指定的 1.0 正式版全名)
-ai_model = genai.GenerativeModel('gemini-1.0-pro')
+def init_strategic_ai():
+    """💥 智慧型模型掛載引擎：多波段嘗試，全面封殺 404 錯誤"""
+    # 按照 2026 最新標準、相容性、歷史穩健度排序的代號陣列
+    model_candidates = [
+        'gemini-1.5-flash',       # 優先順位 1：目前最高效、最廣泛支援的 Flash 模型
+        'gemini-1.5-pro',         # 優先順位 2：高階分析模型
+        'gemini-2.5-flash',       # 優先順位 3：新世代 Flash 規格
+        'gemini-pro'              # 優先順位 4：經典款相容模型
+    ]
+    
+    # 戰術偵察：嘗試列出所有官方授權給這把金鑰的武器清單
+    try:
+        print("🔍 [AI 兵器庫掃描] 正在盤點當前金鑰可用模型...", flush=True)
+        available_list = []
+        for m in genai.list_models():
+            if 'generateContent' in getattr(m, 'supported_generation_methods', []):
+                clean_name = m.name.replace('models/', '')
+                available_list.append(clean_name)
+                print(f"  ✅ 官方授權武器: {clean_name}", flush=True)
+        
+        # 如果官方清單有東西，直接用清單裡最匹配的
+        for candidate in model_candidates:
+            if candidate in available_list:
+                print(f"🎯 [自動尋標成功] 優先匹配到授權清單中的引擎: {candidate}", flush=True)
+                return genai.GenerativeModel(candidate)
+    except Exception as e:
+        print(f"⚠️ [兵器庫掃描受阻] 無法讀取官方清單 ({e})，轉入強制暴力掛載程序...", flush=True)
+
+    # 暴力掛載程序：如果清單讀不到，就由程式碼一個一個去敲門，直到成功為止
+    for model_name in model_candidates:
+        try:
+            print(f"🚀 正在嘗試強行掛載型號: {model_name} ...", flush=True)
+            test_model = genai.GenerativeModel(model_name)
+            # 發射一發極短的空包彈，測試 Google 伺服器會不會報 404
+            test_model.generate_content("ping", generation_config={"max_output_tokens": 1})
+            print(f"🔥 [強行掛載成功] 引擎 {model_name} 通訊測試完全正常！", flush=True)
+            return test_model
+        except Exception as e:
+            print(f"  ❌ 型號 {model_name} 宣告失敗或不支援: {e}", flush=True)
+            
+    # 最終防線：如果全部慘遭拒絕，預設掛載最基礎的 flash，避免後續程式碼死機
+    print("🚨 [嚴重警報] 所有候選模型皆無法通過通訊測試！強制掛載預設防護裝甲。", flush=True)
+    return genai.GenerativeModel('gemini-1.5-flash')
+
+# 💥 執行智慧掛載，並將結果交付給戰情室主要 AI 大腦
+ai_model = init_strategic_ai()
 
 
 
