@@ -1015,51 +1015,62 @@ def market_patrol_loop():
 
 
 # ==========================================================
-# ⚡ 8. [新增] 專屬當沖連續掃描引擎 (每分鐘無情掃描)
+# ⚡ 8. [新增] 專屬當沖連續掃描引擎 (帶有盤中時間鎖定)
 # ==========================================================
 def continuous_radar_loop():
-    print("📡 [當沖雷達] 連續掃描引擎啟動，每 60 秒巡邏一次...")
+    print("📡 [當沖雷達] 連續掃描引擎啟動，待命執行...")
+    import time
+    import datetime
+    import requests
     while True:
         try:
-            # 抓取您的監控清單
-            headers = {"User-Agent": "Mozilla/5.0"}
-            json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={int(time.time())}"
-            res_json = requests.get(json_url, headers=headers, timeout=5)
+            # 💥 物理防線：判斷目前是否為台股盤中時間！
+            now = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
+            is_weekend = now.weekday() >= 5
+            # 將時間轉為數字方便比較，例如 09:15 變成 915，13:30 變成 1330
+            current_time_num = now.hour * 100 + now.minute
             
-            if res_json.status_code == 200:
-                raw_data = res_json.json()
+            # 🔒 只有在「平日」且「09:00 到 13:30 之間」，雷達才允許運作
+            if not is_weekend and (900 <= current_time_num <= 1330):
                 
-                for item in raw_data:
-                    if "代碼" not in item: continue
-                    code = str(item["代碼"])
-                    name = item.get("商品", code)
-                    
-                    # 進行爆量偵測
-                    alert_msg = detect_intraday_breakout(code, name)
-                    
-
-                    # 如果有快訊，且還沒報過
-                    if alert_msg and alert_msg not in intraday_breakout_cache:
-                        intraday_breakout_cache.insert(0, alert_msg)
+                # 抓取您的監控清單
+                headers = {"User-Agent": "Mozilla/5.0"}
+                json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={int(time.time())}"
+                res_json = requests.get(json_url, headers=headers, timeout=5)
+                
+                if res_json.status_code == 200:
+                    raw_data = res_json.json()
+                    for item in raw_data:
+                        if "代碼" not in item: continue
+                        code = str(item["代碼"])
+                        name = item.get("商品", code)
                         
-                        # 1. 寫入快取讓網頁跑馬燈更新
-                        current_cache = read_cache()
-                        current_cache["intraday_alerts"] = intraday_breakout_cache[:10]
-                        update_cache(current_cache)
+                        alert_msg = detect_intraday_breakout(code, name)
                         
-                        # 2. 💥 LINE 實時全頻群發
-                        try:
-                            from linebot.models import TextSendMessage
-                            line_bot_api.broadcast(TextSendMessage(text=f"🚨 【戰情室快訊】\n{alert_msg}"))
-                            print(f"✅ 已全頻群發快訊：{name}")
-                        except Exception as e:
-                            print(f"⚠️ LINE 群發失敗: {e}")
-                    
-                    time.sleep(1) # 避免對 Yahoo 發送太快被鎖定
+                        if alert_msg and alert_msg not in intraday_breakout_cache:
+                            intraday_breakout_cache.insert(0, alert_msg)
+                            
+                            # 將快訊寫入快取讓網頁跑馬燈更新
+                            current_cache = read_cache()
+                            current_cache["intraday_alerts"] = intraday_breakout_cache[:10]
+                            update_cache(current_cache)
+                            
+                            # LINE 實時全頻群發
+                            try:
+                                from linebot.models import TextSendMessage
+                                line_bot_api.broadcast(TextSendMessage(text=f"🚨 【戰情室快訊】\n{alert_msg}"))
+                                print(f"✅ 已全頻群發快訊：{name}")
+                            except Exception as e:
+                                print(f"⚠️ LINE 群發失敗: {e}")
+                        time.sleep(1)
+            else:
+                # 💤 盤後時間，雷達保持靜默，不消耗運算資源
+                pass
+                
         except Exception as e:
             print(f"雷達巡邏異常: {e}")
         
-        time.sleep(60) # 💥 核心：每 60 秒必定重新掃描一次！
+        time.sleep(60)
 
 
 
