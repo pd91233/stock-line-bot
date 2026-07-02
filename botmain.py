@@ -146,12 +146,17 @@ fundamental_full_cache = []  # 全域戰略區快取 (全市場 2000 檔)
 
 
 # ==========================================================
-# ⚡ [升級版] 當沖雷達：5分K 盤中創高爆量突破偵測引擎
+# ⚡ [升級修復版] 當沖雷達：5分K 盤中創高爆量突破偵測引擎
 # ==========================================================
+import datetime
+# 如果要在此處直接推播，確保有 import LINE 相關套件
+from linebot.models import TextSendMessage 
+
 intraday_breakout_cache = [] # 儲存最新的爆量快訊
 
 def detect_intraday_breakout(code, name):
     try:
+        import requests
         headers = {"User-Agent": "Mozilla/5.0"}
         # 抓取近一天的 5 分K 數據
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=5m"
@@ -166,7 +171,7 @@ def detect_intraday_breakout(code, name):
         result = res['chart']['result'][0]
         volumes = result['indicators']['quote'][0]['volume']
         closes = result['indicators']['quote'][0]['close']
-        highs = result['indicators']['quote'][0]['high'] # 💥 新增：抓取盤中高點資料
+        highs = result['indicators']['quote'][0]['high']
         
         # 過濾空值
         valid_vols = [v for v in volumes if v is not None]
@@ -179,7 +184,7 @@ def detect_intraday_breakout(code, name):
             current_px = valid_closes[-1]
             prev_px = valid_closes[-2]
             
-            # 💥 戰術升級：找出「今天開盤到上一根 K 棒為止」的盤中最高價
+            # 戰術升級：找出「今天開盤到上一根 K 棒為止」的盤中最高價
             intraday_high_before_now = max(valid_highs[:-1])
             
             # 條件 1：單根量大於前段均量 3 倍 (爆量)
@@ -187,16 +192,32 @@ def detect_intraday_breakout(code, name):
             # 條件 3：最新價突破今日前面的盤中高點 (創日高突破)
             if avg_vol_5 > 0 and current_vol > (avg_vol_5 * 3) and current_px > prev_px:
                 if current_px >= intraday_high_before_now:
-                    current_time = datetime.datetime.now().strftime("%H:%M")
-                    return f"[{current_time}] ⚡ {name}({code}) 帶量突破盤中新高！現價 {current_px} (爆量 {int(current_vol)} 張)"
+                    
+                    # 💥 修復 1：時區校正 (強制轉換為 UTC+8 台灣時間)
+                    tz = datetime.timezone(datetime.timedelta(hours=8))
+                    current_time = datetime.datetime.now(tz).strftime("%H:%M")
+                    
+                    # 💥 修復 2：價格精準化 (四捨五入到小數點後 2 位)
+                    safe_px = round(current_px, 2)
+                    
+                    # 💥 修復 3：成交量微縮 (將 Yahoo 的股數除以 1000 轉換為張數)
+                    safe_vol = int(current_vol / 1000)
+                    
+                    # 組裝完美格式的作戰電報
+                    msg = f"[{current_time}] ⚡ {name}({code}) 帶量突破盤中新高！現價 {safe_px} (爆量 {safe_vol} 張)"
+                    
+                    # 💥 修復 4：直接掛載 LINE 廣播發射器！
+                    # 若您的雲端主程式中已宣告 `line_bot_api`，請將下方廣播指令解除註解 (移除 #)
+                    try:
+                        # line_bot_api.broadcast(TextSendMessage(text=msg))
+                        pass # 解除上方註解後，可將此行 pass 刪除
+                    except Exception as line_e:
+                        print(f"LINE 推播發射失敗: {line_e}")
+                        
+                    return msg
     except Exception as e:
         pass
     return None
-
-
-import re
-
-
 
 
 # ==========================================================
