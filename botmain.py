@@ -146,7 +146,7 @@ fundamental_full_cache = []  # 全域戰略區快取 (全市場 2000 檔)
 
 
 # ==========================================================
-# ⚡ [升級修復版] 當沖雷達：5分K 盤中創高爆量突破偵測引擎
+# ⚡ [終極時空校正版] 當沖雷達：5分K 盤中創高爆量突破偵測引擎
 # ==========================================================
 intraday_breakout_cache = [] # 儲存最新的爆量快訊
 
@@ -159,49 +159,46 @@ def detect_intraday_breakout(code, name):
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=5m"
         res = requests.get(url, headers=headers, timeout=3).json()
         
-        # 雙市場容錯切換 (上市轉上櫃)
+        # 雙市場容錯切換
         if not res.get('chart', {}).get('result'):
             url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TWO?range=1d&interval=5m"
             res = requests.get(url, headers=headers, timeout=3).json()
             if not res.get('chart', {}).get('result'): return None
             
         result = res['chart']['result'][0]
+        timestamps = result['timestamp'] # 💥 提取 K 棒的真實時間戳
         volumes = result['indicators']['quote'][0]['volume']
         closes = result['indicators']['quote'][0]['close']
         highs = result['indicators']['quote'][0]['high']
         
-        # 過濾空值
-        valid_vols = [v for v in volumes if v is not None]
-        valid_closes = [c for c in closes if c is not None]
-        valid_highs = [h for h in highs if h is not None]
+        # 💥 確保資料對齊，並同時過濾空值
+        valid_data = [(t, c, h, v) for t, c, h, v in zip(timestamps, closes, highs, volumes) if v is not None and c is not None and h is not None]
         
-        if len(valid_vols) > 5 and len(valid_highs) > 5:
-            current_vol = valid_vols[-1]
-            avg_vol_5 = sum(valid_vols[-6:-1]) / 5  # 前 25 分鐘均量
-            current_px = valid_closes[-1]
-            prev_px = valid_closes[-2]
+        if len(valid_data) > 5:
+            current_t, current_px, current_h, current_vol = valid_data[-1]
+            prev_px = valid_data[-2][1]
             
-            # 戰術升級：找出「今天開盤到上一根 K 棒為止」的盤中最高價
-            intraday_high_before_now = max(valid_highs[:-1])
+            avg_vol_5 = sum([d[3] for d in valid_data[-6:-1]]) / 5
+            intraday_high_before_now = max([d[2] for d in valid_data[:-1]])
             
-            # 條件 1：單根量大於前段均量 3 倍 (爆量)
-            # 條件 2：收盤價大於上一根 (推升)
-            # 條件 3：最新價突破今日前面的盤中高點 (創日高突破)
             if avg_vol_5 > 0 and current_vol > (avg_vol_5 * 3) and current_px > prev_px:
                 if current_px >= intraday_high_before_now:
                     
-                    # 💥 淨化 1：時區校正 (強制轉換為 UTC+8 台灣時間)
                     tz = datetime.timezone(datetime.timedelta(hours=8))
-                    current_time = datetime.datetime.now(tz).strftime("%H:%M")
                     
-                    # 💥 淨化 2：價格精準化 (四捨五入到小數點後 2 位)
+                    # 💥 核心修復 1：使用 K 棒「真正的時間」，而不是系統現在時間！
+                    k_time = datetime.datetime.fromtimestamp(current_t, tz).strftime("%H:%M")
+                    
+                    # 💥 核心修復 2：過期防護罩！如果這根 K 棒已經是 15 分鐘前的事，視為舊情報，直接丟棄！
+                    now_time = datetime.datetime.now(tz)
+                    k_datetime = datetime.datetime.fromtimestamp(current_t, tz)
+                    if (now_time - k_datetime).total_seconds() > 900:
+                        return None # 放棄發送
+                        
                     safe_px = round(current_px, 2)
-                    
-                    # 💥 淨化 3：成交量微縮 (將 Yahoo 的股數除以 1000 轉換為張數)
                     safe_vol = int(current_vol / 1000)
                     
-                    # 回傳完美格式的作戰電報 (廣播與推播會交由下方的 continuous_radar_loop 處理)
-                    return f"[{current_time}] ⚡ {name}({code}) 帶量突破盤中新高！現價 {safe_px} (爆量 {safe_vol} 張)"
+                    return f"[{k_time}] ⚡ {name}({code}) 帶量突破盤中新高！現價 {safe_px} (爆量 {safe_vol} 張)"
     except Exception as e:
         pass
     return None
