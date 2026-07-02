@@ -903,8 +903,10 @@ def market_patrol_loop():
                         except: 
                             pass
 
+                        # 💥 1. 建立戰報標題
                         broadcast_msg = f"{phase_title}\n時間：{now.strftime('%H:%M')} (大盤即時：{round(twii_chg, 2)}%)\n====================\n"
                         ai_payload = []
+                        alert_stocks_text = "" # 💥 2. 準備收集異常個股名單
 
                         for code, info in monitor_data.items():
                             try:
@@ -923,7 +925,7 @@ def market_patrol_loop():
                                     h = float(data.get('h', z) if data.get('h', '-') != '-' else z)                  
                                     l = float(data.get('l', z) if data.get('l', '-') != '-' else z)                  
                                     v = float(data.get('v', 0) if data.get('v', '-') != '-' else 0)                  
-                                    y = float(data.get('y', z))                                                                       
+                                    y = float(data.get('y', z))                                                                                
                                     chg = round(((z - y) / y) * 100, 2) if y > 0 else 0.0
                                     
                                     vwap = round((o + h + l + z * 2) / 5, 2)
@@ -946,43 +948,47 @@ def market_patrol_loop():
                                     
                                     if twii_chg <= -1.0:
                                         veto_triggered = True
-                                        veto_reason = f"🚨 大盤目前跌幅 {round(twii_chg,2)}% 觸發環境崩塌警報。持股者請死守防守價 {ma5_val}元 (5MA) 或 {ma10_val}元 (10MA)。"
+                                        veto_reason = f"大盤跌破防線，請嚴守 {ma5_val}元 或 {ma10_val}元 停損點"
+
+                                    # 💥 3. 將異常動態寫入戰報內文
+                                    if veto_triggered:
+                                        alert_stocks_text += f"⚠️ {name}: {veto_reason}\n"
+                                    elif is_overheated_tr:
+                                        alert_stocks_text += f"🔥 {name}: 漲幅 {chg}%, 預估量達 {v_ratio} 倍 (短線過熱)\n"
 
                                     stock_payload = {
                                         "code": code, "name": name, "type": info.get('type', 'core'),
-                                        "ind": info.get('ind', ''), # 💥 補上產業欄位，作為交集雷達的關鍵特徵
+                                        "ind": info.get('ind', ''), 
                                         "z": z, "chg": chg, "vwap": vwap, "v_ratio": v_ratio, "shadow_pct": shadow_pct,
                                         "ma5": ma5_val, "ma10": ma10_val, "ma20": info.get('ma20', z), "kd5": info.get('kd5', z),
                                         "veto_triggered": veto_triggered, "veto_reason": veto_reason
                                     }
                                     ai_payload.append(stock_payload)
 
-                                    # ⚡ 觸發當沖爆量雷達
-                                    # ⚡ 觸發當沖爆量雷達 (強制演習模式)
-                                    alert_msg = detect_intraday_breakout(code, name)
-
-                                    if alert_msg and alert_msg not in intraday_breakout_cache:
-                                        intraday_breakout_cache.insert(0, alert_msg) # 把最新快訊插在最前面
-                                    # 💥 統帥神級戰術：直接啟動「全頻群發 (Broadcast)」無腦轟炸！
-                                        try:
-                                            # 注意：broadcast 是 LINE Messaging API 的高權限功能
-                                            from linebot.models import TextSendMessage
-                                            push_text = f"🚨 【戰情室快訊】\n{alert_msg}"
-                                            line_bot_api.broadcast(TextSendMessage(text=push_text))
-                                            print(f"✅ 已全頻群發快訊：{name}")
-                                        except Exception as push_err:
-                                            print(f"⚠️ LINE 群發發射失敗: {push_err}")
-
                                 time.sleep(1) 
                             except: 
                                 continue
 
+                        # 💥 4. 準備發射定時戰報！
+                        if alert_stocks_text == "":
+                            alert_stocks_text = "✅ 目前監控名單內無異常暴動或跌破防線之標的。\n"
+                        
+                        broadcast_msg += alert_stocks_text
+
+                        try:
+                            from linebot.models import TextSendMessage
+                            line_bot_api.broadcast(TextSendMessage(text=broadcast_msg))
+                            print(f"✅ 已成功發送定時戰報：{current_phase}")
+                        except Exception as push_err:
+                            print(f"⚠️ 定時戰報發射失敗: {push_err}")
+
+
+                        # 5. 更新前端 JSON 快取 (保留您的交集過濾邏輯)
                         if len(ai_payload) > 0:
                             flow_text = get_market_leader()
                             match = re.search(r'【(.*?)】', flow_text)
                             top_ind = match.group(1) if match else "半導體"
                             
-                            # 💥 盤中雷達動態交集篩選
                             matched_payload = [s for s in ai_payload if top_ind in s.get('ind', '')]
                             final_display_list = matched_payload if len(matched_payload) > 0 else ai_payload[:15]
 
@@ -992,14 +998,10 @@ def market_patrol_loop():
                                 "stocksText": " ｜ ".join([f"{s['name']}({s['code']}) {s['z']}元 ({'+' if s['chg']>0 else ''}{s['chg']}%)" for s in final_display_list]),
                                 "fundamental_focus": fundamental_focus_cache,
                                 "fundamental_full": fundamental_full_cache,
-                                "intraday_alerts": intraday_breakout_cache[:10] # 💥 裝載當沖快訊彈藥 (只保留最新10筆)
+                                "intraday_alerts": intraday_breakout_cache[:10] 
                             })
 
-                time.sleep(60) 
-            else:
-                time.sleep(15) 
-        except Exception as e:
-            time.sleep(30)
+                time.sleep(60)
 
 
 # ==========================================================
