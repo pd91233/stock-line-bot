@@ -837,10 +837,16 @@ def handle_message(event):
     else:
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"📡 看盤伺服器已收到指令：'{user_msg}'。即時數據定時同步中。"))
 
+
 # ==========================================================
 # 🌟 7. 🚀 雲端全時相決策中心
 # ==========================================================
 def market_patrol_loop():
+    import time
+    import requests
+    import datetime
+    import re
+
     last_triggered_date = ""
     triggered_phases = set()
     
@@ -906,7 +912,7 @@ def market_patrol_loop():
                         # 💥 1. 建立戰報標題
                         broadcast_msg = f"{phase_title}\n時間：{now.strftime('%H:%M')} (大盤即時：{round(twii_chg, 2)}%)\n====================\n"
                         ai_payload = []
-                        alert_stocks_text = "" # 💥 2. 準備收集異常個股名單
+                        alert_stocks_text = ""
 
                         for code, info in monitor_data.items():
                             try:
@@ -983,7 +989,7 @@ def market_patrol_loop():
                             print(f"⚠️ 定時戰報發射失敗: {push_err}")
 
 
-                        # 5. 更新前端 JSON 快取 (保留您的交集過濾邏輯)
+                        # 5. 更新前端 JSON 快取
                         if len(ai_payload) > 0:
                             flow_text = get_market_leader()
                             match = re.search(r'【(.*?)】', flow_text)
@@ -1001,7 +1007,14 @@ def market_patrol_loop():
                                 "intraday_alerts": intraday_breakout_cache[:10] 
                             })
 
-                time.sleep(60)
+                time.sleep(60) 
+            else:
+                time.sleep(15) 
+
+        # 💥 剛剛遺失的保險箱底座在這裡！
+        except Exception as e:
+            print(f"市場巡邏異常: {e}")
+            time.sleep(30)
 
 
 # ==========================================================
