@@ -149,8 +149,9 @@ fundamental_full_cache = []  # 全域戰略區快取 (全市場 2000 檔)
 # ==========================================================
 # ⚡ [雙週期共振版] 當沖雷達：0秒延遲 5分趨勢 + 1分點火 偵測引擎
 # ==========================================================
-intraday_alerted_codes = set()
-stock_tick_memory = {} # 記錄每檔股票每分鐘的報價與總量 {code: [(timestamp, z, v, h), ...]}
+intraday_breakout_cache = []   # 💥 就是少了這一行！把它補回來！
+intraday_alerted_codes = set() # 記錄今日已爆發過的代碼，防止洗版
+stock_tick_memory = {}         # 記錄每檔股票每分鐘的報價與總量 {code: [(timestamp, z, v, h), ...]}
 
 def detect_intraday_breakout(code, name):
     import requests, time, datetime
