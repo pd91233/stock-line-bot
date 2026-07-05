@@ -209,13 +209,13 @@ def detect_intraday_breakout(code, name):
 
                 # 💥 雙週期共振終極濾網：
                 # 1. 【1分點火】：這 1 分鐘的成交量，暴增超過過去 5 分鐘平均的 3 倍！
-                # 2. 【1分點火】：這 1 分鐘的成交量絕對值 > 100 張 (過濾冷門水餃股)
+                # 2. 【1分點火】：這 1 分鐘的成交金額 > 1000 萬台幣 (過濾低價股雜訊，捕捉高價股動能)
                 # 3. 【5分趨勢】：現價 > 5 分鐘前的價格 (趨勢向上，非死貓反彈)
                 # 4. 【強勢確認】：現價 >= 今日最高點 (突破創高)
                 # 5. 【防護罩】：現價 >= VWAP (確保當沖多軍處於獲利狀態)
                 # 6. 【防護罩】：總漲幅 >= 2.0%
                 
-                if vol_1m > (avg_1m_vol_in_5m * 3) and vol_1m >= 100 and \
+                if vol_1m > (avg_1m_vol_in_5m * 3) and (vol_1m * current_z) >= 10000 and \
                    current_z > z_5m_ago and current_z >= current_h and \
                    current_z >= vwap_est and chg_pct >= 2.0:
                     
