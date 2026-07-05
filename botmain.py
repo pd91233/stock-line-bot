@@ -145,60 +145,87 @@ fundamental_focus_cache = [] # 戰術狙擊區快取 (48小時內有變更)
 fundamental_full_cache = []  # 全域戰略區快取 (全市場 2000 檔)
 
 
+
 # ==========================================================
-# ⚡ [終極時空校正版] 當沖雷達：5分K 盤中創高爆量突破偵測引擎
+# ⚡ [雙週期共振版] 當沖雷達：0秒延遲 5分趨勢 + 1分點火 偵測引擎
 # ==========================================================
-intraday_breakout_cache = [] # 儲存最新的爆量快訊
+intraday_alerted_codes = set()
+stock_tick_memory = {} # 記錄每檔股票每分鐘的報價與總量 {code: [(timestamp, z, v, h), ...]}
 
 def detect_intraday_breakout(code, name):
+    import requests, time, datetime
+    
+    # 🛡️ 單日冷卻防護：今天已經通報過，直接跳過
+    if code in intraday_alerted_codes:
+        return None
+
     try:
-        import requests
-        import datetime
-        headers = {"User-Agent": "Mozilla/5.0"}
-        # 抓取近一天的 5 分K 數據
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=5m"
-        res = requests.get(url, headers=headers, timeout=3).json()
-        
-        # 雙市場容錯切換
-        if not res.get('chart', {}).get('result'):
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TWO?range=1d&interval=5m"
-            res = requests.get(url, headers=headers, timeout=3).json()
-            if not res.get('chart', {}).get('result'): return None
+        # 直連證交所，獲取當下 0 秒延遲的最新報價
+        req = requests.Session()
+        url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{code}.tw&_={int(time.time() * 1000)}"
+        res = req.get(url, timeout=3).json()
+        if not res.get('msgArray'):
+            url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_{code}.tw&_={int(time.time() * 1000)}"
+            res = req.get(url, timeout=3).json()
+
+        if res.get('msgArray'):
+            data = res['msgArray'][0]
+            z = float(data.get('z', 0) if data.get('z', '-') != '-' else data.get('y', 0)) # 現價
+            o = float(data.get('o', 0) if data.get('o', '-') != '-' else z) # 開盤
+            h = float(data.get('h', 0) if data.get('h', '-') != '-' else 0) # 最高
+            l = float(data.get('l', 0) if data.get('l', '-') != '-' else z) # 最低
+            y = float(data.get('y', 0)) # 昨收
+            v = float(data.get('v', 0) if data.get('v', '-') != '-' else 0) # 總量
+
+            if z <= 0 or y <= 0: return None
             
-        result = res['chart']['result'][0]
-        timestamps = result['timestamp'] # 💥 提取 K 棒的真實時間戳
-        volumes = result['indicators']['quote'][0]['volume']
-        closes = result['indicators']['quote'][0]['close']
-        highs = result['indicators']['quote'][0]['high']
-        
-        # 💥 確保資料對齊，並同時過濾空值
-        valid_data = [(t, c, h, v) for t, c, h, v in zip(timestamps, closes, highs, volumes) if v is not None and c is not None and h is not None]
-        
-        if len(valid_data) > 5:
-            current_t, current_px, current_h, current_vol = valid_data[-1]
-            prev_px = valid_data[-2][1]
+            chg_pct = round(((z - y) / y) * 100, 2)
+            vwap_est = round((o + h + l + z * 2) / 5, 2)
+            now_ts = time.time()
+
+            # 🧠 寫入動態矩陣記憶體
+            if code not in stock_tick_memory:
+                stock_tick_memory[code] = []
             
-            avg_vol_5 = sum([d[3] for d in valid_data[-6:-1]]) / 5
-            intraday_high_before_now = max([d[2] for d in valid_data[:-1]])
+            stock_tick_memory[code].append((now_ts, z, v, h))
             
-            if avg_vol_5 > 0 and current_vol > (avg_vol_5 * 3) and current_px > prev_px:
-                if current_px >= intraday_high_before_now:
+            # 只保留最近 10 分鐘的記憶，避免拖慢雲端效能
+            if len(stock_tick_memory[code]) > 10:
+                stock_tick_memory[code].pop(0)
+
+            ticks = stock_tick_memory[code]
+            
+            # 必須收集滿 5 分鐘 (約 6 個點) 才能進行雙週期比對
+            if len(ticks) >= 6:
+                current_z, current_v, current_h = ticks[-1][1], ticks[-1][2], ticks[-1][3]
+                z_1m_ago, v_1m_ago = ticks[-2][1], ticks[-2][2]
+                z_5m_ago, v_5m_ago = ticks[-6][1], ticks[-6][2]
+
+                # 🔫 算出版機：最近 1 分鐘的瞬間成交量
+                vol_1m = current_v - v_1m_ago
+                # 🛡️ 算出大局：最近 5 分鐘的總成交量，並推算平均每分鐘是多少
+                vol_5m = current_v - v_5m_ago
+                avg_1m_vol_in_5m = vol_5m / 5 if vol_5m > 0 else 1.0
+
+                # 💥 雙週期共振終極濾網：
+                # 1. 【1分點火】：這 1 分鐘的成交量，暴增超過過去 5 分鐘平均的 3 倍！
+                # 2. 【1分點火】：這 1 分鐘的成交量絕對值 > 100 張 (過濾冷門水餃股)
+                # 3. 【5分趨勢】：現價 > 5 分鐘前的價格 (趨勢向上，非死貓反彈)
+                # 4. 【強勢確認】：現價 >= 今日最高點 (突破創高)
+                # 5. 【防護罩】：現價 >= VWAP (確保當沖多軍處於獲利狀態)
+                # 6. 【防護罩】：總漲幅 >= 2.0%
+                
+                if vol_1m > (avg_1m_vol_in_5m * 3) and vol_1m >= 100 and \
+                   current_z > z_5m_ago and current_z >= current_h and \
+                   current_z >= vwap_est and chg_pct >= 2.0:
                     
                     tz = datetime.timezone(datetime.timedelta(hours=8))
+                    time_str = datetime.datetime.now(tz).strftime("%H:%M:%S")
                     
-                    # 💥 核心修復 1：使用 K 棒「真正的時間」，而不是系統現在時間！
-                    k_time = datetime.datetime.fromtimestamp(current_t, tz).strftime("%H:%M")
+                    intraday_alerted_codes.add(code) # 鎖上保險栓
                     
-                    # 💥 核心修復 2：過期防護罩！如果這根 K 棒已經是 15 分鐘前的事，視為舊情報，直接丟棄！
-                    now_time = datetime.datetime.now(tz)
-                    k_datetime = datetime.datetime.fromtimestamp(current_t, tz)
-                    if (now_time - k_datetime).total_seconds() > 900:
-                        return None # 放棄發送
-                        
-                    safe_px = round(current_px, 2)
-                    safe_vol = int(current_vol / 1000)
-                    
-                    return f"[{k_time}] ⚡ {name}({code}) 帶量突破盤中新高！現價 {safe_px} (爆量 {safe_vol} 張)"
+                    return f"[{time_str}] ⚡ {name}({code}) 雙週期共振突破！\n現價：{current_z} (均價線:{vwap_est})\n漲幅：{chg_pct}%\n🔥 1分爆量：{int(vol_1m)} 張 (達5分均速 {round(vol_1m/avg_1m_vol_in_5m, 1)}倍)"
+
     except Exception as e:
         pass
     return None
@@ -1014,63 +1041,64 @@ def market_patrol_loop():
             time.sleep(30)
 
 
+
 # ==========================================================
-# ⚡ 8. [新增] 專屬當沖連續掃描引擎 (帶有盤中時間鎖定)
+# ⚡ 8. 專屬當沖連續掃描引擎 (帶有盤中時間鎖定)
 # ==========================================================
 def continuous_radar_loop():
-    print("📡 [當沖雷達] 連續掃描引擎啟動，待命執行...")
+    print("📡 [當沖雷達] 雙週期共振掃描引擎啟動，直連證交所待命中...")
     import time
     import datetime
     import requests
     while True:
         try:
-            # 💥 物理防線：判斷目前是否為台股盤中時間！
             now = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
             is_weekend = now.weekday() >= 5
-            # 將時間轉為數字方便比較，例如 09:15 變成 915，13:30 變成 1330
             current_time_num = now.hour * 100 + now.minute
             
-            # 🔒 只有在「平日」且「09:00 到 13:30 之間」，雷達才允許運作
+            # 🔒 09:00 到 13:30 之間雷達才運作
             if not is_weekend and (900 <= current_time_num <= 1330):
                 
-                # 抓取您的監控清單
                 headers = {"User-Agent": "Mozilla/5.0"}
                 json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={int(time.time())}"
                 res_json = requests.get(json_url, headers=headers, timeout=5)
                 
                 if res_json.status_code == 200:
                     raw_data = res_json.json()
-                    for item in raw_data:
-                        if "代碼" not in item: continue
-                        code = str(item["代碼"])
-                        name = item.get("商品", code)
+                    
+                    if isinstance(raw_data, list):
+                        target_dict = {str(item.get("代碼")): {"name": item.get("商品", item.get("代碼"))} for item in raw_data if "代碼" in item}
+                    else:
+                        target_dict = raw_data
+                        
+                    for code, info in target_dict.items():
+                        name = info.get("name", code)
                         
                         alert_msg = detect_intraday_breakout(code, name)
                         
                         if alert_msg and alert_msg not in intraday_breakout_cache:
                             intraday_breakout_cache.insert(0, alert_msg)
                             
-                            # 將快訊寫入快取讓網頁跑馬燈更新
                             current_cache = read_cache()
                             current_cache["intraday_alerts"] = intraday_breakout_cache[:10]
                             update_cache(current_cache)
                             
-                            # LINE 實時全頻群發
                             try:
                                 from linebot.models import TextSendMessage
                                 line_bot_api.broadcast(TextSendMessage(text=f"🚨 【戰情室快訊】\n{alert_msg}"))
-                                print(f"✅ 已全頻群發快訊：{name}")
+                                print(f"✅ 已全頻群發共振快訊：{name}")
                             except Exception as e:
                                 print(f"⚠️ LINE 群發失敗: {e}")
-                        time.sleep(1)
+                        
+                        time.sleep(1) # 1 秒測 1 檔，完美閃避證交所封鎖
             else:
-                # 💤 盤後時間，雷達保持靜默，不消耗運算資源
                 pass
                 
         except Exception as e:
             print(f"雷達巡邏異常: {e}")
         
-        time.sleep(60)
+        time.sleep(60) # 每分鐘掃描一次
+
 
 
 
