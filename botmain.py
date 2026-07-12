@@ -417,17 +417,29 @@ def fetch_fundamental_data():
             "Connection": "keep-alive"
         }
 
+
+# 🛡️ 將您剛剛複製的 Google Apps Script 網址貼在下方引號內
+        GAS_URL = "https://script.google.com/macros/s/AKfycbxaWJMbteJXq-rOwT7r6dlXq1rDSPgL6hoO2djKoregMZZIWx8WZjadMI9fnTKjTDOCXg/exec"
+
         def fetch_api_list(url):
             try:
-                res = requests.get(url, headers=headers, timeout=15)
+                # 🎯 戰術判定：若是證交所 (上市) 網址，啟動 Google 跳板隱形滲透
+                if "openapi.twse.com.tw" in url:
+                    request_url = f"{GAS_URL}?url={url}"
+                else:
+                    request_url = url # 上櫃 (TPEX) 不會擋，直接連線
+
+                res = requests.get(request_url, headers=headers, timeout=20)
                 if res.status_code == 200:
                     data = res.json()
                     if isinstance(data, list): return data
                     if isinstance(data, dict):
                         for k, v in data.items():
                             if isinstance(v, list): return v
-            except: pass
+            except Exception as e: 
+                print(f"⚠️ API 請求異常 ({url}): {e}", flush=True)
             return []
+
 
         # 1. 抓取營收
         twse_data = fetch_api_list("https://openapi.twse.com.tw/v1/opendata/t187ap05_L")
