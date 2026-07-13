@@ -147,13 +147,13 @@ fundamental_full_cache = []  # 全域戰略區快取 (全市場 2000 檔)
 
 
 # ==========================================================
-# ⚡ [雙週期共振版] 當沖雷達：0秒延遲 5分趨勢 + 1分點火 偵測引擎
+# ⚡ [雙層雷達版] 當沖雷達：破曉初升 vs 極限動能 雙重偵測引擎
 # ==========================================================
-intraday_breakout_cache = []   # 💥 就是少了這一行！把它補回來！
-intraday_alerted_codes = set() # 記錄今日已爆發過的代碼，防止洗版
-stock_tick_memory = {}         # 記錄每檔股票每分鐘的報價與總量 {code: [(timestamp, z, v, h), ...]}
+intraday_breakout_cache = []   
+intraday_alerted_codes = set() 
+stock_tick_memory = {}         
 
-def detect_intraday_breakout(code, name):
+def detect_intraday_breakout(code, name, ind="未知"):
     import requests, time, datetime
     
     # 🛡️ 單日冷卻防護：今天已經通報過，直接跳過
@@ -208,24 +208,36 @@ def detect_intraday_breakout(code, name):
                 vol_5m = current_v - v_5m_ago
                 avg_1m_vol_in_5m = vol_5m / 5 if vol_5m > 0 else 1.0
 
-                # 💥 雙週期共振終極濾網：
-                # 1. 【1分點火】：這 1 分鐘的成交量，暴增超過過去 5 分鐘平均的 3 倍！
-                # 2. 【1分點火】：這 1 分鐘的成交金額 > 1000 萬台幣 (過濾低價股雜訊，捕捉高價股動能)
-                # 3. 【5分趨勢】：現價 > 5 分鐘前的價格 (趨勢向上，非死貓反彈)
-                # 4. 【強勢確認】：現價 >= 今日最高點 (突破創高)
-                # 5. 【防護罩】：現價 >= VWAP (確保當沖多軍處於獲利狀態)
-                # 6. 【防護罩】：總漲幅 >= 2.0%
+                # 💥 【全新雙層防線濾網】💥
                 
-                if vol_1m > (avg_1m_vol_in_5m * 3) and (vol_1m * current_z) >= 10000 and \
-                   current_z > z_5m_ago and current_z >= current_h and \
-                   current_z >= vwap_est and chg_pct >= 2.0:
+                # 1. 均價線防護與短趨勢向上 (確保多方控盤)
+                is_above_vwap = current_z >= vwap_est
+                is_trend_up = current_z >= z_5m_ago
+                
+                # 2. 降門檻點火偵測 (1.5倍爆量 + 300萬台幣資金)
+                is_volume_surge = vol_1m >= (avg_1m_vol_in_5m * 1.5)
+                is_ignited = (vol_1m * current_z * 1000) >= 3000000 
+                
+                if is_above_vwap and is_trend_up and is_volume_surge and is_ignited:
                     
-                    tz = datetime.timezone(datetime.timedelta(hours=8))
-                    time_str = datetime.datetime.now(tz).strftime("%H:%M:%S")
-                    
-                    intraday_alerted_codes.add(code) # 鎖上保險栓
-                    
-                    return f"[{time_str}] ⚡ {name}({code}) 雙週期共振突破！\n現價：{current_z} (均價線:{vwap_est})\n漲幅：{chg_pct}%\n🔥 1分爆量：{int(vol_1m)} 張 (達5分均速 {round(vol_1m/avg_1m_vol_in_5m, 1)}倍)"
+                    # 3. 雙層警戒線判斷
+                    alert_type = None
+                    if 1.0 <= chg_pct <= 4.5:
+                        alert_type = "🌅 【破曉初升】安全起漲區 (適合佈局)"
+                    elif 4.5 < chg_pct <= 7.0:
+                        alert_type = "⚠️ 【極限動能】高風險誘多區 (請縮小部位)"
+                        
+                    # 只要落入兩大射擊區間，立刻擊發警報！
+                    if alert_type:
+                        tz = datetime.timezone(datetime.timedelta(hours=8))
+                        time_str = datetime.datetime.now(tz).strftime("%H:%M:%S")
+                        
+                        intraday_alerted_codes.add(code) # 鎖上保險栓
+                        
+                        # 💥 加上主流族群的專屬視覺標記
+                        hot_tag = "👑 [主流領頭羊]" if "半導體" in ind else f"🏷️ [{ind}]"
+                        
+                        return f"[{time_str}] ⚡ {name}({code}) {alert_type}\n{hot_tag} | 現價：{current_z} (均價線:{vwap_est})\n漲幅：{chg_pct}%\n🔥 1分爆量：{int(vol_1m)} 張 (達5分均速 {round(vol_1m/avg_1m_vol_in_5m, 1)}倍)"
 
     except Exception as e:
         pass
@@ -876,181 +888,26 @@ def handle_message(event):
 
 
 # ==========================================================
-# 🌟 7. 🚀 雲端全時相決策中心
+# 🌟 7. 🚀 雲端全時相決策中心 (靜默快取版 - 已廢除定時廣播)
 # ==========================================================
 def market_patrol_loop():
     import time
-    import requests
-    import datetime
-    import re
+    import threading
 
-    last_triggered_date = ""
-    triggered_phases = set()
-    
-    print("📡 [總部軍令] 偵蒐引擎初始化，發動開機首次盤面刷新...")
+    print("📡 [總部軍令] 靜默偵蒐引擎啟動，專心支援前端快取 (定時廣播已拔除)...", flush=True)
+    # 開機時強制刷新一次大盤與資金流向
     threading.Thread(target=lambda: execute_force_refresh()).start()
 
     while True:
         try:
-            now = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
-            date_today = now.strftime("%Y%m%d")
+            # 💥 戰術變更：廢除所有定時的 LINE 廣播！
+            # 僅保留每 300 秒 (5 分鐘) 在背景執行一次 execute_force_refresh() 
+            # 讓網頁版戰情室的報價與資金流向保持最新狀態。
+            time.sleep(300) 
+            execute_force_refresh()
             
-            if date_today != last_triggered_date:
-                last_triggered_date = date_today
-                triggered_phases.clear()
-
-            is_weekend = (now.weekday() >= 5)
-            current_phase = None
-            phase_title = ""
-            
-            if not is_weekend and now.hour == 9 and now.minute == 15 and "0915" not in triggered_phases:
-                current_phase = "0915"; phase_title = "🌅 09:15 【早盤強勢突破與假開高篩選點】"
-            elif not is_weekend and now.hour == 10 and now.minute == 0 and "1000" not in triggered_phases:
-                current_phase = "1000"; phase_title = "📈 10:00 【早盤方向確認點】"
-            elif not is_weekend and now.hour == 12 and now.minute == 30 and "1230" not in triggered_phases:
-                current_phase = "1230"; phase_title = "⚖️ 12:30 【尾盤籌碼定調點】"
-            elif not is_weekend and now.hour == 13 and now.minute == 15 and "1315" not in triggered_phases:
-                current_phase = "1315"; phase_title = "👑 13:15 【終局之戰：主力作線與鎖碼確認點】"
-            elif now.hour == 21 and now.minute == 0 and "2100" not in triggered_phases:
-                current_phase = "2100"; phase_title = "📡 21:00 【夜間雷達：多空溫度計與美股期指共振】"
-
-            if current_phase:
-                triggered_phases.add(current_phase)
-                timestamp_v = datetime.datetime.now().strftime("%H%M%S")
-
-                if current_phase == "2100":
-                    continue
-
-                json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={timestamp_v}"
-                res_json = requests.get(json_url, timeout=5)
-                
-                if res_json.status_code == 200 and res_json.text:
-                    raw_data = res_json.json()
-                    if raw_data:
-                        if isinstance(raw_data, list):
-                            monitor_data = {str(item.get("代碼")): {"name": item.get("商品", item.get("代碼")), "ind": str(item.get("ind", item.get("產業", "")))} for item in raw_data if "代碼" in item}
-                        else:
-                            monitor_data = raw_data
-
-                        headers = {"User-Agent": "Mozilla/5.0"}
-                        req = requests.Session()
-                        
-                        twii_chg = 0.0
-                        try:
-                            yh_res = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?range=1d&interval=1d", headers=headers, timeout=5).json()
-                            yh_meta = yh_res['chart']['result'][0]['meta']
-                            curr_idx = yh_meta['regularMarketPrice']
-                            prev_idx = yh_meta['chartPreviousClose']
-                            if prev_idx > 0: 
-                                twii_chg = ((curr_idx - prev_idx) / prev_idx) * 100
-                        except: 
-                            pass
-
-                        # 💥 1. 建立戰報標題
-                        broadcast_msg = f"{phase_title}\n時間：{now.strftime('%H:%M')} (大盤即時：{round(twii_chg, 2)}%)\n====================\n"
-                        ai_payload = []
-                        alert_stocks_text = ""
-
-                        for code, info in monitor_data.items():
-                            try:
-                                url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{code}.tw&_={int(time.time() * 1000)}"
-                                res = req.get(url, timeout=3).json() 
-                                if not res.get('msgArray'):
-                                    url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_{code}.tw&_={int(time.time() * 1000)}"
-                                    res = req.get(url, timeout=3).json()
-                                    
-                                if res.get('msgArray'):
-                                    data = res['msgArray'][0]
-                                    name = info.get('name', code)
-                                    
-                                    z = float(data.get('z', 0) if data.get('z', '-') != '-' else data.get('y', 0)) 
-                                    o = float(data.get('o', z) if data.get('o', '-') != '-' else z)                  
-                                    h = float(data.get('h', z) if data.get('h', '-') != '-' else z)                  
-                                    l = float(data.get('l', z) if data.get('l', '-') != '-' else z)                  
-                                    v = float(data.get('v', 0) if data.get('v', '-') != '-' else 0)                  
-                                    y = float(data.get('y', z))                                                                                
-                                    chg = round(((z - y) / y) * 100, 2) if y > 0 else 0.0
-                                    
-                                    vwap = round((o + h + l + z * 2) / 5, 2)
-                                    elapsed_mins = 60 if current_phase == "0915" else (105 if current_phase == "1000" else (255 if current_phase == "1230" else 300))
-                                    est_vol = v * (270 / elapsed_mins)
-                                    
-                                    v_5ma_val = info.get('v_5ma', 1.0)
-                                    v_ratio = round(est_vol / v_5ma_val, 1) if v_5ma_val > 0 else 1.0
-                                    
-                                    amp = h - l if h - l > 0 else 1.0
-                                    upper_shadow = h - max(o, z)
-                                    shadow_pct = round((upper_shadow / amp) * 100, 1)
-                                    is_overheated_tr = (v_ratio > 2.5 and chg > 5)
-
-                                    veto_triggered = False
-                                    veto_reason = ""
-                                    
-                                    ma5_val = info.get('ma5', z)
-                                    ma10_val = info.get('ma10', z)
-                                    
-                                    if twii_chg <= -1.0:
-                                        veto_triggered = True
-                                        veto_reason = f"大盤跌破防線，請嚴守 {ma5_val}元 或 {ma10_val}元 停損點"
-
-                                    # 💥 3. 將異常動態寫入戰報內文
-                                    if veto_triggered:
-                                        alert_stocks_text += f"⚠️ {name}: {veto_reason}\n"
-                                    elif is_overheated_tr:
-                                        alert_stocks_text += f"🔥 {name}: 漲幅 {chg}%, 預估量達 {v_ratio} 倍 (短線過熱)\n"
-
-                                    stock_payload = {
-                                        "code": code, "name": name, "type": info.get('type', 'core'),
-                                        "ind": info.get('ind', ''), 
-                                        "z": z, "chg": chg, "vwap": vwap, "v_ratio": v_ratio, "shadow_pct": shadow_pct,
-                                        "ma5": ma5_val, "ma10": ma10_val, "ma20": info.get('ma20', z), "kd5": info.get('kd5', z),
-                                        "veto_triggered": veto_triggered, "veto_reason": veto_reason
-                                    }
-                                    ai_payload.append(stock_payload)
-
-                                time.sleep(1) 
-                            except: 
-                                continue
-
-                        # 💥 4. 準備發射定時戰報！
-                        if alert_stocks_text == "":
-                            alert_stocks_text = "✅ 目前監控名單內無異常暴動或跌破防線之標的。\n"
-                        
-                        broadcast_msg += alert_stocks_text
-
-                        try:
-                            from linebot.models import TextSendMessage
-                            line_bot_api.broadcast(TextSendMessage(text=broadcast_msg))
-                            print(f"✅ 已成功發送定時戰報：{current_phase}")
-                        except Exception as push_err:
-                            print(f"⚠️ 定時戰報發射失敗: {push_err}")
-
-
-                        # 5. 更新前端 JSON 快取
-                        if len(ai_payload) > 0:
-                            flow_text = get_market_leader()
-                            match = re.search(r'【(.*?)】', flow_text)
-                            top_ind = match.group(1) if match else "半導體"
-                            
-                            matched_payload = [s for s in ai_payload if top_ind in s.get('ind', '')]
-                            final_display_list = matched_payload if len(matched_payload) > 0 else ai_payload[:15]
-
-                            news_headline = fetch_cnyes_news()
-                            update_cache({
-                                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {flow_text} ｜ {news_headline}",
-                                "stocksText": " ｜ ".join([f"{s['name']}({s['code']}) {s['z']}元 ({'+' if s['chg']>0 else ''}{s['chg']}%)" for s in final_display_list]),
-                                "fundamental_focus": fundamental_focus_cache,
-                                "fundamental_full": fundamental_full_cache,
-                                "intraday_alerts": intraday_breakout_cache[:10] 
-                            })
-
-                time.sleep(60) 
-            else:
-                time.sleep(15) 
-
-        # 💥 剛剛遺失的保險箱底座在這裡！
         except Exception as e:
-            print(f"市場巡邏異常: {e}")
+            print(f"⚠️ 靜默巡邏異常: {e}", flush=True)
             time.sleep(30)
 
 
@@ -1086,8 +943,11 @@ def continuous_radar_loop():
                         
                     for code, info in target_dict.items():
                         name = info.get("name", code)
+                        # 🎯 抓取這檔股票的產業別 (相容 ind 或 產業 欄位)
+                        ind = str(info.get("ind", info.get("產業", "未知")))
                         
-                        alert_msg = detect_intraday_breakout(code, name)
+                        # 🎯 將 ind 一併傳送給雷達
+                        alert_msg = detect_intraday_breakout(code, name, ind)
                         
                         if alert_msg and alert_msg not in intraday_breakout_cache:
                             intraday_breakout_cache.insert(0, alert_msg)
