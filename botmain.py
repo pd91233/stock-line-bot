@@ -370,6 +370,10 @@ def fetch_material_info():
                     est_yearly = "-"
                     
                     try:
+                        # 💥 射速冷卻裝甲：強制休眠 4.5 秒，完美閃避 Google 每分鐘 15 次的封鎖線！
+                        import time
+                        time.sleep(4.5)
+                        
                         # 💥 對 Gemini 下達戰術萃取指令
                         prompt = f"""
                         你是一位頂尖台股分析師。請閱讀以下重大訊息，並以 JSON 格式輸出萃取結果。
