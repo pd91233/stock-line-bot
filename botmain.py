@@ -893,10 +893,22 @@ def callback():
 def get_live_data():
     global self_assessed_cache
     
-    # 💥 偵測：如果記憶體是空的 (代表母艦剛睡醒)，立刻強制出動獵犬！
+    # 💥 偵測：記憶體是空的，絕對不能卡死網頁！派背景線程去處理！
     if not self_assessed_cache or len(self_assessed_cache) == 0:
-        print("⚠️ [緊急戰略] 母艦剛甦醒且無歷史情報，強制啟動解碼獵犬...", flush=True)
-        fetch_material_info()
+        print("⚠️ [緊急戰略] 派遣背景 AI 獵犬出動，避免網頁卡死...", flush=True)
+        
+        # 1. 先塞入一筆暫時的公告，安撫網頁端，這樣網頁就能瞬間載入成功！
+        self_assessed_cache = [{
+            "date": "剛剛", "code": "SYS", "name": "戰情室", 
+            "subject": "📡 AI 獵犬剛甦醒，正在後台排隊解讀中...", 
+            "desc": "", "eps": 0.0, "ai_rating": "⚪ 系統載入中", 
+            "ai_analysis": "為了規避 Google 防火牆，AI 需要慢慢排隊讀取財報。請統帥先看別的數據，約 1~2 分鐘後重新整理網頁即可看到最新情報！",
+            "last_year_eps": "-", "yoy_eps": "-", "turnaround": "-", "est_yearly": "-"
+        }]
+        
+        # 2. 啟動背景獨立執行！獵犬在後台慢慢跑，完全不影響網頁運作！
+        import threading
+        threading.Thread(target=fetch_material_info, daemon=True).start()
         
     # 讀取現有快取，並將獵犬的情資寫入
     current_cache = read_cache()
