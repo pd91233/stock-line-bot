@@ -51,27 +51,32 @@ def fetch_cnyes_news():
 
 def get_market_leader():
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        # 💥 修正 1：換上 Yahoo 最新的上市類股網址
+        # 💥 升級頂級偽裝，徹底欺騙 Yahoo 防火牆
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
         class_res = requests.get("https://tw.stock.yahoo.com/class-quote?sectorId=tw_stock_class", headers=headers, timeout=8)
         soup = BeautifulSoup(class_res.text, 'html.parser')
         
-        # 💥 修正 2：無視 HTML 結構，直接將整個網頁炸成純文字
-        page_text = soup.get_text(separator=' ', strip=True)
-        
-        # 💥 修正 3：加入「電腦及週邊設備」以防 Yahoo 改名
-        target_industries = ["半導體", "電腦及週邊", "電腦週邊", "電子零組件", "通信網路", "光電業", "生技醫療", "金融保險", "鋼鐵工業", "航運業", "建材營造"]
+        target_industries = ["半導體", "電腦及週邊", "電子零組件", "通信網路", "光電業", "生技醫療", "金融保險", "鋼鐵工業", "航運業", "建材營造"]
         leaderboard = {}
         
+        # 💥 終極殺招：把網頁所有可見文字抽出來排成一列！
+        texts = list(soup.stripped_strings)
+        
         for ind in target_industries:
-            # 💥 修正 4：在純文字中，抓取產業名稱後面 50 個字元內出現的第一個「正負百分比」
-            match = re.search(ind + r'.{1,50}?([+-]?\d+\.\d+)\s*%', page_text)
-            if match: 
-                leaderboard[ind] = float(match.group(1))
-                
+            for i, text in enumerate(texts):
+                if ind == text:
+                    # 找到產業名稱後，直接往下檢查接下來的 15 個文字區塊
+                    for j in range(1, 15):
+                        if i + j < len(texts):
+                            # 揪出包含 % 的漲跌幅數字
+                            match = re.search(r'([+-]?\d+\.\d+)%', texts[i+j])
+                            if match:
+                                leaderboard[ind] = float(match.group(1))
+                                break # 抓到數字就換下一個產業
+                    if ind in leaderboard: break # 確保只抓一次
+                    
         if leaderboard:
             top = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)[0]
-            # 統一正名為「電腦週邊」
             ind_name = "電腦週邊" if "電腦" in top[0] else top[0]
             return f"🔥 資金主攻：【{ind_name}】({top[1]}%)"
     except: pass
@@ -794,26 +799,34 @@ def execute_force_refresh():
 
         # 2. 資金流向排行
         try:
-            # 💥 同步更新最新網址
-            class_res = requests.get("https://tw.stock.yahoo.com/class-quote?sectorId=tw_stock_class", headers=headers, timeout=8)
+            # 💥 升級頂級偽裝
+            headers_fake = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+            class_res = requests.get("https://tw.stock.yahoo.com/class-quote?sectorId=tw_stock_class", headers=headers_fake, timeout=8)
+            
             if class_res.status_code == 200:
                 soup = BeautifulSoup(class_res.text, 'html.parser')
-                # 💥 同步使用純文字炸彈掃描法
-                page_text = soup.get_text(separator=' ', strip=True)
-                
-                target_industries = ["半導體", "電腦及週邊", "電腦週邊", "電子零組件", "通信網路", "光電業", "生技醫療", "金融保險", "鋼鐵工業", "航運業", "建材營造"]
+                target_industries = ["半導體", "電腦及週邊", "電子零組件", "通信網路", "光電業", "生技醫療", "金融保險", "鋼鐵工業", "航運業", "建材營造"]
                 leaderboard = {}
                 
+                # 💥 終極殺招：全視角文字列陣掃描
+                texts = list(soup.stripped_strings)
+                
                 for ind in target_industries:
-                    match = re.search(ind + r'.{1,50}?([+-]?\d+\.\d+)\s*%', page_text)
-                    if match: 
-                        leaderboard[ind] = float(match.group(1))
-                        
+                    for i, text in enumerate(texts):
+                        if ind == text:
+                            for j in range(1, 15):
+                                if i + j < len(texts):
+                                    match = re.search(r'([+-]?\d+\.\d+)%', texts[i+j])
+                                    if match:
+                                        leaderboard[ind] = float(match.group(1))
+                                        break
+                            if ind in leaderboard: break
+                            
                 if leaderboard:
                     top = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)[0]
                     true_market_top_ind = "電腦週邊" if "電腦" in top[0] else top[0]
                     true_market_top_chg = top[1]
-        except: pass
+        except: pass     
 
         # 3. 戰報對齊與快取寫入 (技術面監控名單保持運作)
         json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={time.time()}"
