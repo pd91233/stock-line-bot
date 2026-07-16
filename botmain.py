@@ -797,36 +797,39 @@ def execute_force_refresh():
             twii_chg = ((meta['regularMarketPrice'] - meta['chartPreviousClose']) / meta['chartPreviousClose']) * 100
         except: pass
 
-        # 2. 資金流向排行
+        # 2. 資金流向排行 (💥 升級：台灣證交所官方 API 直連引擎)
         try:
-            # 💥 升級頂級偽裝
-            headers_fake = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-            class_res = requests.get("https://tw.stock.yahoo.com/class-quote?sectorId=tw_stock_class", headers=headers_fake, timeout=8)
+            # 官方各類股指數代碼對照表
+            target_indices = {
+                "t24": "半導體", "t25": "電腦週邊", "t28": "電子零組件", "t27": "通信網路",
+                "t26": "光電業", "t22": "生技醫療", "t17": "金融保險", "t10": "鋼鐵工業",
+                "t21": "航運業", "t20": "建材營造"
+            }
+            # 組合雷達頻道
+            channels = "|".join([f"tse_{code}.tw" for code in target_indices.keys()])
+            api_url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={channels}&_={int(time.time() * 1000)}"
             
-            if class_res.status_code == 200:
-                soup = BeautifulSoup(class_res.text, 'html.parser')
-                target_industries = ["半導體", "電腦及週邊", "電子零組件", "通信網路", "光電業", "生技醫療", "金融保險", "鋼鐵工業", "航運業", "建材營造"]
-                leaderboard = {}
-                
-                # 💥 終極殺招：全視角文字列陣掃描
-                texts = list(soup.stripped_strings)
-                
-                for ind in target_industries:
-                    for i, text in enumerate(texts):
-                        if ind == text:
-                            for j in range(1, 15):
-                                if i + j < len(texts):
-                                    match = re.search(r'([+-]?\d+\.\d+)%', texts[i+j])
-                                    if match:
-                                        leaderboard[ind] = float(match.group(1))
-                                        break
-                            if ind in leaderboard: break
+            res = requests.get(api_url, timeout=5).json()
+            leaderboard = {}
+            
+            if 'msgArray' in res:
+                for data in res['msgArray']:
+                    code = data.get('c') # 取得官方代號
+                    name = target_indices.get(code)
+                    z_str, y_str = data.get('z', '-'), data.get('y', '-')
+                    
+                    if name and z_str != '-' and y_str != '-':
+                        z, y = float(z_str), float(y_str)
+                        if y > 0:
+                            # 精準計算漲跌幅
+                            leaderboard[name] = round(((z - y) / y) * 100, 2)
                             
-                if leaderboard:
-                    top = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)[0]
-                    true_market_top_ind = "電腦週邊" if "電腦" in top[0] else top[0]
-                    true_market_top_chg = top[1]
-        except: pass     
+            if leaderboard:
+                # 排序找出真正的資金主攻榜首
+                top = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)[0]
+                true_market_top_ind = top[0]
+                true_market_top_chg = top[1]
+        except: pass    
 
         # 3. 戰報對齊與快取寫入 (技術面監控名單保持運作)
         json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={time.time()}"
