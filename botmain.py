@@ -52,28 +52,30 @@ def fetch_cnyes_news():
 def get_market_leader():
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
-        class_res = requests.get("https://tw.stock.yahoo.com/class", headers=headers, timeout=8)
+        # 💥 修正 1：換上 Yahoo 最新的上市類股網址
+        class_res = requests.get("https://tw.stock.yahoo.com/class-quote?sectorId=tw_stock_class", headers=headers, timeout=8)
         soup = BeautifulSoup(class_res.text, 'html.parser')
-        target_industries = ["半導體", "電腦週邊", "電子零組件", "通信網路", "光電業", "生技醫療", "金融保險", "鋼鐵工業", "航運業", "建材營造"]
+        
+        # 💥 修正 2：無視 HTML 結構，直接將整個網頁炸成純文字
+        page_text = soup.get_text(separator=' ', strip=True)
+        
+        # 💥 修正 3：加入「電腦及週邊設備」以防 Yahoo 改名
+        target_industries = ["半導體", "電腦及週邊", "電腦週邊", "電子零組件", "通信網路", "光電業", "生技醫療", "金融保險", "鋼鐵工業", "航運業", "建材營造"]
         leaderboard = {}
+        
         for ind in target_industries:
-            # 💥 修正 1：防護 bs4 版本衝突，改用 string
-            ind_element = soup.find(string=re.compile(ind))
-            if ind_element:
-                # 💥 修正 2：Yahoo 結構改變，我們讓探子往上找 5 層，確保把整列的漲跌幅數字都包進來
-                curr_node = ind_element.parent
-                for _ in range(5):
-                    if not curr_node: break
-                    pct_match = re.search(r'([+-]?\d+\.\d+)%', curr_node.get_text())
-                    if pct_match: 
-                        leaderboard[ind] = float(pct_match.group(1))
-                        break # 抓到數字就立刻撤退
-                    curr_node = curr_node.parent 
+            # 💥 修正 4：在純文字中，抓取產業名稱後面 50 個字元內出現的第一個「正負百分比」
+            match = re.search(ind + r'.{1,50}?([+-]?\d+\.\d+)\s*%', page_text)
+            if match: 
+                leaderboard[ind] = float(match.group(1))
+                
         if leaderboard:
             top = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)[0]
-            return f"🔥 資金主攻：【{top[0]}】({top[1]}%)"
+            # 統一正名為「電腦週邊」
+            ind_name = "電腦週邊" if "電腦" in top[0] else top[0]
+            return f"🔥 資金主攻：【{ind_name}】({top[1]}%)"
     except: pass
-    return "🔥 資金主攻：【半導體】"
+    return "🔥 資金主攻：【半導體】(0.0%)"
 
 
 app = Flask(__name__)
@@ -792,27 +794,25 @@ def execute_force_refresh():
 
         # 2. 資金流向排行
         try:
-            class_res = requests.get("https://tw.stock.yahoo.com/class", headers=headers, timeout=8)
+            # 💥 同步更新最新網址
+            class_res = requests.get("https://tw.stock.yahoo.com/class-quote?sectorId=tw_stock_class", headers=headers, timeout=8)
             if class_res.status_code == 200:
                 soup = BeautifulSoup(class_res.text, 'html.parser')
-                target_industries = ["半導體", "電腦週邊", "電子零組件", "通信網路", "光電業", "生技醫療", "金融保險", "鋼鐵工業", "航運業", "建材營造"]
+                # 💥 同步使用純文字炸彈掃描法
+                page_text = soup.get_text(separator=' ', strip=True)
+                
+                target_industries = ["半導體", "電腦及週邊", "電腦週邊", "電子零組件", "通信網路", "光電業", "生技醫療", "金融保險", "鋼鐵工業", "航運業", "建材營造"]
                 leaderboard = {}
+                
                 for ind in target_industries:
-                        # 💥 修正 1：防護 bs4 版本衝突，改用 string
-                        ind_element = soup.find(string=re.compile(ind))
-                        if ind_element:
-                            # 💥 修正 2：Yahoo 結構改變，我們讓探子往上找 5 層，確保把整列的漲跌幅數字都包進來
-                            curr_node = ind_element.parent
-                            for _ in range(5):
-                                if not curr_node: break
-                                pct_match = re.search(r'([+-]?\d+\.\d+)%', curr_node.get_text())
-                                if pct_match: 
-                                    leaderboard[ind] = float(pct_match.group(1))
-                                    break # 抓到數字就立刻撤退
-                                curr_node = curr_node.parent
+                    match = re.search(ind + r'.{1,50}?([+-]?\d+\.\d+)\s*%', page_text)
+                    if match: 
+                        leaderboard[ind] = float(match.group(1))
+                        
                 if leaderboard:
                     top = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)[0]
-                    true_market_top_ind, true_market_top_chg = top[0], top[1]
+                    true_market_top_ind = "電腦週邊" if "電腦" in top[0] else top[0]
+                    true_market_top_chg = top[1]
         except: pass
 
         # 3. 戰報對齊與快取寫入 (技術面監控名單保持運作)
