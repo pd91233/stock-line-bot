@@ -87,6 +87,7 @@ app = Flask(__name__)
 
 # 🛡️ 戰術快取配置
 CACHE_FILE = "live_data_cache.json"
+VIP_CACHE_FILE = "radar_vips.json"  # 💥 新增：特戰隊員點名簿
 
 def update_cache(data):
     try:
@@ -103,6 +104,21 @@ def read_cache():
         except:
             pass
     return {"fundsText": "⏳ 系統剛啟動，等待盤中數據同步...", "stocksText": "⏳ 系統剛啟動，等待盤中數據同步..."}
+
+# 💥 新增：讀取與寫入點名簿的專屬函數
+def read_vips():
+    if os.path.exists(VIP_CACHE_FILE):
+        try:
+            with open(VIP_CACHE_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except: pass
+    return {}
+
+def update_vips(data):
+    try:
+        with open(VIP_CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+    except: pass
 
 # ==========================================================
 # 🔑 1. API 金鑰與通訊參數設定
@@ -924,9 +940,49 @@ def get_live_data():
     
     return response
 
+
+# ==========================================================
+# 📡 中控台 VIP 權限管理通道 (供 main.py 讀寫與打勾)
+# ==========================================================
+@app.route("/vips", methods=['GET', 'POST'])
+def manage_vips():
+    if request.method == 'GET':
+        return jsonify(read_vips())
+    elif request.method == 'POST':
+        data = request.json
+        if data is not None:
+            update_vips(data)
+            return jsonify({"status": "success", "msg": "✅ 統帥權限已成功同步至雲端母艦！"})
+        return jsonify({"status": "error"}), 400
+
+
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_msg = event.message.text.strip()
+    user_id = event.source.user_id  # 💥 瞬間攔截發送者的隱藏 User ID
+    
+    # 🎯 隱形招募處：攔截通關密語
+    if user_msg == "雷達開通":
+        try:
+            profile = line_bot_api.get_profile(user_id)
+            user_name = profile.display_name
+        except:
+            user_name = "未知特戰隊員"
+
+        vips = read_vips()
+        if user_id not in vips:
+            # 💥 預設：新兵報到時，三個權限預設全開，統帥後續可從中控台關閉
+            vips[user_id] = {
+                "name": user_name,
+                "perms": {"1min": True, "5min": True, "report": True}
+            }
+            update_vips(vips)
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ 歡迎歸隊，{user_name}！\n您的專屬「當沖雷達與戰報」已成功列入發射名單。\n(※各項接收權限將由統帥於中控台統一調度)"))
+        else:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"⚠️ {user_name}，您的通訊座標已經在作戰名單中，無須重複開通！"))
+        return
+
+    # 📊 原本的大盤或雷達查詢邏輯
     if user_msg == "大盤" or user_msg == "雷達":
         cache_data = read_cache()
         reply_text = f"{cache_data.get('fundsText', '')}\n\n精選標的流向：\n{cache_data.get('stocksText', '')}"
@@ -1004,12 +1060,29 @@ def continuous_radar_loop():
                             current_cache["intraday_alerts"] = intraday_breakout_cache[:10]
                             update_cache(current_cache)
                             
+                            # 💥 讀取最新權限名單，準備精準發射！
                             try:
                                 from linebot.models import TextSendMessage
-                                line_bot_api.broadcast(TextSendMessage(text=f"🚨 【戰情室快訊】\n{alert_msg}"))
-                                print(f"✅ 已全頻群發共振快訊：{name}")
+                                vips = read_vips()
+                                target_ids = []
+                                
+                                # 🔍 過濾權限：如果是「破曉初升(安全區)」，需要有 5min 權限
+                                # 🔍 過濾權限：如果是「極限動能(高風險)」，需要有 1min 權限
+                                for uid, info in vips.items():
+                                    perms = info.get("perms", {})
+                                    if "極限動能" in alert_type:
+                                        if perms.get("1min", False): target_ids.append(uid)
+                                    else:
+                                        if perms.get("5min", False): target_ids.append(uid)
+
+                                if target_ids:
+                                    # Multicast 最大上限 500 人
+                                    line_bot_api.multicast(target_ids, TextSendMessage(text=f"🚨 【戰情室快訊】\n{alert_msg}"))
+                                    print(f"✅ 已對 {len(target_ids)} 名擁有權限之隊員精準群發：{name}")
+                                else:
+                                    print(f"⚠️ 掃到 {name}，但目前無人符合該項雷達權限。")
                             except Exception as e:
-                                print(f"⚠️ LINE 群發失敗: {e}")
+                                print(f"⚠️ LINE 精準多播失敗: {e}")
                         
                         time.sleep(1) # 1 秒測 1 檔，完美閃避證交所封鎖
             else:
