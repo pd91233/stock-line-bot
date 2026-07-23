@@ -385,42 +385,60 @@ def fetch_material_info():
                     turnaround = "-"
                     est_yearly = "-"
                     
-                    try:
-                        # 💥 射速冷卻裝甲：強制休眠 4.5 秒，完美閃避 Google 每分鐘 15 次的封鎖線！
-                        import time
-                        time.sleep(4.5)
-                        
-                        # 💥 對 Gemini 下達戰術萃取指令
-                        prompt = f"""
-                        你是一位頂尖台股分析師。請閱讀以下重大訊息，並以 JSON 格式輸出萃取結果。
-                        如果內文中找不到對應數字，請填 "-"。務必只輸出 JSON 格式，不要其他廢話。
-                        格式要求：
-                        {{
-                          "last_year_eps": "去年同月或同期EPS(數字)",
-                          "yoy_eps_growth": "EPS年增率(字串，包含%)",
-                          "turnaround": "是否轉虧為盈(是/否/持續虧損/持續獲利)",
-                          "est_yearly_eps": "預估全年EPS(數字或字串)",
-                          "ai_rating": "評級(🔴 強烈買進 / 🟡 值得觀察 / 🟢 需要小心 / ⚪ 中性看待)",
-                          "ai_analysis": "用四個段落(營運現況、獲利分析、產業風險、綜合評估)撰寫約200字白話文解析"
-                        }}
-                        重大訊息內容：{desc}
-                        """
-                        response = ai_model.generate_content(prompt)
-                        
-                        # 嘗試解析 AI 回傳的 JSON (去除可能的 markdown 標記)
-                        res_text = response.text.replace('```json', '').replace('```', '').strip()
-                        ai_data = json.loads(res_text)
-                        
-                        ai_rating = ai_data.get("ai_rating", ai_rating)
-                        ai_analysis = ai_data.get("ai_analysis", ai_analysis)
-                        last_year_eps = ai_data.get("last_year_eps", "-")
-                        yoy_eps = ai_data.get("yoy_eps_growth", "-")
-                        turnaround = ai_data.get("turnaround", "-")
-                        est_yearly = ai_data.get("est_yearly_eps", "-")
-                        print(f"✅ [AI 成功] {code} 財報數據萃取完畢！", flush=True)
-                        
-                    except Exception as e:
-                        print(f"⚠️ [AI 解析失敗] {e}", flush=True)
+                    # 💥 新增：重試機制與自動換彈匣系統
+                    max_retries = 3
+                    for attempt in range(max_retries):
+                        try:
+                            import time
+                            # 將基礎冷卻時間稍微拉長至 6 秒，穩定射速
+                            time.sleep(6) 
+                            
+                            # 💥 對 Gemini 下達戰術萃取指令
+                            prompt = f"""
+                            你是一位頂尖台股分析師。請閱讀以下重大訊息，並以 JSON 格式輸出萃取結果。
+                            如果內文中找不到對應數字，請填 "-"。務必只輸出 JSON 格式，不要其他廢話。
+                            格式要求：
+                            {{
+                              "last_year_eps": "去年同月或同期EPS(數字)",
+                              "yoy_eps_growth": "EPS年增率(字串，包含%)",
+                              "turnaround": "是否轉虧為盈(是/否/持續虧損/持續獲利)",
+                              "est_yearly_eps": "預估全年EPS(數字或字串)",
+                              "ai_rating": "評級(🔴 強烈買進 / 🟡 值得觀察 / 🟢 需要小心 / ⚪ 中性看待)",
+                              "ai_analysis": "用四個段落(營運現況、獲利分析、產業風險、綜合評估)撰寫約200字白話文解析"
+                            }}
+                            重大訊息內容：{desc}
+                            """
+                            response = ai_model.generate_content(prompt)
+                            
+                            # 嘗試解析 AI 回傳的 JSON (去除可能的 markdown 標記)
+                            res_text = response.text.replace('```json', '').replace('```', '').strip()
+                            ai_data = json.loads(res_text)
+                            
+                            ai_rating = ai_data.get("ai_rating", ai_rating)
+                            ai_analysis = ai_data.get("ai_analysis", ai_analysis)
+                            last_year_eps = ai_data.get("last_year_eps", "-")
+                            yoy_eps = ai_data.get("yoy_eps_growth", "-")
+                            turnaround = ai_data.get("turnaround", "-")
+                            est_yearly = ai_data.get("est_yearly_eps", "-")
+                            print(f"✅ [AI 成功] {code} 財報數據萃取完畢！", flush=True)
+                            
+                            break # 💥 成功萃取，跳出重試迴圈
+                            
+                        except Exception as e:
+                            err_str = str(e)
+                            if "429" in err_str:
+                                print(f"⚠️ [429 資源耗盡] 第 {attempt+1} 次嘗試失敗。自動切換備用金鑰...", flush=True)
+                                try:
+                                    # 抓取下一把備用金鑰並重新配置
+                                    next_key = next(key_cycle)
+                                    genai.configure(api_key=next_key)
+                                    time.sleep(2) # 換彈匣稍等 2 秒
+                                except:
+                                    print("⚠️ [彈匣警告] 無法切換，請確保 Render 已設定 GEMINI_API_KEY_1~5", flush=True)
+                                    time.sleep(5) # 沒子彈只能硬等冷卻
+                            else:
+                                print(f"⚠️ [AI 解析失敗] {e}", flush=True)
+                                break # 若非 429 錯誤，直接放棄這檔標的
 
                     news_list.append({
                         "date": full_date,
