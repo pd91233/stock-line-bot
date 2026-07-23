@@ -338,7 +338,7 @@ ai_model = init_strategic_ai()
 
 
 def fetch_material_info():
-    global self_assessed_cache
+    global self_assessed_cache, ai_model  # 💥 修正：允許函數內部重新組裝 AI 槍管
     print("🕵️‍♂️ [AI 獵犬] 開始掃描全市場重大訊息...", flush=True)
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
@@ -372,7 +372,12 @@ def fetch_material_info():
             if "注意" in subject or "自結" in subject or "EPS" in subject or "盈餘" in subject:
                 eps_match = re.search(r'(?:每股盈餘|EPS|每股虧損|每股盈餘\(虧損\)).*?([+-]?\d+\.\d+)', desc, re.IGNORECASE)
                 eps_val = float(eps_match.group(1)) if eps_match else 0.0
+
                 
+                # 💥 新增：防空攔截網，如果股票代碼是空白的，直接跳過不浪費子彈！
+                if not code.strip():
+                    continue
+
                 # 只要符合條件，立刻呼叫 Gemini 進行深度解析！
                 if eps_val != 0.0 or "注意" in subject:
                     
@@ -385,7 +390,7 @@ def fetch_material_info():
                     turnaround = "-"
                     est_yearly = "-"
                     
-                    # 💥 新增：重試機制與自動換彈匣系統
+                    # 💥 這裡開始是全新的：重試機制與自動換彈匣系統
                     max_retries = 3
                     for attempt in range(max_retries):
                         try:
@@ -432,6 +437,10 @@ def fetch_material_info():
                                     # 抓取下一把備用金鑰並重新配置
                                     next_key = next(key_cycle)
                                     genai.configure(api_key=next_key)
+                                    
+                                    # 📍 統帥，就是這一行！重新上膛！拿新的金鑰重新組裝槍管！
+                                    ai_model = genai.GenerativeModel('gemini-2.5-flash')
+                                    
                                     time.sleep(2) # 換彈匣稍等 2 秒
                                 except:
                                     print("⚠️ [彈匣警告] 無法切換，請確保 Render 已設定 GEMINI_API_KEY_1~5", flush=True)
