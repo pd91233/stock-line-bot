@@ -7,7 +7,8 @@ from flask import Flask, request, abort, jsonify, make_response
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
-    MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction, ImageSendMessage
+    MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction, ImageSendMessage,
+    JoinEvent, SourceGroup  # 💥 新增：群組加入事件偵測模組
 )
 from bs4 import BeautifulSoup
 import json
@@ -981,6 +982,28 @@ def manage_vips():
             update_vips(data)
             return jsonify({"status": "success", "msg": "✅ 統帥權限已成功同步至雲端母艦！"})
         return jsonify({"status": "error"}), 400
+
+
+# ==========================================================
+# 🛡️ 專屬群組進駐雷達：自動捕捉並綁定 Group ID
+# ==========================================================
+@handler.add(JoinEvent)
+def handle_join(event):
+    if isinstance(event.source, SourceGroup):
+        group_id = event.source.group_id
+        print(f"✅ 成功潛入群組！群組 ID 為: {group_id}", flush=True)
+        
+        welcome_msg = (
+            "🫡 報告統帥！股海觀浪戰情雷達已成功進駐本群組！\n\n"
+            "🎯 本群組的專屬通訊代號為：\n"
+            f"{group_id}\n\n"
+            "請將此代號複製並記錄下來，日後只要統帥將此代號寫入中控台程式碼的發射目標中，每日戰報與緊急軍令就會全自動空投至此群組！"
+        )
+        
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=welcome_msg)
+        )
 
 
 @handler.add(MessageEvent, message=TextMessage)
