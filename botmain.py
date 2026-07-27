@@ -149,7 +149,7 @@ if gemini_keys:
     key_cycle = itertools.cycle(gemini_keys)
 
 # ==========================================================
-# 📚 2. 台股資料庫初始化 (強效升級版)
+# 📚 2. 台股資料庫初始化 (本地 JSON 優先版)
 # ==========================================================
 global_stock_dict = {}
 global_full_stock_list = []
@@ -159,25 +159,24 @@ def get_stock_dict():
     if len(global_stock_dict) > 0: 
         return global_stock_dict, global_full_stock_list
     
-    headers = {"User-Agent": "Mozilla/5.0"}
-    try:
-        # 將逾時從 3 秒拉長至 8 秒，確保 FinMind API 有充足時間回傳全市場資料
-        url = "https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo"
-        res = requests.get(url, headers=headers, timeout=8, verify=False).json()
-        if res.get("msg") == "success":
-            for item in res.get("data", []):
-                name = item.get("stock_name")
-                sid = item.get("stock_id")
-                if name and sid and len(sid) <= 6: 
-                    clean_name = str(name).strip()
-                    clean_sid = str(sid).strip()
-                    global_stock_dict[clean_name] = clean_sid
-                    global_stock_dict[clean_sid] = clean_sid
-                    global_full_stock_list.append({"code": clean_sid, "name": clean_name})
-    except: 
-        pass
-        
-    # 若 API 暫時失敗的擴充防呆備份 (包含統帥提到的台肥、聯合再生等)
+    # 1. 優先讀取與 botmain.py 同目錄的 all_stocks.json 檔案
+    if os.path.exists("all_stocks.json"):
+        try:
+            with open("all_stocks.json", "r", encoding="utf-8") as f:
+                all_list = json.load(f)
+                for item in all_list:
+                    sid = str(item.get("code", "")).strip()
+                    name = str(item.get("name", "")).strip()
+                    if sid and name:
+                        global_stock_dict[name] = sid
+                        global_stock_dict[sid] = sid
+                        global_full_stock_list.append({"code": sid, "name": name})
+                print(f"✅ 成功從本地 JSON 載入全市場股票共 {len(global_full_stock_list)} 筆", flush=True)
+                return global_stock_dict, global_full_stock_list
+        except Exception as e:
+            print(f"⚠️ 讀取本地 all_stocks.json 失敗: {e}", flush=True)
+
+    # 2. 如果本地檔案讀取失敗的備用防呆
     if len(global_stock_dict) == 0:
         backup_data = {
             "台積電": "2330", "鴻海": "2317", "聯發科": "2454", "群創": "3481",
@@ -1065,41 +1064,46 @@ def handle_message(event):
     
 # 📈 個股即時行情與全市場模糊關鍵字查詢功能
     else:
-        # 確保回傳值正確解構（自動相容 tuple 或單一字典）
-        res_data = get_stock_dict()
-        if isinstance(res_data, tuple):
-            stock_dict, full_list = res_data
-        else:
-            stock_dict = res_data
-            full_list = [{"code": c, "name": n} for n, c in stock_dict.items()]
+        try:
+            # 確保回傳值正確解構（自動相容 tuple 或單一字典）
+            res_data = get_stock_dict()
+            if isinstance(res_data, tuple):
+                stock_dict, full_list = res_data
+            else:
+                stock_dict = res_data
+                full_list = [{"code": c, "name": n} for n, c in stock_dict.items()]
 
-        target_code = ""
-        # 1. 判斷輸入的是不是精確代號或完整名稱
-        if user_msg.isdigit() and len(user_msg) <= 6:
-            target_code = user_msg
-        elif user_msg in stock_dict:
-            target_code = stock_dict[user_msg]
-        
-        if target_code:
-            realtime_info = fetch_realtime_data(target_code)
-            reply_msg = f"🔍 【個股即時戰情】({user_msg})\n{realtime_info}"
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
-        else:
-            # 2. 模糊關鍵字查詢 (例如輸入「台」或「群」，列出所有包含該字的股票)
-            matched_stocks = []
-            for item in full_list:
-                c = str(item.get("code", "")).strip()
-                n = str(item.get("name", "")).strip()
-                if user_msg in n or user_msg in c:
-                    matched_stocks.append(f"{n}({c})")
+            target_code = ""
+            # 1. 判斷輸入的是不是精確代號或完整名稱
+            if user_msg.isdigit() and len(user_msg) <= 6:
+                target_code = user_msg
+            elif user_msg in stock_dict:
+                target_code = stock_dict[user_msg]
             
-            if matched_stocks:
-                display_list = matched_stocks[:30]
-                more_text = f"\n...(還有 {len(matched_stocks) - 30} 筆)" if len(matched_stocks) > 30 else ""
-                reply_msg = f"🔍 找到包含「{user_msg}」的股票共 {len(matched_stocks)} 筆：\n" + " | ".join(display_list) + more_text
+            if target_code:
+                realtime_info = fetch_realtime_data(target_code)
+                reply_msg = f"🔍 【個股即時戰情】({user_msg})\n{realtime_info}"
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
             else:
-                pass
+                # 2. 模糊關鍵字查詢 (例如輸入「台」或「群」，列出所有包含該字的股票)
+                matched_stocks = []
+                for item in full_list:
+                    c = str(item.get("code", "")).strip()
+                    n = str(item.get("name", "")).strip()
+                    if user_msg in n or user_msg in c:
+                        matched_stocks.append(f"{n}({c})")
+                
+                if matched_stocks:
+                    display_list = matched_stocks[:30]
+                    more_text = f"\n...(還有 {len(matched_stocks) - 30} 筆)" if len(matched_stocks) > 30 else ""
+                    reply_msg = f"🔍 找到包含「{user_msg}」的股票共 {len(matched_stocks)} 筆：\n" + " | ".join(display_list) + more_text
+                    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
+                else:
+                    # 如果找不到，至少回傳提示，避免完全沒反應像當機一樣
+                    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"⚠️ 找不到與「{user_msg}」相關的股票，請確認代號或名稱是否正確。"))
+        except Exception as e:
+            print(f"❌ 查詢股票發生嚴重例外錯誤: {e}", flush=True)
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"⚠️ 查詢系統發生異常: {e}"))
 
 
 # ==========================================================
