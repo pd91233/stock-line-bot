@@ -1055,37 +1055,18 @@ def handle_message(event):
         reply_text = f"{cache_data.get('fundsText', '')}\n\n精選標的流向：\n{cache_data.get('stocksText', '')}"
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text[:5000]))
     
-    # 📈 個股即時行情與全市場模糊關鍵字查詢功能
+# 📈 個股即時行情與全市場模糊關鍵字查詢功能
     else:
-        stock_dict = {}
-        all_stocks_list = []
-        
-        # 1. 優先讀取全市場地圖 (all_stocks.json)
-        if os.path.exists("all_stocks.json"):
-            try:
-                with open("all_stocks.json", "r", encoding="utf-8") as f:
-                    all_stocks_list = json.load(f)
-                    for item in all_stocks_list:
-                        c = str(item.get("code", "")).strip()
-                        n = str(item.get("name", "")).strip()
-                        if c and n:
-                            stock_dict[n] = c
-                            stock_dict[c] = c
-            except:
-                pass
-        
-        # 2. 若地圖不存在， fallback 到基礎 finmind 字典
-        if not stock_dict:
-            res_data = get_stock_dict()
-            if isinstance(res_data, tuple):
-                stock_dict, all_stocks_list = res_data
-            else:
-                stock_dict = res_data
-                for n, c in stock_dict.items():
-                    all_stocks_list.append({"code": c, "name": n})
+        # 確保回傳值正確解構（自動相容 tuple 或單一字典）
+        res_data = get_stock_dict()
+        if isinstance(res_data, tuple):
+            stock_dict, full_list = res_data
+        else:
+            stock_dict = res_data
+            full_list = [{"code": c, "name": n} for n, c in stock_dict.items()]
 
         target_code = ""
-        # 判斷輸入的是不是精確代號或完整名稱
+        # 1. 判斷輸入的是不是精確代號或完整名稱
         if user_msg.isdigit() and len(user_msg) <= 6:
             target_code = user_msg
         elif user_msg in stock_dict:
@@ -1096,9 +1077,9 @@ def handle_message(event):
             reply_msg = f"🔍 【個股即時戰情】({user_msg})\n{realtime_info}"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
         else:
-            # 3. 模糊關鍵字查詢 (例如輸入「台」，列出所有包含「台」的股票)
+            # 2. 模糊關鍵字查詢 (例如輸入「台」或「群」，列出所有包含該字的股票)
             matched_stocks = []
-            for item in all_stocks_list:
+            for item in full_list:
                 c = str(item.get("code", "")).strip()
                 n = str(item.get("name", "")).strip()
                 if user_msg in n or user_msg in c:
@@ -1106,11 +1087,10 @@ def handle_message(event):
             
             if matched_stocks:
                 display_list = matched_stocks[:30]
-                more_text = f"\n...(還有 {len(matched_stocks) - 30} 筆，請縮小關鍵字)" if len(matched_stocks) > 30 else ""
+                more_text = f"\n...(還有 {len(matched_stocks) - 30} 筆)" if len(matched_stocks) > 30 else ""
                 reply_msg = f"🔍 找到包含「{user_msg}」的股票共 {len(matched_stocks)} 筆：\n" + " | ".join(display_list) + more_text
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
             else:
-                # 其它與股票無關的群組閒聊字眼，保持靜默不洗版
                 pass
 
 
