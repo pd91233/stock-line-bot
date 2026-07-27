@@ -1039,12 +1039,30 @@ def handle_message(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"⚠️ {user_name}，您的通訊座標已經在作戰名單中，無須重複開通！"))
         return
 
-    # 📊 專屬指令過濾：只有輸入「大盤」或「雷達」才回覆，避免群組對話被洗版
+    # 📊 專屬指令過濾：大盤或雷達
     if user_msg == "大盤" or user_msg == "雷達":
         cache_data = read_cache()
         reply_text = f"{cache_data.get('fundsText', '')}\n\n精選標的流向：\n{cache_data.get('stocksText', '')}"
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text[:5000]))
-    # 其它閒聊字眼一律靜默不打擾群組
+    
+    # 📈 個股即時行情查詢功能（支援輸入代號如 2330 或名稱如 台積電）
+    else:
+        stock_dict = get_stock_dict()
+        target_code = ""
+        
+        # 判斷輸入的是不是代號
+        if user_msg.isdigit() and len(user_msg) <= 4:
+            target_code = user_msg
+        elif user_msg in stock_dict:
+            target_code = stock_dict[user_msg]
+        
+        if target_code:
+            realtime_info = fetch_realtime_data(target_code)
+            reply_msg = f"🔍 【個股即時戰情】({user_msg})\n{realtime_info}"
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
+        else:
+            # 其它與股票無關的群組閒聊字眼，保持靜默不洗版
+            pass
 
 
 # ==========================================================
