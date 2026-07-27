@@ -1197,7 +1197,7 @@ threading.Thread(target=keep_alive, daemon=True).start()
 # ==========================================================
 # 建立一個全域變數陣列，用來暫存歷史訊息
 chat_history = []
-MAX_HISTORY = 50  # 設定大廳最多保留最新 50 筆訊息，避免記憶體爆滿
+MAX_HISTORY = 1000  # 設定大廳最多保留最新 1000 筆訊息，避免記憶體爆滿
 
 @socketio.on('connect')
 def handle_connect():
