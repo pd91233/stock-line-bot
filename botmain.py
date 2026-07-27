@@ -1118,40 +1118,40 @@ def continuous_radar_loop():
                             update_cache(current_cache)
                             
                             # 💥 讀取最新權限名單，準備精準發射！
-                                    try:
-                                        from linebot.models import TextSendMessage
-                                        vips = read_vips()
-                                        target_ids = []
+							try:
+								from linebot.models import TextSendMessage
+                                vips = read_vips()
+                                target_ids = []
                                         
-                                        # 🔍 過濾權限：如果是「破曉初升(安全區)」，需要有 5min 權限
-                                        # 🔍 過濾權限：如果是「極限動能(高風險)」，需要有 1min 權限
-                                        for uid, info in vips.items():
-                                            perms = info.get("perms", {})
-                                            if "極限動能" in alert_type:
-                                                if perms.get("1min", False): target_ids.append(uid)
-                                            else:
-                                                if perms.get("5min", False): target_ids.append(uid)
+                                # 🔍 過濾權限：如果是「破曉初升(安全區)」，需要有 5min 權限
+                                # 🔍 過濾權限：如果是「極限動能(高風險)」，需要有 1min 權限
+                                for uid, info in vips.items():
+                                    perms = info.get("perms", {})
+                                    if "極限動能" in alert_type:
+                                        if perms.get("1min", False): target_ids.append(uid)
+                                    else:
+                                        if perms.get("5min", False): target_ids.append(uid)
 
-                                        # 1. 🎯 個人 VIP 導航發射
-                                        if target_ids:
-                                            line_bot_api.multicast(target_ids, TextSendMessage(text=f"🚨 【戰情室快訊】\n{alert_msg}"))
-                                            print(f"✅ 已對 {len(target_ids)} 名擁有權限之隊員精準群發：{name}")
-                                        else:
-                                            print(f"⚠️ 掃到 {name}，但目前無人符合該項雷達權限。")
+                                # 1. 🎯 個人 VIP 導航發射
+                                if target_ids:
+                                    line_bot_api.multicast(target_ids, TextSendMessage(text=f"🚨 【戰情室快訊】\n{alert_msg}"))
+                                    print(f"✅ 已對 {len(target_ids)} 名擁有權限之隊員精準群發：{name}")
+                                else:
+                                    print(f"⚠️ 掃到 {name}，但目前無人符合該項雷達權限。")
 
-                                        # 2. 🚀 【群組直通車】強制空投至統帥指定的 LINE 群組！
-                                        TARGET_GROUP_ID = "C0481b44935888bb1dc20dfd52a675e8a"
-                                        try:
-                                            line_bot_api.push_message(
-                                                TARGET_GROUP_ID,
-                                                TextSendMessage(text=f"🚨 【群組同步跟單急報】\n{alert_msg}")
-                                            )
-                                            print(f"🚀 成功將飆股急報空投至指定 LINE 群組！")
-                                        except Exception as group_err:
-                                            print(f"❌ 群組推播發送失敗: {group_err}")
+                                # 2. 🚀 【群組直通車】強制空投至統帥指定的 LINE 群組！
+                                TARGET_GROUP_ID = "C0481b44935888bb1dc20dfd52a675e8a"
+                                try:
+                                    line_bot_api.push_message(
+                                        TARGET_GROUP_ID,
+                                        TextSendMessage(text=f"🚨 【群組同步跟單急報】\n{alert_msg}")
+                                    )
+                                    print(f"🚀 成功將飆股急報空投至指定 LINE 群組！")
+                                except Exception as group_err:
+                                     print(f"❌ 群組推播發送失敗: {group_err}")
 
-                                    except Exception as e:
-                                        print(f"⚠️ LINE 精準多播與群組發射失敗: {e}")
+                            except Exception as e:
+                                print(f"⚠️ LINE 精準多播與群組發射失敗: {e}")				
                         
                         time.sleep(1) # 1 秒測 1 檔，完美閃避證交所封鎖
             else:
