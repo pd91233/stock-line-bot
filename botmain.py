@@ -4,6 +4,7 @@
 # 開發代號：botmain.py (雲端守護協定 - 100% 完整解碼不閹割版)
 # =========================================================
 from flask import Flask, request, abort, jsonify, make_response
+from flask_socketio import SocketIO, emit
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
@@ -85,6 +86,10 @@ def get_market_leader():
 
 
 app = Flask(__name__)
+
+# 💥 啟動戰情大廳通訊樞紐
+app.config['SECRET_KEY'] = 'shadow_base_secret_999'
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # 🛡️ 戰術快取配置
 CACHE_FILE = "live_data_cache.json"
@@ -1185,8 +1190,25 @@ def keep_alive():
 threading.Thread(target=keep_alive, daemon=True).start()
 
 
+# ==========================================================
+# 💬 戰情大廳：WebSocket 即時通訊樞紐
+# ==========================================================
+@socketio.on('connect')
+def handle_connect():
+    print("✅ [戰情大廳] 一名戰友已成功連線進入大廳！", flush=True)
+
+@socketio.on('send_message')
+def handle_client_message(data):
+    # 攔截戰友發送的訊息
+    sender = data.get('sender', '游擊兵')
+    msg = data.get('msg', '')
+    print(f"💬 [大廳廣播] {sender}: {msg}", flush=True)
+    
+    # 瞬間將訊息無延遲空投給所有連線中的戰友
+    emit('receive_message', {'sender': sender, 'msg': msg}, broadcast=True)
+
 
 if __name__ == "__main__":
-    options = {'bind': '0.0.0.0:10000', 'workers': 1, 'threads': 2, 'timeout': 120}
-    StandaloneApplication(app, options).run()
-    print("雷達掃描引擎已啟動")
+    print("🚀 戰情室與雷達掃描引擎全面啟動 (含 WebSocket 即時通訊裝甲)...", flush=True)
+    port = int(os.environ.get("PORT", 10000))
+    socketio.run(app, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
