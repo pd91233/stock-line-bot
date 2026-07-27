@@ -1224,7 +1224,50 @@ def handle_client_message(data):
     emit('receive_message', message_data, broadcast=True)
 
 
+# ==========================================================
+# 🔔 Web Push 伺服器端：接收裝置訂閱與發射防空警報
+# ==========================================================
+from pywebpush import webpush, WebPushException
+
+# 暫存所有訂閱防空警報的戰友裝置清單
+push_subscriptions = []
+
+@app.route('/subscribe_push', methods=['POST'])
+def subscribe_push():
+    data = request.json
+    sub = data.get('sub')
+    sender = data.get('sender', '未知戰友')
+    if sub:
+        # 避免重複儲存相同的裝置
+        if sub not in push_subscriptions:
+            push_subscriptions.append({'sender': sender, 'sub': sub})
+        print(f"✅ 成功註冊戰友 [{sender}] 的防空警報接收器！", flush=True)
+        return jsonify({"status": "success", "message": "防空警報雷達鎖定成功！"}), 200
+    return jsonify({"status": "error", "message": "無效的訂閱資料"}), 400
+
+# 當盤中偵測到爆量訊號時，呼叫此函數向所有已訂閱的戰友發射通知！
+def trigger_air_raid_alarm(title, body):
+    vapid_private_key = os.environ.get('VAPID_PRIVATE_KEY')
+    vapid_claim_email = os.environ.get('VAPID_SUBJECT', 'mailto:pd91233@gmail.com')
+
+    if not vapid_private_key:
+        print("⚠️ 警告：未找到 VAPID_PRIVATE_KEY 環境變數，無法發送推播！", flush=True)
+        return
+
+    for client in push_subscriptions:
+        try:
+            webpush(
+                subscription_info=client['sub'],
+                data=json.dumps({"title": title, "body": body, "url": "https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/latest_report.html"}),
+                vapid_private_key=vapid_private_key,
+                vapid_claims={"sub": vapid_claim_email}
+            )
+            print(f"🚀 成功向戰友 [{client['sender']}] 發射防空警報！", flush=True)
+        except WebPushException as ex:
+            print(f"❌ 推播發送失敗 ({client['sender']}): {ex}", flush=True)
+
+
 if __name__ == "__main__":
-    print("🚀 戰情室與雷達掃描引擎全面啟動 (含 WebSocket 即時通訊裝甲)...", flush=True)
+    print("🚀 戰情室與雷達掃描引擎全面啟動 (含 WebSocket 即時通訊與 Web Push 裝甲)...", flush=True)
     port = int(os.environ.get("PORT", 10000))
     socketio.run(app, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
