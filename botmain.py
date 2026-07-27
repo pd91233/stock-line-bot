@@ -1076,9 +1076,13 @@ def handle_message(event):
         
         # 2. 若地圖不存在， fallback 到基礎 finmind 字典
         if not stock_dict:
-            stock_dict = get_stock_dict()
-            for n, c in stock_dict.items():
-                all_stocks_list.append({"code": c, "name": n})
+            res_data = get_stock_dict()
+            if isinstance(res_data, tuple):
+                stock_dict, all_stocks_list = res_data
+            else:
+                stock_dict = res_data
+                for n, c in stock_dict.items():
+                    all_stocks_list.append({"code": c, "name": n})
 
         target_code = ""
         # 判斷輸入的是不是精確代號或完整名稱
