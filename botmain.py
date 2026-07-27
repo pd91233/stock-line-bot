@@ -149,32 +149,42 @@ if gemini_keys:
     key_cycle = itertools.cycle(gemini_keys)
 
 # ==========================================================
-# 📚 2. 台股資料庫初始化
+# 📚 全市場上市櫃股票資料庫 (自動抓取全市場)
 # ==========================================================
 global_stock_dict = {}
+global_full_stock_list = [] # 儲存完整的清單供模糊搜尋
+
 def get_stock_dict():
-    global global_stock_dict
+    global global_stock_dict, global_full_stock_list
     if len(global_stock_dict) > 0: 
-        return global_stock_dict
+        return global_stock_dict, global_full_stock_list
     
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
+        # 透過 FinMind API 撈取全台上市櫃股票總表
         url = "https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo"
-        res = requests.get(url, headers=headers, timeout=3, verify=False).json()
+        res = requests.get(url, headers=headers, timeout=5, verify=False).json()
         if res.get("msg") == "success":
             for item in res.get("data", []):
-                name = item.get("stock_name")
-                sid = item.get("stock_id")
-                if name and sid and len(sid) <= 4: 
-                    global_stock_dict[name.strip()] = sid.strip()
-    except: 
-        pass
+                name = str(item.get("stock_name", "")).strip()
+                sid = str(item.get("stock_id", "")).strip()
+                # 確保只收錄有效代號 (台股通常為 4 到 6 碼)
+                if name and sid and len(sid) <= 6: 
+                    global_stock_dict[name] = sid
+                    global_stock_dict[sid] = sid
+                    global_full_stock_list.append({"code": sid, "name": name})
+    except Exception as e:
+        print(f"⚠️ 雲端動態載入全市場股票失敗: {e}")
         
+    # 若 API 暫時連線失敗的防呆備份
     if len(global_stock_dict) == 0:
-        global_stock_dict = {"台積電": "2330", "鴻海": "2317", "聯發科": "2454"}
-    return global_stock_dict
+        global_stock_dict = {"台積電": "2330", "群創": "3481", "鴻海": "2317"}
+        global_full_stock_list = [{"code": "2330", "name": "台積電"}, {"code": "3481", "name": "群創"}, {"code": "2317", "name": "鴻海"}]
+        
+    return global_stock_dict, global_full_stock_list
 
-threading.Thread(target=get_stock_dict).start()
+# 啟動時在背景預先載入全市場
+threading.Thread(target=get_stock_dict, daemon=True).start()
 
 # ==========================================================
 # 📈 3. [新增] 全市場基本面動能掃描引擎 (階段一核心)
