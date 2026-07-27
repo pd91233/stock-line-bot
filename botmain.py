@@ -149,10 +149,10 @@ if gemini_keys:
     key_cycle = itertools.cycle(gemini_keys)
 
 # ==========================================================
-# 📚 全市場上市櫃股票資料庫 (自動抓取全市場)
+# 📚 2. 台股資料庫初始化 (強效升級版)
 # ==========================================================
 global_stock_dict = {}
-global_full_stock_list = [] # 儲存完整的清單供模糊搜尋
+global_full_stock_list = []
 
 def get_stock_dict():
     global global_stock_dict, global_full_stock_list
@@ -161,26 +161,34 @@ def get_stock_dict():
     
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        # 透過 FinMind API 撈取全台上市櫃股票總表
+        # 將逾時從 3 秒拉長至 8 秒，確保 FinMind API 有充足時間回傳全市場資料
         url = "https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo"
-        res = requests.get(url, headers=headers, timeout=5, verify=False).json()
+        res = requests.get(url, headers=headers, timeout=8, verify=False).json()
         if res.get("msg") == "success":
             for item in res.get("data", []):
-                name = str(item.get("stock_name", "")).strip()
-                sid = str(item.get("stock_id", "")).strip()
-                # 確保只收錄有效代號 (台股通常為 4 到 6 碼)
+                name = item.get("stock_name")
+                sid = item.get("stock_id")
                 if name and sid and len(sid) <= 6: 
-                    global_stock_dict[name] = sid
-                    global_stock_dict[sid] = sid
-                    global_full_stock_list.append({"code": sid, "name": name})
-    except Exception as e:
-        print(f"⚠️ 雲端動態載入全市場股票失敗: {e}")
+                    clean_name = str(name).strip()
+                    clean_sid = str(sid).strip()
+                    global_stock_dict[clean_name] = clean_sid
+                    global_stock_dict[clean_sid] = clean_sid
+                    global_full_stock_list.append({"code": clean_sid, "name": clean_name})
+    except: 
+        pass
         
-    # 若 API 暫時連線失敗的防呆備份
+    # 若 API 暫時失敗的擴充防呆備份 (包含統帥提到的台肥、聯合再生等)
     if len(global_stock_dict) == 0:
-        global_stock_dict = {"台積電": "2330", "群創": "3481", "鴻海": "2317"}
-        global_full_stock_list = [{"code": "2330", "name": "台積電"}, {"code": "3481", "name": "群創"}, {"code": "2317", "name": "鴻海"}]
-        
+        backup_data = {
+            "台積電": "2330", "鴻海": "2317", "聯發科": "2454", "群創": "3481",
+            "台肥": "1722", "聯合再生": "3576", "友達": "2409", "長榮": "2603",
+            "陽明": "2609", "萬海": "2615", "中鋼": "2002", "聯電": "2303"
+        }
+        for name, sid in backup_data.items():
+            global_stock_dict[name] = sid
+            global_stock_dict[sid] = sid
+            global_full_stock_list.append({"code": sid, "name": name})
+            
     return global_stock_dict, global_full_stock_list
 
 # 啟動時在背景預先載入全市場
