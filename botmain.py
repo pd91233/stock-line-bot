@@ -1124,10 +1124,18 @@ def handle_message(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"⚠️ {user_name}，您的通訊座標已經在作戰名單中，無須重複開通！"))
         return
 
-    if user_msg == "大盤" or user_msg == "雷達":
+    # 支援大盤、雷達或戰報的即時行情查詢
+    if user_msg in ["大盤", "雷達", "戰報"]:
         cache_data = read_cache()
         reply_text = f"{cache_data.get('fundsText', '')}\n\n精選標的流向：\n{cache_data.get('stocksText', '')}"
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text[:5000]))
+        return
+
+    # 💥 新增：讓用戶隨時透過 LINE 調閱完整盤後戰報網址
+    if user_msg in ["最新戰報", "完整戰報", "查看戰報"]:
+        report_url = "https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/latest_report.html"
+        reply_msg = f"📊 【股海觀浪】最新盤後完整戰報：\n請點擊以下連結前往觀看：\n{report_url}"
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg))
         return
 
     # 1. 取得股票資料庫
