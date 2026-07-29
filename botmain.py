@@ -1131,10 +1131,10 @@ def handle_message(event):
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text[:5000]))
         return
 
-    # 💥 新增：讓用戶隨時透過 LINE 調閱完整盤後戰報網址
-    if user_msg in ["最新戰報", "完整戰報", "查看戰報"]:
+    # 💥 新增：讓用戶隨時透過 LINE 調閱完整盤後選股網址
+    if user_msg in ["盤後選股", "選股策略", "最新選股"]:
         report_url = "https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/latest_report.html"
-        reply_msg = f"📊 【股海觀浪】最新盤後完整戰報：\n請點擊以下連結前往觀看：\n{report_url}"
+        reply_msg = f"📊 【股海觀浪】最新盤後選股策略：\n請點擊以下連結前往觀看：\n{report_url}"
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg))
         return
 
