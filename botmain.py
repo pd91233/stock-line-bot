@@ -1030,12 +1030,16 @@ def handle_join(event):
         )
 
 
+
+# ==========================================================
+# LINE群組查詢股票 💡 最完美的智慧過濾邏輯
+# ==========================================================
+
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_msg = event.message.text.strip()
-    user_id = event.source.user_id  # 💥 瞬間攔截發送者的隱藏 User ID
+    user_id = event.source.user_id  
     
-    # 🎯 隱形招募處：攔截通關密語
     if user_msg == "雷達開通":
         try:
             profile = line_bot_api.get_profile(user_id)
@@ -1045,66 +1049,60 @@ def handle_message(event):
 
         vips = read_vips()
         if user_id not in vips:
-            # 💥 預設：新兵報到時，三個權限預設全開，統帥後續可從中控台關閉
             vips[user_id] = {
                 "name": user_name,
                 "perms": {"1min": True, "5min": True, "report": True}
             }
             update_vips(vips)
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ 歡迎歸隊，{user_name}！\n您的專屬「當沖雷達與戰報」已成功列入發射名單。\n(※各項接收權限將由統帥於中控台統一調度)"))
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ 歡迎歸隊，{user_name}！\n您的專屬「當沖雷達與戰報」已成功列入發射名單。"))
         else:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"⚠️ {user_name}，您的通訊座標已經在作戰名單中，無須重複開通！"))
         return
 
-    # 📊 專屬指令過濾：大盤或雷達
     if user_msg == "大盤" or user_msg == "雷達":
         cache_data = read_cache()
         reply_text = f"{cache_data.get('fundsText', '')}\n\n精選標的流向：\n{cache_data.get('stocksText', '')}"
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text[:5000]))
-    
-# 📈 個股即時行情與全市場模糊關鍵字查詢功能
+        return
+
+    # 1. 取得股票資料庫
+    res_data = get_stock_dict()
+    if isinstance(res_data, tuple):
+        stock_dict, full_list = res_data
     else:
-        try:
-            # 確保回傳值正確解構（自動相容 tuple 或單一字典）
-            res_data = get_stock_dict()
-            if isinstance(res_data, tuple):
-                stock_dict, full_list = res_data
-            else:
-                stock_dict = res_data
-                full_list = [{"code": c, "name": n} for n, c in stock_dict.items()]
+        stock_dict = res_data
+        full_list = [{"code": c, "name": n} for n, c in stock_dict.items()]
 
-            target_code = ""
-            # 1. 判斷輸入的是不是精確代號或完整名稱
-            if user_msg.isdigit() and len(user_msg) <= 6:
-                target_code = user_msg
-            elif user_msg in stock_dict:
-                target_code = stock_dict[user_msg]
-            
-            if target_code:
-                realtime_info = fetch_realtime_data(target_code)
-                reply_msg = f"🔍 【個股即時戰情】({user_msg})\n{realtime_info}"
-                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
-            else:
-                # 2. 模糊關鍵字查詢 (例如輸入「台」或「群」，列出所有包含該字的股票)
-                matched_stocks = []
-                for item in full_list:
-                    c = str(item.get("code", "")).strip()
-                    n = str(item.get("name", "")).strip()
-                    if user_msg in n or user_msg in c:
-                        matched_stocks.append(f"{n}({c})")
-                
-                if matched_stocks:
-                    display_list = matched_stocks[:30]
-                    more_text = f"\n...(還有 {len(matched_stocks) - 30} 筆)" if len(matched_stocks) > 30 else ""
-                    reply_msg = f"🔍 找到包含「{user_msg}」的股票共 {len(matched_stocks)} 筆：\n" + " | ".join(display_list) + more_text
-                    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
-                else:
-                    # 如果找不到，至少回傳提示，避免完全沒反應像當機一樣
-                    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"⚠️ 找不到與「{user_msg}」相關的股票，請確認代號或名稱是否正確。"))
-        except Exception as e:
-            print(f"❌ 查詢股票發生嚴重例外錯誤: {e}", flush=True)
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"⚠️ 查詢系統發生異常: {e}"))
+    target_code = ""
+    if user_msg.isdigit() and len(user_msg) <= 6:
+        target_code = user_msg
+    elif user_msg in stock_dict:
+        target_code = stock_dict[user_msg]
+    
+    # 2. 如果直接命中代號或精確名稱，直接回傳即時戰情
+    if target_code:
+        realtime_info = fetch_realtime_data(target_code)
+        reply_msg = f"🔍 【個股即時戰情】({user_msg})\n{realtime_info}"
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
+        return
 
+    # 3. 模糊比對：檢查這段文字是不是在股票名稱中出現過
+    matched_stocks = []
+    for item in full_list:
+        c = str(item.get("code", "")).strip()
+        n = str(item.get("name", "")).strip()
+        if user_msg in n or user_msg in c:
+            matched_stocks.append(f"{n}({c})")
+    
+    # 4. 關鍵防護罩：如果有找到相關股票，才回傳清單；如果是日常對話（找不到任何股票），直接靜默 pass！
+    if matched_stocks:
+        display_list = matched_stocks[:30]
+        more_text = f"\n...(還有 {len(matched_stocks) - 30} 筆)" if len(matched_stocks) > 30 else ""
+        reply_msg = f"🔍 找到包含「{user_msg}」的股票共 {len(matched_stocks)} 筆：\n" + " | ".join(display_list) + more_text
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
+    else:
+        # 找不到股票（代表這是一般聊天對話，如「謝謝」、「好」、「該吃飯囉」），直接安靜不回應！
+        pass
 
 # ==========================================================
 # 🌟 7. 🚀 雲端全時相決策中心 (靜默快取版 - 已廢除定時廣播)
