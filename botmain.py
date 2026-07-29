@@ -1074,15 +1074,32 @@ def handle_message(event):
         full_list = [{"code": c, "name": n} for n, c in stock_dict.items()]
 
     target_code = ""
+    target_name = user_msg  # 預設名稱
+    
     if user_msg.isdigit() and len(user_msg) <= 6:
         target_code = user_msg
+        # 如果輸入的是代號，自動反查對應的中文名稱
+        for item in full_list:
+            if str(item.get("code", "")).strip() == target_code:
+                target_name = str(item.get("name", "")).strip()
+                break
     elif user_msg in stock_dict:
         target_code = stock_dict[user_msg]
+        target_name = user_msg  # 輸入的就是中文名稱
     
-    # 2. 如果直接命中代號或精確名稱，直接回傳即時戰情
+    # 2. 如果直接命中代號或精確名稱，直接回傳升級版即時戰情
     if target_code:
         realtime_info = fetch_realtime_data(target_code)
-        reply_msg = f"🔍 【個股即時戰情】({user_msg})\n{realtime_info}"
+        reply_msg = (
+            f"🎯 【個股進出場戰情室】\n"
+            f"📌 標的：{target_name} ({target_code})\n"
+            f"----------------------------------\n"
+            f"{realtime_info}\n"
+            f"----------------------------------\n"
+            f"💡 【無腦判斷指引】\n"
+            f"• 均線結構：請對照上方均線與扣抵位，多頭排列者偏多看待。\n"
+            f"• 進場時機：量縮拉回至關鍵均線不破、或籌碼極致收斂時為最佳買點！"
+        )
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
         return
 
