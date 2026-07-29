@@ -850,6 +850,70 @@ def fetch_realtime_data(stock_code):
 
     return f"{yahoo_price}\n{yahoo_ma}"
 
+
+
+
+# ==========================================================
+# ⚖️LINE群組 回應股票查詢 多維度動態計分（趨勢結構、籌碼量價、風險評估）與操盤手戰略方針的核心邏輯
+# ==========================================================
+
+def generate_professional_analysis(stock_name, stock_code, realtime_str, current_price, ma5, ma20, volume, chip_status):
+    """
+    結合技術面、量價與籌碼，進行專業操盤手級別的動態綜合評估
+    """
+    score = 50  # 基礎分
+    signals = []
+    
+    # 1. 均線與趨勢結構判斷
+    if current_price > ma5 and ma5 > ma20:
+        score += 20
+        trend_text = "🟢 多頭排列（短中均線向上，強勢格局）"
+    elif current_price < ma5 and ma5 < ma20:
+        score -= 20
+        trend_text = "🔴 空頭排列（均線下彎，短線弱勢）"
+    else:
+        trend_text = "🟡 均線糾結 / 震盪整理格局"
+        
+    # 2. 籌碼與主力意圖判斷
+    if "大戶放量攻擊" in chip_status or "強勢" in chip_status:
+        score += 25
+        signals.append("🔥 主力大戶積極進駐，具備上攻動能")
+    elif "鬆動" in chip_status:
+        score -= 15
+        signals.append("⚠️ 籌碼有鬆動跡象，留意短線賣壓")
+    else:
+        signals.append("⚖️ 籌碼結構相對平穩，多空拔河中")
+        
+    # 3. 量價結構評估
+    if volume > 100000:  # 大量標準
+        signals.append("📊 量能顯著放大，市場關注度高")
+    else:
+        signals.append("💤 量能相對沉寂，處於等待變盤階段")
+
+    # 4. 綜合操盤手建議產出
+    if score >= 75:
+        action_advice = "🔥 【操盤手戰略：偏多狙擊】多方結構扎實，可沿關鍵支撐（如 5 日線）分批佈局，嚴守停損。"
+    elif score <= 40:
+        action_advice = "🛑 【操盤手戰略：保守觀望】短線趨勢偏弱或籌碼凌亂，切勿盲目接刀，建議等帶量突破或量縮止穩再說。"
+    else:
+        action_advice = "⚖️ 【操盤手戰略：區間應對】目前多空不明、處於橫盤整理，適合在上下檔支撐壓力間做區間看待，切勿追高殺低。"
+
+    # 組合完整戰情報告
+    report = (
+        f"🎯 【專業操盤手立體戰情室】\n"
+        f"📌 標的：{stock_name} ({stock_code})\n"
+        f"----------------------------------\n"
+        f"{realtime_str}\n"
+        f"----------------------------------\n"
+        f"🔍 【多維度深度審查】\n"
+        f"• 趨勢結構：{trend_text}\n"
+        f"• 籌碼量價：{' | '.join(signals)}\n"
+        f"• 綜合評分：{score} 分（滿分 100 分）\n"
+        f"----------------------------------\n"
+        f"{action_advice}"
+    )
+    return report
+
 # ==========================================================
 # 🚀 5. 全市場真實資金流向排行與精選戰報交集過濾引擎
 # ==========================================================
@@ -1087,19 +1151,41 @@ def handle_message(event):
         target_code = stock_dict[user_msg]
         target_name = user_msg  # 輸入的就是中文名稱
     
-    # 2. 如果直接命中代號或精確名稱，直接回傳升級版即時戰情
+    # 2. 如果直接命中代號或精確名稱，直接回傳專業操盤手級別的立體戰情
     if target_code:
         realtime_info = fetch_realtime_data(target_code)
-        reply_msg = (
-            f"🎯 【個股進出場戰情室】\n"
-            f"📌 標的：{target_name} ({target_code})\n"
-            f"----------------------------------\n"
-            f"{realtime_info}\n"
-            f"----------------------------------\n"
-            f"💡 【無腦判斷指引】\n"
-            f"• 均線結構：請對照上方均線與扣抵位，多頭排列者偏多看待。\n"
-            f"• 進場時機：量縮拉回至關鍵均線不破、或籌碼極致收斂時為最佳買點！"
+        
+        # 🛡️ 智慧解析即時數據以供操盤手評分函數使用
+        current_price = 0.0
+        ma5 = 0.0
+        ma20 = 0.0
+        volume = 0
+        chip_status = "平穩"
+        
+        try:
+            # 從 realtime_info 字串中把關鍵數值解析出來
+            for line in realtime_info.split('\n'):
+                if "雲端即時成交價" in line:
+                    # 擷取成交價與總量
+                    p_match = re.search(r'成交價:\s*([0-9.]+)', line)
+                    if p_match: current_price = float(p_match.group(1))
+                    v_match = re.search(r'總量:\s*([0-9,]+)張', line)
+                    if v_match: volume = int(v_match.group(1).replace(',', ''))
+                elif "均線數值" in line:
+                    m_match = re.findall(r'([0-9.]+)', line)
+                    if len(m_match) >= 3:
+                        ma5 = float(m_match[0])
+                        ma20 = float(m_match[2])
+                elif "籌碼動向" in line:
+                    chip_status = line
+        except:
+            pass
+
+        # 呼叫專業操盤手動態分析引擎
+        reply_msg = generate_professional_analysis(
+            target_name, target_code, realtime_info, current_price, ma5, ma20, volume, chip_status
         )
+        
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
         return
 
