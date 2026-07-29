@@ -1376,14 +1376,31 @@ threading.Thread(target=keep_alive, daemon=True).start()
 # ==========================================================
 # 💬 戰情大廳：WebSocket 即時通訊樞紐與記憶模組
 # ==========================================================
-# 建立一個全域變數陣列，用來暫存歷史訊息
-chat_history = []
-MAX_HISTORY = 1000  # 設定大廳最多保留最新 1000 筆訊息，避免記憶體爆滿
+CHAT_FILE = "chat_memory.json"  # 💥 新增：實體對話紀錄檔案
+MAX_HISTORY = 1000  # 設定大廳最多保留最新 1000 筆訊息
+
+# 💥 新增：開機時讀取實體硬碟的函數
+def load_chat_history():
+    if os.path.exists(CHAT_FILE):
+        try:
+            with open(CHAT_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except: pass
+    return []
+
+# 💥 新增：收到訊息時寫入實體硬碟的函數
+def save_chat_history(data):
+    try:
+        with open(CHAT_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False)
+    except: pass
+
+# 啟動時立刻讀取舊有的對話紀錄
+chat_history = load_chat_history()
 
 @socketio.on('connect')
 def handle_connect():
-    print("✅ [戰情大廳] 一名戰友已成功連線進入大廳！", flush=True)
-    # 戰友一連線，母艦立刻將歷史對話紀錄打包空投給他
+    # 戰友連線時，立刻把歷史對話紀錄發給他
     emit('load_history', chat_history)
 
 @socketio.on('send_message')
@@ -1401,9 +1418,11 @@ def handle_client_message(data):
     if len(chat_history) > MAX_HISTORY:
         chat_history.pop(0)
     
+    # 💥 關鍵補給：將更新後的陣列立刻寫入實體檔案存檔！
+    save_chat_history(chat_history)
+    
     # 瞬間將訊息無延遲空投給所有連線中的戰友
     emit('receive_message', message_data, broadcast=True)
-
 
 # ==========================================================
 # 🔔 Web Push 伺服器端：接收裝置訂閱與發射防空警報
