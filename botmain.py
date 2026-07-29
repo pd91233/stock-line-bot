@@ -859,7 +859,7 @@ def fetch_realtime_data(stock_code):
 
 def generate_professional_analysis(stock_name, stock_code, realtime_str, current_price, ma5, ma20, volume, chip_status):
     """
-    結合技術面、量價與籌碼，進行專業操盤手級別的動態綜合評估
+    結合技術面、量價與籌碼，進行專業操盤手級別的動態綜合評估（保留完整文字版）
     """
     score = 50  # 基礎分
     signals = []
@@ -898,21 +898,22 @@ def generate_professional_analysis(stock_name, stock_code, realtime_str, current
     else:
         action_advice = "⚖️ 【操盤手戰略：區間應對】目前多空不明、處於橫盤整理，適合在上下檔支撐壓力間做區間看待，切勿追高殺低。"
 
-    # 組合完整戰情報告
+    # 組合完整戰情報告（保留所有完整字句，僅縮短分隔線以防破圖）
     report = (
         f"🎯 【專業操盤手立體戰情室】\n"
         f"📌 標的：{stock_name} ({stock_code})\n"
-        f"----------------------------------\n"
+        f"--------------------------\n"
         f"{realtime_str}\n"
-        f"----------------------------------\n"
+        f"--------------------------\n"
         f"🔍 【多維度深度審查】\n"
         f"• 趨勢結構：{trend_text}\n"
-        f"• 籌碼量價：{' | '.join(signals)}\n"
+        f"• 籌碼量價：{' ｜ '.join(signals)}\n"
         f"• 綜合評分：{score} 分（滿分 100 分）\n"
-        f"----------------------------------\n"
+        f"--------------------------\n"
         f"{action_advice}"
     )
     return report
+
 
 # ==========================================================
 # 🚀 5. 全市場真實資金流向排行與精選戰報交集過濾引擎
