@@ -1279,24 +1279,39 @@ def handle_message(event):
 
 
 
-# 💥 新增模組 2：均線扣抵與起漲轉折掃描 (智慧語意與動態解讀版)
+# 💥 新增模組 2：均線扣抵與起漲轉折掃描 (智慧語意與動態解讀版 - 裝甲防呆修正)
     if any(keyword in user_msg for keyword in ["轉折", "起漲", "發動", "轉強", "找買點", "扣抵"]):
         try:
-            # 讀取大本營上傳至 pCloud 的 monitor_list.json
             json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={int(time.time())}"
             res_json = requests.get(json_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
             
             reply_lines = ["🦅 【股海觀浪・起漲轉折雷達】\n", "幫您掃描最新籌碼，抓出「均線扣低、準備轉強」的潛力標的：\n"]
             count = 0
             
-            for code, info in res_json.items():
+            # 🛡️ 終極防呆裝甲：自動判斷並相容 List 與 Dict 格式
+            target_dict = {}
+            if isinstance(res_json, list):
+                for item in res_json:
+                    code = str(item.get("代碼", item.get("code", "")))
+                    if code:
+                        target_dict[code] = item
+            else:
+                target_dict = res_json
+            
+            # 安全讀取資料
+            for code, info in target_dict.items():
                 if count >= 5: break  # 精選 5 檔火力最強的
                 
-                name = info.get('name', '未知')
-                ind = info.get('ind', '')
+                # 確保能相容不同命名規則
+                name = info.get('name', info.get('商品', '未知'))
+                ind = info.get('ind', info.get('產業', ''))
                 y_close = float(info.get("y_close", 0))
                 koudi_5 = float(info.get("ma5", 0))
                 koudi_10 = float(info.get("ma10", 0))
+                
+                # 🛡️ 防呆：若為舊版格式缺少數值，自動跳過該檔
+                if y_close == 0 or koudi_5 == 0:
+                    continue
                 
                 # 戰術條件：收盤價高於 5MA 扣抵且高於 10MA 扣抵 (雙線扣低，轉為支撐)
                 if y_close > koudi_5 and y_close > koudi_10 and y_close > 0:
@@ -1317,7 +1332,7 @@ def handle_message(event):
                     count += 1
             
             if count == 0:
-                reply_lines.append("🛡️ 報告股神，目前大盤動盪，系統掃描後尚未發現符合「完美雙線轉強」的安全標的。寧可錯過不要做錯，建議嚴控資金！")
+                reply_lines.append("🛡️ 報告統帥，目前大盤動盪(或雲端尚未更新最新數據)，尚未發現符合「完美雙線轉強」的安全標的。寧可錯過不要做錯，建議嚴控資金！")
             else:
                 reply_lines.append("💡 叮嚀：轉折股剛發動時容易震盪，請搭配大盤【夜盤】資金風向，分批佈局喔！")
                 
