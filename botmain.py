@@ -1222,9 +1222,9 @@ def handle_message(event):
 # 💥 新增模組 2：均線扣抵轉折預告
 # ==========================================================
 # 💥 新增模組 1：國際夜盤與期貨速報
+    # 💥 新增模組 1：國際夜盤、期貨與虛擬貨幣速報 (動態戰略解讀版)
     if user_msg in ["夜盤", "國際局勢", "期貨", "虛擬貨幣"]:
         try:
-            # 擴充監控雷達網：涵蓋美股期指、台積電 ADR、虛擬貨幣、避險商品與恐慌指數
             tickers = {
                 "那斯達克期": "NQ=F",
                 "小道瓊期": "YM=F",
@@ -1238,11 +1238,14 @@ def handle_message(event):
             }
             reply_lines = ["🌍 【股海觀浪・全球資金速報】\n"]
             
+            # 建立變數，用來捕捉關鍵指標的漲跌幅
+            vix_chg = 0.0
+            btc_chg = 0.0
+            
             for name, ticker in tickers.items():
                 url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=20d"
                 res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
                 
-                # 確保有抓到資料
                 if not res.get('chart', {}).get('result'):
                     reply_lines.append(f"⚠️ {name}：訊號中斷")
                     continue
@@ -1255,20 +1258,34 @@ def handle_message(event):
                 curr_p = round(meta['regularMarketPrice'], 2)
                 prev_p = meta['chartPreviousClose']
                 
-                # 預防除以零的錯誤
                 if prev_p > 0:
                     chg_pct = round(((curr_p - prev_p) / prev_p) * 100, 2)
                 else:
                     chg_pct = 0.0
                 
-                # 計算短線 EMA (5EMA) 判斷趨勢防線
+                # 攔截 VIX 與 BTC 的數據，交給後面的大腦進行判斷
+                if name == "恐慌指數 VIX":
+                    vix_chg = chg_pct
+                elif name == "比特幣 (BTC)":
+                    btc_chg = chg_pct
+                
                 ema5 = round(sum(valid_closes[-5:]) / 5, 2) if len(valid_closes) >= 5 else curr_p
                 
                 sign = "📈 +" if chg_pct > 0 else "📉 "
                 reply_lines.append(f"{sign}{chg_pct}% ｜ {name}")
                 reply_lines.append(f"   現價: {curr_p} (短線支撐/壓力: {ema5})")
             
-            reply_lines.append("\n💡 戰略解讀：緊盯比特幣與 VIX 動向，提前預判明日台股科技族群的資金風向。")
+            # 🧠 動態戰略解讀引擎
+            reply_lines.append("\n💡 戰略解讀：")
+            if vix_chg > 5.0:
+                reply_lines.append("⚠️ VIX 恐慌指數狂飆！全球避險情緒升溫，明日台股開盤請嚴防下殺，保留現金水位。")
+            elif btc_chg > 3.0 and vix_chg < 0:
+                reply_lines.append("🚀 虛擬貨幣大漲且 VIX 降溫！市場風險偏好極強，明日台股科技股有望迎來資金點火。")
+            elif btc_chg < -3.0:
+                reply_lines.append("📉 虛擬貨幣重挫，資金正在撤出高風險資產！明日台股電子股恐承壓，操作宜保守。")
+            else:
+                reply_lines.append("⚖️ 國際資金目前未見極端波動，明日台股預計將跟隨自身均線與籌碼慣性發展。")
+                
             reply_msg = "\n".join(reply_lines)
             
         except Exception as e:
