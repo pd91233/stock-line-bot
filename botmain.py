@@ -1222,72 +1222,59 @@ def handle_message(event):
 # 💥 新增模組 2：均線扣抵轉折預告
 # ==========================================================
 # 💥 新增模組 1：國際夜盤與期貨速報
-    if user_msg in ["夜盤", "國際局勢", "期貨"]:
+    if user_msg in ["夜盤", "國際局勢", "期貨", "虛擬貨幣"]:
         try:
-            # 鎖定微型那斯達克、微型黃金、微型輕原油
-            tickers = {"微型那斯達克": "MNQ=F", "微型黃金": "MGC=F", "微型輕原油": "MCL=F"}
-            reply_lines = ["🌍 【股海觀浪・國際夜盤速報】\n"]
+            # 擴充監控雷達網：涵蓋美股期指、台積電 ADR、虛擬貨幣、避險商品與恐慌指數
+            tickers = {
+                "那斯達克期": "NQ=F",
+                "小道瓊期": "YM=F",
+                "台積電 ADR": "TSM",
+                "比特幣 (BTC)": "BTC-USD",
+                "以太幣 (ETH)": "ETH-USD",
+                "恐慌指數 VIX": "^VIX",
+                "美元兌台幣": "TWD=X",
+                "微型黃金": "MGC=F", 
+                "微型輕原油": "MCL=F"
+            }
+            reply_lines = ["🌍 【股海觀浪・全球資金速報】\n"]
             
             for name, ticker in tickers.items():
                 url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=20d"
                 res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
+                
+                # 確保有抓到資料
+                if not res.get('chart', {}).get('result'):
+                    reply_lines.append(f"⚠️ {name}：訊號中斷")
+                    continue
+                    
                 meta = res['chart']['result'][0]['meta']
-                closes = res['chart']['result'][0]['indicators']['quote'][0]['close']
+                indicators = res['chart']['result'][0]['indicators']['quote'][0]
+                closes = indicators.get('close', [])
                 valid_closes = [c for c in closes if c is not None]
                 
-                curr_p = meta['regularMarketPrice']
+                curr_p = round(meta['regularMarketPrice'], 2)
                 prev_p = meta['chartPreviousClose']
-                chg_pct = round(((curr_p - prev_p) / prev_p) * 100, 2)
+                
+                # 預防除以零的錯誤
+                if prev_p > 0:
+                    chg_pct = round(((curr_p - prev_p) / prev_p) * 100, 2)
+                else:
+                    chg_pct = 0.0
                 
                 # 計算短線 EMA (5EMA) 判斷趨勢防線
                 ema5 = round(sum(valid_closes[-5:]) / 5, 2) if len(valid_closes) >= 5 else curr_p
                 
                 sign = "📈 +" if chg_pct > 0 else "📉 "
                 reply_lines.append(f"{sign}{chg_pct}% ｜ {name}")
-                reply_lines.append(f"   現價: {curr_p} (短線EMA支撐/壓力: {ema5})\n")
+                reply_lines.append(f"   現價: {curr_p} (短線支撐/壓力: {ema5})")
             
-            reply_lines.append("💡 戰略解讀：觀察主力是否利用夜盤波動，引導明日台股散戶情緒。")
+            reply_lines.append("\n💡 戰略解讀：緊盯比特幣與 VIX 動向，提前預判明日台股科技族群的資金風向。")
             reply_msg = "\n".join(reply_lines)
             
         except Exception as e:
-            reply_msg = f"⚠️ 夜盤雷達連線異常：{e}"
+            reply_msg = f"⚠️ 全球雷達連線異常：{e}"
             
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg))
-        return
-
-    # 💥 新增模組 2：均線扣抵轉折預告
-    if user_msg in ["明日轉折", "扣抵", "轉折"]:
-        try:
-            # 讀取大本營上傳至 pCloud 的 monitor_list.json
-            json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={int(time.time())}"
-            res_json = requests.get(json_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
-            
-            reply_lines = ["🦅 【股海觀浪・扣抵轉折預告】\n", "主力洗盤後，均線由壓力量縮轉換為支撐的關鍵標的：\n"]
-            count = 0
-            
-            for code, info in res_json.items():
-                if count >= 5: break  # 只取前五名精銳
-                
-                y_close = float(info.get("y_close", 0))
-                koudi_5 = float(info.get("ma5", 0))
-                koudi_10 = float(info.get("ma10", 0))
-                
-                # 戰術條件：收盤價高於 5MA 扣抵且高於 10MA 扣抵 (雙線扣低，轉為支撐)
-                if y_close > koudi_5 and y_close > koudi_10 and y_close > 0:
-                    reply_lines.append(f"🎯 {info.get('name', '未知')} ({code})")
-                    reply_lines.append(f"   現價 {y_close} > 5MA扣抵 ({koudi_5})")
-                    reply_lines.append(f"   💡 籌碼未退，均線由壓力轉為強力支撐！\n")
-                    count += 1
-            
-            if count == 0:
-                reply_lines.append("🛡️ 目前大盤動盪，尚無符合雙線轉強之安全標的，請嚴控資金。")
-                
-            reply_msg = "\n".join(reply_lines)
-            
-        except Exception as e:
-            reply_msg = f"⚠️ 扣抵轉折計算異常：{e}"
-            
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
         return
 
 
