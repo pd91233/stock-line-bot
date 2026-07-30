@@ -11,7 +11,7 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction, ImageSendMessage,
-    JoinEvent, SourceGroup  # 💥 新增：群組加入事件偵測模組
+    JoinEvent, SourceGroup, FlexSendMessage
 )
 from bs4 import BeautifulSoup
 import json
@@ -1346,6 +1346,107 @@ def handle_message(event):
             reply_msg = f"⚠️ 轉折雷達掃描異常：{e}"
             
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
+        return
+
+
+    # ==========================================================
+    # 💥 方案一：輕量級快捷按鈕 (Quick Reply)
+    # 觸發口令：輸入「呼叫雷達」或「快捷選單」
+    # ==========================================================
+    if user_msg in ["呼叫雷達", "快捷選單"]:
+        reply_msg = TextSendMessage(
+            text="🦅 股海觀浪戰情中心：請選擇您要呼叫的雷達！",
+            quick_reply=QuickReply(
+                items=[
+                    QuickReplyButton(action=MessageAction(label="🌍 國際夜盤", text="夜盤")),
+                    QuickReplyButton(action=MessageAction(label="🎯 轉折起漲", text="轉折")),
+                    QuickReplyButton(action=MessageAction(label="📊 盤後選股", text="盤後選股")),
+                    QuickReplyButton(action=MessageAction(label="🛡️ 權限開通", text="雷達開通"))
+                ]
+            )
+        )
+        line_bot_api.reply_message(event.reply_token, reply_msg)
+        return
+
+    # ==========================================================
+    # 💥 方案二：重裝甲戰情面板 (Flex Message)
+    # 觸發口令：輸入「主選單」或「指揮中心」
+    # ==========================================================
+    if user_msg in ["主選單", "指揮中心"]:
+        flex_json = {
+          "type": "bubble",
+          "size": "mega",
+          "header": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+              {
+                "type": "text",
+                "text": "股海觀浪・戰情指揮中心",
+                "weight": "bold",
+                "color": "#fbbf24",
+                "size": "xl"
+              }
+            ],
+            "backgroundColor": "#0f172a"
+          },
+          "body": {
+            "type": "box",
+            "layout": "vertical",
+            "spacing": "md",
+            "contents": [
+              {
+                "type": "text",
+                "text": "請點擊下方按鈕，調閱最新情報：",
+                "size": "sm",
+                "color": "#94a3b8",
+                "wrap": True
+              },
+              {
+                "type": "separator",
+                "margin": "md",
+                "color": "#334155"
+              },
+              {
+                "type": "button",
+                "style": "primary",
+                "color": "#2563eb",
+                "action": {
+                  "type": "message",
+                  "label": "🌍 國際夜盤速報",
+                  "text": "夜盤"
+                }
+              },
+              {
+                "type": "button",
+                "style": "primary",
+                "color": "#059669",
+                "action": {
+                  "type": "message",
+                  "label": "🦅 智慧轉折雷達",
+                  "text": "轉折"
+                }
+              },
+              {
+                "type": "button",
+                "style": "secondary",
+                "action": {
+                  "type": "message",
+                  "label": "📊 調閱盤後選股",
+                  "text": "盤後選股"
+                }
+              }
+            ],
+            "backgroundColor": "#1e293b"
+          }
+        }
+
+        reply_msg = FlexSendMessage(
+            alt_text="📊 股海觀浪主選單",
+            contents=flex_json
+        )
+        
+        line_bot_api.reply_message(event.reply_token, reply_msg)
         return
 
 # ==========================================================
