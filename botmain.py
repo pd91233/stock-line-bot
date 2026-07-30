@@ -1222,9 +1222,9 @@ def handle_message(event):
 # 💥 新增模組 2：均線扣抵轉折預告
 # ==========================================================
 # 💥 新增模組 1：國際夜盤與期貨速報
-    # 💥 新增模組 1：國際夜盤、期貨與虛擬貨幣速報 (動態戰略解讀版)
     if user_msg in ["夜盤", "國際局勢", "期貨", "虛擬貨幣"]:
         try:
+            # 擴充監控雷達網：涵蓋美股期指、台積電 ADR、虛擬貨幣、避險商品與恐慌指數
             tickers = {
                 "那斯達克期": "NQ=F",
                 "小道瓊期": "YM=F",
@@ -1238,14 +1238,11 @@ def handle_message(event):
             }
             reply_lines = ["🌍 【股海觀浪・全球資金速報】\n"]
             
-            # 建立變數，用來捕捉關鍵指標的漲跌幅
-            vix_chg = 0.0
-            btc_chg = 0.0
-            
             for name, ticker in tickers.items():
                 url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=20d"
                 res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
                 
+                # 確保有抓到資料
                 if not res.get('chart', {}).get('result'):
                     reply_lines.append(f"⚠️ {name}：訊號中斷")
                     continue
@@ -1258,34 +1255,20 @@ def handle_message(event):
                 curr_p = round(meta['regularMarketPrice'], 2)
                 prev_p = meta['chartPreviousClose']
                 
+                # 預防除以零的錯誤
                 if prev_p > 0:
                     chg_pct = round(((curr_p - prev_p) / prev_p) * 100, 2)
                 else:
                     chg_pct = 0.0
                 
-                # 攔截 VIX 與 BTC 的數據，交給後面的大腦進行判斷
-                if name == "恐慌指數 VIX":
-                    vix_chg = chg_pct
-                elif name == "比特幣 (BTC)":
-                    btc_chg = chg_pct
-                
+                # 計算短線 EMA (5EMA) 判斷趨勢防線
                 ema5 = round(sum(valid_closes[-5:]) / 5, 2) if len(valid_closes) >= 5 else curr_p
                 
                 sign = "📈 +" if chg_pct > 0 else "📉 "
                 reply_lines.append(f"{sign}{chg_pct}% ｜ {name}")
                 reply_lines.append(f"   現價: {curr_p} (短線支撐/壓力: {ema5})")
             
-            # 🧠 動態戰略解讀引擎
-            reply_lines.append("\n💡 戰略解讀：")
-            if vix_chg > 5.0:
-                reply_lines.append("⚠️ VIX 恐慌指數狂飆！全球避險情緒升溫，明日台股開盤請嚴防下殺，保留現金水位。")
-            elif btc_chg > 3.0 and vix_chg < 0:
-                reply_lines.append("🚀 虛擬貨幣大漲且 VIX 降溫！市場風險偏好極強，明日台股科技股有望迎來資金點火。")
-            elif btc_chg < -3.0:
-                reply_lines.append("📉 虛擬貨幣重挫，資金正在撤出高風險資產！明日台股電子股恐承壓，操作宜保守。")
-            else:
-                reply_lines.append("⚖️ 國際資金目前未見極端波動，明日台股預計將跟隨自身均線與籌碼慣性發展。")
-                
+            reply_lines.append("\n💡 戰略解讀：緊盯比特幣與 VIX 動向，提前預判明日台股科技族群的資金風向。")
             reply_msg = "\n".join(reply_lines)
             
         except Exception as e:
@@ -1295,6 +1278,56 @@ def handle_message(event):
         return
 
 
+
+# 💥 新增模組 2：均線扣抵與起漲轉折掃描 (智慧語意與動態解讀版)
+    if any(keyword in user_msg for keyword in ["轉折", "起漲", "發動", "轉強", "找買點", "扣抵"]):
+        try:
+            # 讀取大本營上傳至 pCloud 的 monitor_list.json
+            json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={int(time.time())}"
+            res_json = requests.get(json_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
+            
+            reply_lines = ["🦅 【股海觀浪・起漲轉折雷達】\n", "幫您掃描最新籌碼，抓出「均線扣低、準備轉強」的潛力標的：\n"]
+            count = 0
+            
+            for code, info in res_json.items():
+                if count >= 5: break  # 精選 5 檔火力最強的
+                
+                name = info.get('name', '未知')
+                ind = info.get('ind', '')
+                y_close = float(info.get("y_close", 0))
+                koudi_5 = float(info.get("ma5", 0))
+                koudi_10 = float(info.get("ma10", 0))
+                
+                # 戰術條件：收盤價高於 5MA 扣抵且高於 10MA 扣抵 (雙線扣低，轉為支撐)
+                if y_close > koudi_5 and y_close > koudi_10 and y_close > 0:
+                    reply_lines.append(f"🎯 {name} ({code}) ｜ {ind}")
+                    
+                    # 🧠 動態智慧解讀引擎：根據價差比例，給予不同的操盤手級白話文
+                    diff_pct = ((y_close - koudi_5) / koudi_5) * 100
+                    
+                    if diff_pct < 1.0:
+                        comment = f"👉 收盤 {y_close} 元，超級貼近 5日防線({koudi_5})！主力控盤極度精準，這是絕佳的「防守反擊」買點，停損超好守。"
+                    elif diff_pct < 3.0:
+                        comment = f"👉 現價 {y_close} 元已穩穩踩住短線支撐({koudi_5})。賣壓消化得差不多了，只要大盤稍有風吹草動，隨時能輕鬆點火上攻！"
+                    else:
+                        comment = f"👉 股價 {y_close} 元強勢拉開與均線({koudi_5})的距離！多方完全掌握發球權，動能充沛，適合順勢操作。"
+                        
+                    reply_lines.append(comment)
+                    reply_lines.append("") # 空行分隔
+                    count += 1
+            
+            if count == 0:
+                reply_lines.append("🛡️ 報告股神，目前大盤動盪，系統掃描後尚未發現符合「完美雙線轉強」的安全標的。寧可錯過不要做錯，建議嚴控資金！")
+            else:
+                reply_lines.append("💡 叮嚀：轉折股剛發動時容易震盪，請搭配大盤【夜盤】資金風向，分批佈局喔！")
+                
+            reply_msg = "\n".join(reply_lines)
+            
+        except Exception as e:
+            reply_msg = f"⚠️ 轉折雷達掃描異常：{e}"
+            
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
+        return
 
 # ==========================================================
 # 🌟 7. 🚀 雲端全時相決策中心 (靜默快取版 - 已廢除定時廣播)
