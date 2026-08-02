@@ -1239,7 +1239,8 @@ def handle_message(event):
             reply_lines = ["🌍 【股海觀浪・全球資金速報】\n"]
             
             for name, ticker in tickers.items():
-                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=20d"
+                # 💥 修改 1：網址加上 &includePrePost=true 強制抓取盤後與電子盤數據
+                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=20d&includePrePost=true"
                 res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
                 
                 # 確保有抓到資料
@@ -1252,8 +1253,11 @@ def handle_message(event):
                 closes = indicators.get('close', [])
                 valid_closes = [c for c in closes if c is not None]
                 
-                curr_p = round(meta['regularMarketPrice'], 2)
-                prev_p = meta['chartPreviousClose']
+                # 💥 修改 2：🛡️ 強制優先抓取盤後/電子盤的即時報價，若無則退回常規盤報價
+                curr_p = meta.get('postMarketPrice', meta.get('regularMarketPrice'))
+                curr_p = round(curr_p, 2) if curr_p else 0.0
+                
+                prev_p = meta.get('chartPreviousClose', 0.0)
                 
                 # 預防除以零的錯誤
                 if prev_p > 0:
