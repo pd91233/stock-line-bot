@@ -1545,16 +1545,21 @@ def continuous_radar_loop():
                                 else:
                                     print(f"⚠️ 掃到 {name}，但目前無人符合該項雷達權限。")
 
-                                # 2. 🚀 【群組直通車】強制空投至統帥指定的 LINE 群組！
-                                TARGET_GROUP_ID = "C0481b44935888bb1dc20dfd52a675e8a"
-                                try:
-                                    line_bot_api.push_message(
-                                        TARGET_GROUP_ID,
-                                        TextSendMessage(text=f"🚨 【群組同步跟單急報】\n{alert_msg}")
-                                    )
-                                    print(f"🚀 成功將飆股急報空投至指定 LINE 群組！")
-                                except Exception as group_err:
-                                    print(f"❌ 群組推播發送失敗: {group_err}")
+                                # 2. 🚀 【群組直通車】強制空投至統帥指定的多個 LINE 群組！
+                                TARGET_GROUP_IDS = [
+                                    "C0481b44935888bb1dc20dfd52a675e8a",  # 這是原本的第一個群組
+                                    "C47bfa8e16a7216bd54dceb3b5e90cfa0"             # 💥 這是您新增的第二個群組
+                                ]
+                                
+                                for group_id in TARGET_GROUP_IDS:
+                                    try:
+                                        line_bot_api.push_message(
+                                            group_id,
+                                            TextSendMessage(text=f"🚨 【群組同步跟單急報】\n{alert_msg}")
+                                        )
+                                    except Exception as group_err:
+                                        print(f"❌ 群組 ({group_id}) 推播發送失敗: {group_err}")
+                                print(f"🚀 成功將飆股急報空投至所有指定的 LINE 群組！")
 
                             except Exception as e:
                                 print(f"⚠️ LINE 精準多播與群組發射失敗: {e}")                
