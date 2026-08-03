@@ -1538,12 +1538,12 @@ def continuous_radar_loop():
                                         if perms.get("5min", False): target_ids.append(uid)
 
                                 # 1. 🎯 個人 VIP 導航發射
-                                if target_ids:
-                                    # Multicast 最大上限 500 人
-                                    line_bot_api.multicast(target_ids, TextSendMessage(text=f"🚨 【戰情室快訊】\n{alert_msg}"))
-                                    print(f"✅ 已對 {len(target_ids)} 名擁有權限之隊員精準群發：{name}")
-                                else:
-                                    print(f"⚠️ 掃到 {name}，但目前無人符合該項雷達權限。")
+                                # if target_ids:
+                                #     # Multicast 最大上限 500 人
+                                #     line_bot_api.multicast(target_ids, TextSendMessage(text=f"🚨 【戰情室快訊】\n{alert_msg}"))
+                                #     print(f"✅ 已對 {len(target_ids)} 名擁有權限之隊員精準群發：{name}")
+                                # else:
+                                #     print(f"⚠️ 掃到 {name}，但目前無人符合該項雷達權限。")
 
                                 # 2. 🚀 【群組直通車】強制空投至統帥指定的多個 LINE 群組！
                                 TARGET_GROUP_IDS = [
