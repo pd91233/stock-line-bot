@@ -129,14 +129,34 @@ def update_vips(data):
     except: pass
 
 # ==========================================================
-# 🔑 1. API 金鑰與通訊參數設定
+# 🔑 1. API 金鑰與通訊參數設定 (雙彈匣火力升級)
 # ==========================================================
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN', 'SMvkBhzw64RpFhLGsaDRfzqPVPkxAk8HYLz+Pvy/kiVG/n3XkSNWOcPPyQkSpWrCcAj3+SmAaM1iopF9dz6TJdo6xyQwBv0soAzdn+Wdn3GC2YS+4m16cEzIW5pUTqO12JC6grdw6ktZ4wh3arR5+gdB04t89/1O/w1cDnyilFU=')
 LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET', '')
 IMGBB_API_KEY = os.environ.get('IMGBB_API_KEY', '') 
 
-line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
+# 💥 裝載二號機彈藥庫
+LINE_CHANNEL_ACCESS_TOKEN_2 = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN_2', 'cN+RyHUSVPVjN2E2pf7UZZXdE5Y/vX0fBU7YvOecr1EbEaJpIOn9Z/EVpquq5alZjD5FrCapigoT7Pjm4ibi/Rekp67d+h1NlFqV/okLDWQvhR9bUWp50YaoB0NKNQjUb1w2kt57uig9EGO3YkyLjAdB04t89/1O/w1cDnyilFU=')
+LINE_CHANNEL_SECRET_2 = os.environ.get('LINE_CHANNEL_SECRET_2', 'c5bed42c2d36c3f26d15a02e20439953')
+
+# 初始化兩把通訊槍管
+line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)     # 一號主戰機
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
+line_bot_api_2 = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN_2) # 二號備用機
+
+# 💥 雙彈匣自動切換發射引擎
+def smart_push_message(group_id, message):
+    try:
+        # 優先使用一號機發射
+        line_bot_api.push_message(group_id, message)
+    except Exception as e:
+        print(f"⚠️ 一號機發射受阻 ({e})，自動切換二號機發射！", flush=True)
+        try:
+            # 一號機沒子彈或發生錯誤時，瞬間切換二號機補槍
+            line_bot_api_2.push_message(group_id, message)
+            print("🚀 二號機補槍發射成功！", flush=True)
+        except Exception as e2:
+            print(f"❌ 雙機皆發射失敗: {e2}", flush=True)
 
 gemini_keys = []
 if os.environ.get('GEMINI_API_KEY'): 
@@ -147,7 +167,6 @@ for i in range(1, 6):
         gemini_keys.append(k)
 if gemini_keys: 
     key_cycle = itertools.cycle(gemini_keys)
-
 # ==========================================================
 # 📚 2. 台股資料庫初始化 (本地 JSON 優先版)
 # ==========================================================
@@ -1545,21 +1564,19 @@ def continuous_radar_loop():
                                 # else:
                                 #     print(f"⚠️ 掃到 {name}，但目前無人符合該項雷達權限。")
 
-                                # 2. 🚀 【群組直通車】強制空投至統帥指定的多個 LINE 群組！
+                                # 2. 🚀 【群組直通車】雙彈匣自動輪替空投至統帥指定的多個 LINE 群組！
                                 TARGET_GROUP_IDS = [
                                     "C0481b44935888bb1dc20dfd52a675e8a",  # 這是原本的第一個群組
-                                    "C47bfa8e16a7216bd54dceb3b5e90cfa0"             # 💥 這是您新增的第二個群組
+                                    "C47bfa8e16a7216bd54dceb3b5e90cfa0"   # 💥 這是您新增的第二個群組
                                 ]
                                 
                                 for group_id in TARGET_GROUP_IDS:
-                                    try:
-                                        line_bot_api.push_message(
-                                            group_id,
-                                            TextSendMessage(text=f"🚨 【群組同步跟單急報】\n{alert_msg}")
-                                        )
-                                    except Exception as group_err:
-                                        print(f"❌ 群組 ({group_id}) 推播發送失敗: {group_err}")
-                                print(f"🚀 成功將飆股急報空投至所有指定的 LINE 群組！")
+                                    # 💥 呼叫智慧發射引擎，自動判斷要用哪把槍 (一號沒子彈自動換二號)
+                                    smart_push_message(
+                                        group_id,
+                                        TextSendMessage(text=f"🚨 【群組同步跟單急報】\n{alert_msg}")
+                                    )
+                                print(f"🚀 成功將飆股急報雙機聯防空投至所有指定的 LINE 群組！")
 
                             except Exception as e:
                                 print(f"⚠️ LINE 精準多播與群組發射失敗: {e}")                
