@@ -1196,6 +1196,39 @@ def handle_message(event):
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg))
         return
 
+
+    # ==========================================================
+    # 🧮 💥 新增模組：LINE 當月發射次數查詢與自動預警
+    # ==========================================================
+    if user_msg in ["次數", "額度", "剩餘發數", "子彈"]:
+        try:
+            # 抓取一號機與二號機的真實使用量
+            usage_1 = line_bot_api.get_message_quota_consumption().total_usage
+            usage_2 = line_bot_api_2.get_message_quota_consumption().total_usage
+            
+            remain_1 = 200 - usage_1
+            remain_2 = 200 - usage_2
+            
+            # 判斷目前主力槍管
+            active_gun = "一號機 (主戰)" if remain_1 > 0 else "二號機 (備用中)"
+            
+            reply_msg = (
+                f"📊 【股海觀浪・彈藥庫實時庫存】\n"
+                f"----------------------\n"
+                f"🔫 一號機：已用 {usage_1} / 200 則 (剩 {remain_1} 則)\n"
+                f"🔫 二號機：已用 {usage_2} / 200 則 (剩 {remain_2} 則)\n"
+                f"----------------------\n"
+                f"🎯 目前主力火線：{active_gun}\n"
+                f"💡 備註：每月 1 號系統將自動重置免費發射額度。"
+            )
+        except Exception as e:
+            reply_msg = f"⚠️ 彈藥庫數據連線受阻: {e}"
+            
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg))
+        return
+
+
+
     # 1. 取得股票資料庫
     res_data = get_stock_dict()
     if isinstance(res_data, tuple):
