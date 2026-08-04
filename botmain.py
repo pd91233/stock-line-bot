@@ -228,7 +228,7 @@ intraday_breakout_cache = []
 intraday_alerted_codes = set() 
 stock_tick_memory = {}         
 
-def detect_intraday_breakout(code, name, ind="未知"):
+def detect_intraday_breakout(code, name, ind="未知", ma5=0.0, y_high=0.0, s_type=""):
     import requests, time, datetime
     
     # 🛡️ 單日冷卻防護：今天已經通報過，直接跳過
@@ -313,24 +313,35 @@ def detect_intraday_breakout(code, name, ind="未知"):
                         hot_tag = "👑 [主流領頭羊]" if "半導體" in ind else f"🏷️ [{ind}]"
                         
                         # ==========================================
-                        # 💡 系統自動判斷：小白專屬實戰指令生成
+                        # 💡 升級版多維度判斷：小白專屬實戰指令生成
                         # ==========================================
-                        if "安全" in alert_type or "初升" in alert_type:
-                            # 安全起漲區：建議在均價線與現價之間買進
+                        status_prefix = f"突破昨高({y_high})動能強勁！" if (current_z > y_high > 0) else "底部出量點火！"
+
+                        if current_z < ma5 and ma5 > 0:
+                            # 跌破 5MA 的弱勢反彈，最危險的接刀陷阱
+                            action_guide = (
+                                f"🎯 【小白實戰指令：⚠️ 弱勢反彈陷阱】\n"
+                                f"👉 戰況：股價連 5日線({ma5}) 都還沒站上！\n"
+                                f"⚠️ 怎麼買：上方套牢壓力重，這只是死貓反彈，嚴禁追高進場！\n"
+                                f"🛡️ 防守：空手觀望，把錢留給真正的強勢股。"
+                            )
+                        elif "安全" in alert_type or "初升" in alert_type:
+                            # 站上 5MA 的安全起漲區
+                            ma5_text = f"站穩 5日線({ma5})" if ma5 > 0 else "站穩均價線"
                             buy_range = f"{vwap_est} ~ {current_z}"
                             action_guide = (
-                                f"🎯 【建議操作】\n"
-                                f"👉 怎麼買：現在可以分批買！\n"
-                                f"💰 委託價：設定 {buy_range} 皆可\n"
-                                f"🛡️ 停損線：若跌破 {vwap_est} 請果斷認賠"
+                                f"🎯 【小白實戰指令：✅ 多方起漲】\n"
+                                f"👉 戰況：{ma5_text}，{status_prefix}\n"
+                                f"💰 委託價：拉回 {buy_range} 區間可分批低接\n"
+                                f"🛡️ 停損線：嚴守均價線 {vwap_est}，跌破站不回就果斷停損！"
                             )
                         else:
-                            # 高風險誘多區：警告新手不要追
+                            # 高風險誘多區 (現價 > VWAP，但漲幅過高)
                             action_guide = (
-                                f"🎯 【建議操作】\n"
-                                f"⚠️ 怎麼買：新手嚴禁現在追高！\n"
-                                f"💰 委託價：請耐心等股價跌回 {vwap_est} 附近\n"
-                                f"🛡️ 停損線：若硬要追高，跌破 {vwap_est} 必跑"
+                                f"🎯 【小白實戰指令：⚠️ 高檔誘多警戒】\n"
+                                f"👉 戰況：短線衝太快，正乖離過大，極易引發當沖客獲利了結賣壓！\n"
+                                f"⚠️ 怎麼買：切勿被爆量沖昏頭去追高！\n"
+                                f"🛡️ 防守：耐心等股價量縮拉回 {vwap_est} 附近有守再說，目前空手觀望。"
                             )
 
                         return (
@@ -1543,6 +1554,24 @@ def continuous_radar_loop():
             if not is_weekend and (900 <= current_time_num <= 1330):
                 
                 headers = {"User-Agent": "Mozilla/5.0"}
+
+                # ==========================================
+                # 🛡️ 系統主動升級：大盤指數防空防護罩 (覆巢防禦系統)
+                # ==========================================
+                try:
+                    twii_res = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?range=1d&interval=1d", headers=headers, timeout=3).json()
+                    twii_meta = twii_res['chart']['result'][0]['meta']
+                    twii_chg_pct = ((twii_meta['regularMarketPrice'] - twii_meta['chartPreviousClose']) / twii_meta['chartPreviousClose']) * 100
+                    
+                    # 🚨 如果大盤跌幅超過 1.5%，啟動最高級別防護，直接強制終止這 1 分鐘的所有個股掃描！
+                    if twii_chg_pct <= -1.5:
+                        print(f"🚨 [大盤防護罩啟動] 加權指數重挫 {twii_chg_pct:.2f}%！覆巢之下無完卵，凍結所有多方點火雷達！", flush=True)
+                        time.sleep(60)
+                        continue 
+                except Exception as e:
+                    print(f"⚠️ 大盤防護罩偵測異常: {e}", flush=True)
+                # ==========================================
+
                 json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={int(time.time())}"
                 res_json = requests.get(json_url, headers=headers, timeout=5)
                 
@@ -1559,8 +1588,13 @@ def continuous_radar_loop():
                         # 🎯 抓取這檔股票的產業別 (相容 ind 或 產業 欄位)
                         ind = str(info.get("ind", info.get("產業", "未知")))
                         
-                        # 🎯 將 ind 一併傳送給雷達
-                        alert_msg = detect_intraday_breakout(code, name, ind)
+                        # 💥 提取日K級別大數據：5日均線、昨日高點、戰略分類
+                        ma5 = float(info.get("ma5", 0))
+                        y_high = float(info.get("y_high", 0))
+                        s_type = str(info.get("type", "general"))
+                        
+                        # 🎯 將大數據一併傳送給雷達進行多維度判定
+                        alert_msg = detect_intraday_breakout(code, name, ind, ma5, y_high, s_type)
                         
                         if alert_msg and alert_msg not in intraday_breakout_cache:
                             intraday_breakout_cache.insert(0, alert_msg)
