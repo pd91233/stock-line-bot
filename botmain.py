@@ -1717,8 +1717,8 @@ def afternoon_review_loop():
             is_weekend = now.weekday() >= 5
             current_time_num = now.hour * 100 + now.minute
             
-            # 鎖定每個交易日 13:40 執行
-            if not is_weekend and current_time_num == 2130:
+            # 💡 修正一：完美鎖定每個交易日 13:40 執行
+            if not is_weekend and current_time_num == 1340:
                 print("🔍 [戰場鑑識] 開始同步執行盤中當沖雷達結算與各策略分頁覆盤...", flush=True)
                 
                 review_lines = ["📊 【股海觀浪・全方位戰場鑑識與分頁驗證】\n" + "----------------------"]
@@ -1796,7 +1796,7 @@ def afternoon_review_loop():
                 review_lines.append("----------------------")
 
                 # ==========================================
-                # 🛠️ 區塊二：各策略分頁選股戰報績效驗證
+                # 🛠️ 區塊二：各策略分頁選股戰報績效驗證 (修復資料格式對應)
                 # ==========================================
                 try:
                     res_json = requests.get("https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json", timeout=5).json()
@@ -1810,13 +1810,30 @@ def afternoon_review_loop():
                     "⚡ 當沖/隔日游擊區": []
                 }
                 
-                for code, info in res_json.items() if isinstance(res_json, dict) else []:
+                # 💡 修正二：完美適配 monitor_list.json 的資料結構 (支援字典與清單)
+                items_to_process = []
+                if isinstance(res_json, dict):
+                    for k, v in res_json.items():
+                        if isinstance(v, dict):
+                            v["code"] = k
+                            items_to_process.append(v)
+                elif isinstance(res_json, list):
+                    items_to_process = res_json
+
+                for info in items_to_process:
                     try:
-                        name = info.get("name", code)
-                        stype = info.get("type", "general")
+                        code = str(info.get("代碼", info.get("code", ""))).strip()
+                        name = info.get("name", info.get("商品", code))
+                        stype = str(info.get("type", "general"))
                         
+                        if not code: continue
+
                         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=1d"
                         res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
+                        if not res.get('chart', {}).get('result'):
+                            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TWO?range=1d&interval=1d"
+                            res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
+
                         meta = res['chart']['result'][0]['meta']
                         close_p = meta.get('regularMarketPrice', 0)
                         prev_close = meta.get('chartPreviousClose', close_p)
