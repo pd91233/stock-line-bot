@@ -312,7 +312,35 @@ def detect_intraday_breakout(code, name, ind="未知"):
                         # 💥 加上主流族群的專屬視覺標記
                         hot_tag = "👑 [主流領頭羊]" if "半導體" in ind else f"🏷️ [{ind}]"
                         
-                        return f"[{time_str}] ⚡ {name}({code}) {alert_type}\n{hot_tag} | 現價：{current_z} (均價線:{vwap_est})\n漲幅：{chg_pct}%\n🔥 1分爆量：{int(vol_1m)} 張 (達5分均速 {round(vol_1m/avg_1m_vol_in_5m, 1)}倍)"
+                        # ==========================================
+                        # 💡 系統自動判斷：小白專屬實戰指令生成
+                        # ==========================================
+                        if "安全" in alert_type or "初升" in alert_type:
+                            # 安全起漲區：建議在均價線與現價之間買進
+                            buy_range = f"{vwap_est} ~ {current_z}"
+                            action_guide = (
+                                f"🎯 【建議操作】\n"
+                                f"👉 怎麼買：現在可以分批買！\n"
+                                f"💰 委託價：設定 {buy_range} 皆可\n"
+                                f"🛡️ 停損線：若跌破 {vwap_est} 請果斷認賠"
+                            )
+                        else:
+                            # 高風險誘多區：警告新手不要追
+                            action_guide = (
+                                f"🎯 【建議操作】\n"
+                                f"⚠️ 怎麼買：新手嚴禁現在追高！\n"
+                                f"💰 委託價：請耐心等股價跌回 {vwap_est} 附近\n"
+                                f"🛡️ 停損線：若硬要追高，跌破 {vwap_est} 必跑"
+                            )
+
+                        return (
+                            f"[{time_str}] ⚡ {name}({code}) {alert_type}\n"
+                            f"{hot_tag} | 現價：{current_z} (均價線:{vwap_est})\n"
+                            f"漲幅：{chg_pct}%\n"
+                            f"🔥 1分爆量：{int(vol_1m)} 張 (達5分均速 {round(vol_1m/avg_1m_vol_in_5m, 1)}倍)\n"
+                            f"----------------------\n"
+                            f"{action_guide}"
+                        )
 
     except Exception as e:
         pass
