@@ -1709,7 +1709,7 @@ def afternoon_review_loop():
     import requests
     import re
     
-    print("📡 [收盤檢討哨] 多分頁選股戰報績效驗證與當沖鑑識引擎已就位，等待下午 13:40 結算...", flush=True)
+    print("📡 [收盤檢討哨] 多分頁選股戰報與當沖鑑識雙效驗證引擎已就位，等待下午 13:40 結算...", flush=True)
     
     while True:
         try:
@@ -1718,18 +1718,14 @@ def afternoon_review_loop():
             current_time_num = now.hour * 100 + now.minute
             
             # 鎖定每個交易日 13:40 執行
-            if not is_weekend and current_time_num == 1340:
-                print("🔍 [戰場鑑識] 開始進行多策略分頁選股績效驗證與當沖極端值結算...", flush=True)
+            if not is_weekend and current_time_num == 2130:
+                print("🔍 [戰場鑑識] 開始同步執行盤中當沖雷達結算與各策略分頁覆盤...", flush=True)
                 
-                # 1. 抓取當日選股清單 (對應各策略分頁)
-                try:
-                    res_json = requests.get("https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json", timeout=5).json()
-                except:
-                    res_json = {}
-
                 review_lines = ["📊 【股海觀浪・全方位戰場鑑識與分頁驗證】\n" + "----------------------"]
                 
-                # 2. 當沖爆量雷達標的鑑識 (原有的 1:40 檢討邏輯)
+                # ==========================================
+                # 🛠️ 區塊一：盤中 1分/5分爆量雷達標的驗證結算
+                # ==========================================
                 if intraday_breakout_cache:
                     stock_records = {}
                     for alert in intraday_breakout_cache:
@@ -1791,13 +1787,22 @@ def afternoon_review_loop():
                     
                     if settle_count > 0:
                         win_rate = round((win_count / settle_count) * 100, 1)
-                        review_lines.insert(1, f"🎯 【盤中當沖雷達】鑑識標的：{settle_count} 檔 ｜ 收盤收紅：{win_count} 檔 (勝率 {win_rate}%)")
+                        review_lines.append(f"🎯 【盤中爆量雷達】鑑識標的：{settle_count} 檔 ｜ 收盤收紅：{win_count} 檔 (勝率 {win_rate}%)")
                     else:
-                        review_lines.insert(1, "🎯 【盤中當沖雷達】今日無有效發報標的。")
+                        review_lines.append("🎯 【盤中爆量雷達】今日無有效發報標的。")
+                else:
+                    review_lines.append("🎯 【盤中爆量雷達】今日無發報紀錄。")
                 
                 review_lines.append("----------------------")
 
-                # 3. 各策略分頁選股戰報驗證 (新加入的 多分頁獨立結算)
+                # ==========================================
+                # 🛠️ 區塊二：各策略分頁選股戰報績效驗證
+                # ==========================================
+                try:
+                    res_json = requests.get("https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json", timeout=5).json()
+                except:
+                    res_json = {}
+
                 strat_groups = {
                     "🎯 MTS 完美共振區": [],
                     "🎖️ S級肥羊特戰區": [],
@@ -1853,7 +1858,7 @@ def afternoon_review_loop():
                     review_lines.append("• 各策略分頁今日無有效追蹤標的數據。")
                 
                 review_lines.append("----------------------")
-                review_lines.append("💡 參謀總結：完整記錄盤中衝刺與各策略分頁表現，作為優化次日選股模型的黃金依據。")
+                review_lines.append("💡 參謀總結：完整記錄盤中爆量衝刺與各策略分頁表現，作為優化次日選股模型的黃金依據。")
                 
                 final_report = "\n".join(review_lines)
                 
@@ -1868,14 +1873,13 @@ def afternoon_review_loop():
                         TextSendMessage(text=final_report)
                     )
                 
-                print("🚀 全方位戰場鑑識與分頁驗證戰報已自動空投！", flush=True)
+                print("🚀 全方位爆量雷達與分頁驗證戰報已自動空投！", flush=True)
                 time.sleep(70)
                 
         except Exception as e:
             print(f"⚠️ 戰場鑑識異常: {e}", flush=True)
             
         time.sleep(30)
-
 
 
 
