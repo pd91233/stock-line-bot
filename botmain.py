@@ -1768,7 +1768,7 @@ if user_msg in ["夜盤", "國際局勢", "期貨", "虛擬貨幣"]:
             if qualified_picks and len(qualified_picks) > 0:
                 top_picks = qualified_picks[:5]
                 reply_lines = [
-                    f"📊 【盤中技術面即時篩選・買點雷達】",
+                    "📊 【盤中技術面即時篩選・買點雷達】",
                     f"報告 {user_name}，系統已完成盤中多維度技術篩選，目前符合轉折與穩健排列的標的如下：\n",
                     "======================"
                 ]
