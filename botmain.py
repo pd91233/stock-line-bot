@@ -1749,21 +1749,21 @@ if any(keyword in user_msg for keyword in ["轉折", "起漲", "發動", "轉強
         else:
             target_dict = res_json
 
-        for code, info in target_dict.items():
-            name = info.get('name', info.get('商品', '未知'))
-            ind = info.get('ind', info.get('產業', ''))
-            y_close = float(info.get("y_close", 0))
-            ma5 = float(info.get("ma5", 0))
+			for code, info in target_dict.items():
+                name = info.get('name', info.get('商品', '未知'))
+                ind = info.get('ind', info.get('產業', ''))
+                y_close = float(info.get("y_close", 0))
+                ma5 = float(info.get("ma5", 0))
 
-            if y_close > 0 and ma5 > 0 and y_close >= ma5:
-                qualified_picks.append({
-                    "id": code,
-                    "name": name,
-                    "ind": ind,
-                    "price": y_close,
-                    "ma5": ma5,
-                    "reason": "均線之上穩健排列，多方主導中"
-                })
+                if y_close > 0 and ma5 > 0 and y_close >= ma5:
+                    qualified_picks.append({
+                        "id": code,
+                        "name": name,
+                        "ind": ind,
+                        "price": y_close,
+                        "ma5": ma5,
+                        "reason": "均線之上穩健排列，多方主導中"
+                    })
 
             if qualified_picks and len(qualified_picks) > 0:
                 top_picks = qualified_picks[:5]
