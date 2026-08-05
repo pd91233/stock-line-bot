@@ -1418,23 +1418,19 @@ def handle_message(event):
 
 
 
-# 💥 新增模組 2：均線扣抵與起漲轉折掃描 (專屬暱稱客製化版)
+# 💥 優化版：盤中技術面轉折與買點即時篩選（與爆量通知互補）
     if any(keyword in user_msg for keyword in ["轉折", "起漲", "發動", "轉強", "找買點", "扣抵"]):
         try:
-            # 🚀 第一步：攔截發問者的 LINE 暱稱
             try:
                 profile = line_bot_api.get_profile(user_id)
                 user_name = profile.display_name
             except Exception:
-                user_name = "戰友" # 萬一沒加好友或抓不到時的備用稱呼
+                user_name = "戰友"
 
             json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={int(time.time())}"
             res_json = requests.get(json_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
-            
-            # 💥 第二步：在開頭也換上專屬稱呼
-            reply_lines = [f"🦅 【股海觀浪・起漲轉折雷達】", f"報告 {user_name}，幫您掃描最新籌碼，抓出「均線扣低、準備轉強」的潛力標的：\n"]
-            count = 0
-            
+
+            qualified_picks = []
             target_dict = {}
             if isinstance(res_json, list):
                 for item in res_json:
@@ -1443,47 +1439,41 @@ def handle_message(event):
                         target_dict[code] = item
             else:
                 target_dict = res_json
-            
+
             for code, info in target_dict.items():
-                if count >= 5: break
-                
                 name = info.get('name', info.get('商品', '未知'))
                 ind = info.get('ind', info.get('產業', ''))
                 y_close = float(info.get("y_close", 0))
-                koudi_5 = float(info.get("ma5", 0))
-                koudi_10 = float(info.get("ma10", 0))
+                ma5 = float(info.get("ma5", 0))
+
+                if y_close > 0 and ma5 > 0 and y_close >= ma5:
+                    qualified_picks.append({
+                        "id": code,
+                        "name": name,
+                        "ind": ind,
+                        "price": y_close,
+                        "ma5": ma5,
+                        "reason": "均線之上穩健排列，多方主導中"
+                    })
+
+            if qualified_picks and len(qualified_picks) > 0:
+                top_picks = qualified_picks[:5]
+                reply_lines = [
+                    f"📊 【盤中技術面即時篩選・買點雷達】",
+                    f"報告 {user_name}，系統已完成盤中多維度技術篩選，目前符合轉折與穩健排列的標的如下：\n",
+                    "======================"
+                ]
+                for p in top_picks:
+                    reply_lines.append(f"🔹 {p['name']}({p['id']}) ｜ {p['ind']}\n現價：{p['price']} (5MA: {p['ma5']})\n💡 狀態：{p['reason']}")
+                    reply_lines.append("----------------------")
                 
-                if y_close == 0 or koudi_5 == 0:
-                    continue
-                
-                if y_close > koudi_5 and y_close > koudi_10 and y_close > 0:
-                    reply_lines.append(f"🎯 {name} ({code}) ｜ {ind}")
-                    
-                    diff_pct = ((y_close - koudi_5) / koudi_5) * 100
-                    
-                    if diff_pct < 1.0:
-                        comment = f"👉 收盤 {y_close} 元，超級貼近 5日防線({koudi_5})！主力控盤極度精準，這是絕佳的「防守反擊」買點，停損超好守。"
-                    elif diff_pct < 3.0:
-                        comment = f"👉 現價 {y_close} 元已穩穩踩住短線支撐({koudi_5})。賣壓消化得差不多了，只要大盤稍有風吹草動，隨時能輕鬆點火上攻！"
-                    else:
-                        comment = f"👉 股價 {y_close} 元強勢拉開與均線({koudi_5})的距離！多方完全掌握發球權，動能充沛，適合順勢操作。"
-                        
-                    reply_lines.append(comment)
-                    reply_lines.append("") 
-                    count += 1
-            
-            if count == 0:
-                # 💥 第三步：將原本寫死的「統帥」換成 {user_name}
-                reply_lines.append(f"🛡️ 報告 {user_name}，目前大盤動盪(或雲端尚未更新最新數據)，尚未發現符合「完美雙線轉強」的安全標的。寧可錯過不要做錯，建議嚴控資金！")
+                reply_lines.append("📌 提示：此清單為技術面即時篩選結果，請搭配當下大盤走勢與個人風險承受度評估進出！")
+                reply_msg = "\n".join(reply_lines)
             else:
-                # 結尾叮嚀也加上名字
-                reply_lines.append(f"💡 叮嚀 {user_name}：轉折股剛發動時容易震盪，請搭配大盤【夜盤】資金風向，分批佈局喔！")
-                
-            reply_msg = "\n".join(reply_lines)
-            
+                reply_msg = f"🔍 報告 {user_name}，目前盤中多空拉鋸，系統暫未篩選出符合嚴格均線轉折條件的標的。建議先觀望、等待主流資金明確表態！"
         except Exception as e:
-            reply_msg = f"⚠️ 轉折雷達掃描異常：{e}"
-            
+            reply_msg = f"⚠️ 盤中技術篩選異常：{e}"
+
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
         return
 
