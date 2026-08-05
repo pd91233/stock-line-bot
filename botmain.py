@@ -1000,13 +1000,20 @@ def generate_professional_analysis(stock_name, stock_code, realtime_str, current
     score = 50 
     signals = []
     
+    # 追蹤各項目的得分/扣分明細以供顯示
+    trend_score_text = "0 分（均線糾結 / 震盪整理）"
+    chip_score_text = "0 分（籌碼結構相對平穩）"
+    volume_score_text = "0 分（量能相對沉寂）"
+
     # 1. 均線與趨勢結構判斷
     if current_price > ma5 and ma5 > ma20:
         score += 20
         trend_text = "🟢 多頭排列（短中均線向上，強勢格局）"
+        trend_score_text = "+20 分（多頭排列）"
     elif current_price < ma5 and ma5 < ma20:
         score -= 20
         trend_text = "🔴 空頭排列（均線下彎，短線弱勢）"
+        trend_score_text = "-20 分（空頭排列）"
     else:
         trend_text = "🟡 均線糾結 / 震盪整理格局"
         
@@ -1014,19 +1021,26 @@ def generate_professional_analysis(stock_name, stock_code, realtime_str, current
     if "大戶放量攻擊" in chip_status or "強勢" in chip_status:
         score += 25
         signals.append("🔥 主力大戶積極進駐，具備上攻動能")
+        chip_score_text = "+25 分（大戶放量攻擊）"
     elif "鬆動" in chip_status:
         score -= 15
         signals.append("⚠️ 籌碼有鬆動跡象，留意短線賣壓")
+        chip_score_text = "-15 分（籌碼鬆動）"
     else:
         signals.append("⚖️ 籌碼結構相對平穩，多空拔河中")
         
     # 3. 量價結構評估
     if volume > 100000: 
         signals.append("📊 量能顯著放大，市場關注度高")
+        volume_score_text = "+15 分（量能顯著放大）"
+        score += 15 # 順便補上量能的微調加分
     else:
         signals.append("💤 量能相對沉寂，處於等待變盤階段")
 
-    # 4. 💥 新增：智慧支撐壓力計算（依據現價與 5MA 推算當日攻防價位）
+    # 確保分數不會超過 100 或低於 0
+    score = max(0, min(100, score))
+
+    # 4. 智慧支撐壓力計算
     if current_price > 0:
         pivot = current_price
         resistance_1 = round(pivot * 1.015, 2)  # 上檔壓力 (+1.5%)
@@ -1048,11 +1062,15 @@ def generate_professional_analysis(stock_name, stock_code, realtime_str, current
         f"--------------------------\n"
         f"{realtime_str}\n"
         f"--------------------------\n"
-        f"🔍 【多維度深度審查】\n"
-        f"• 趨勢結構：{trend_text}\n"
-        f"• 籌碼量價：{' ｜ '.join(signals)}\n"
+        f"🔍 【多維度深度審查與計分明細】\n"
+        f"• 趨勢結構：{trend_text} ｜ {trend_score_text}\n"
+        f"• 籌碼動向：{chip_score_text}\n"
+        f"• 量能狀態：{volume_score_text}\n"
+        f"• 籌碼量價細節：{' ｜ '.join(signals)}\n"
         f"• 實戰攻防：上檔壓力約 {resistance_1} ｜ 下檔支撐約 {support_1}\n"
-        f"• 綜合評分：{score} 分（滿分 100 分）\n"
+        f"• 綜合評分：{score} 分（基準 50 分 ｜ 中立區）\n"
+        f"--------------------------\n"
+        f"💡 【評分說明】：本系統以 50 分為多空分水嶺（>75分偏多狙擊，<40分保守觀望）。50 分代表當下多空膠著、處於平衡或整理期。\n"
         f"--------------------------\n"
         f"{action_advice}"
     )
