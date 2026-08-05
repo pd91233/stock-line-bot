@@ -1463,7 +1463,7 @@ def handle_message(event):
 
 
 # 💥 優化版：盤中技術面轉折與買點即時篩選（與爆量通知互補）
-    if any(keyword in user_msg for keyword in ["轉折", "起漲", "發動", "轉強", "找買點", "尋找買點", "扣抵"])::
+    if any(keyword in user_msg for keyword in ["轉折", "起漲", "發動", "轉強", "找買點", "尋找買點", "扣抵"]):
         try:
             try:
                 profile = line_bot_api.get_profile(user_id)
