@@ -1441,7 +1441,7 @@ def handle_message(event):
             review_lines.append("----------------------")
 
             # ==========================================
-            # 🛠️ 區塊二：各策略分頁選股戰報績效驗證
+            # 🛠️ 區塊二：各策略分頁選股戰報績效與明細驗證（個股明細版）
             # ==========================================
             try:
                 res_json = requests.get("https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json", timeout=5).json()
@@ -1484,7 +1484,7 @@ def handle_message(event):
                     
                     if close_p > 0 and prev_close > 0:
                         chg_pct = round(((close_p - prev_close) / prev_close) * 100, 2)
-                        item_data = {"name": name, "code": code, "chg": chg_pct, "is_win": chg_pct > 0}
+                        item_data = {"name": name, "code": code, "close": close_p, "chg": chg_pct, "is_win": chg_pct > 0}
                         
                         if stype == "mts":
                             strat_groups["🎯 MTS 完美共振區"].append(item_data)
@@ -1497,7 +1497,7 @@ def handle_message(event):
                 except:
                     pass
             
-            review_lines.append("📊 【選股策略各分頁獨立績效驗證】")
+            review_lines.append("📊 【選股策略各分頁獨立績效與明細驗證】")
             total_valid_groups = 0
             for group_name, stocks in strat_groups.items():
                 if not stocks:
@@ -1507,18 +1507,16 @@ def handle_message(event):
                 wins = sum(1 for s in stocks if s["is_win"])
                 win_rate = round((wins / count) * 100, 1)
                 avg_chg = round(sum(s["chg"] for s in stocks) / count, 2)
-                best_stock = max(stocks, key=lambda x: x["chg"]) if stocks else {"name": "-", "chg": 0}
                 
-                review_lines.append(
-                    f"• {group_name}\n"
-                    f"  ╰ 追蹤:{count}檔 ｜ 收盤收紅:{wins}檔 (勝率 {win_rate}%)\n"
-                    f"  ╰ 平均表現:{avg_chg:+.2f}% ｜ 最佳:{best_stock['name']}({best_stock['code']}) {best_stock['chg']:+.2f}%"
-                )
-            
-            if total_valid_groups == 0:
-                review_lines.append("• 各策略分頁今日無有效追蹤標的數據。")
-            
-            review_lines.append("----------------------")
+                # 分頁群組總結
+                review_lines.append(f"• {group_name} (追蹤 {count} 檔 ｜ 勝率 {win_rate}% ｜ 平均 {avg_chg:+.2f}%)")
+                
+                # 💥 逐行列出每一檔個股的收盤價與漲跌幅！
+                for s in stocks:
+                    sign = "📈 +" if s["chg"] > 0 else ("📉 " if s["chg"] < 0 else "➖ ")
+                    review_lines.append(f"   - {s['name']}({s['code']}) ｜ 收盤:{s['close']} ({sign}{s['chg']:+.2f}%)")
+                
+                review_lines.append("----------------------")
             review_lines.append("💡 參謀總結：完整記錄盤中爆量衝刺與各策略分頁表現，作為優化次日選股模型的黃金依據。")
             
             reply_msg = "\n".join(review_lines)
@@ -1644,8 +1642,7 @@ def handle_message(event):
 # 💥 新增模組 1：國際夜盤與期貨速報
 # 💥 新增模組 2：均線扣抵轉折預告
 # ==========================================================
-# 💥 新增模組 1：國際夜盤與期貨速報
-    if user_msg in ["夜盤", "國際局勢", "期貨", "虛擬貨幣"]:
+if user_msg in ["夜盤", "國際局勢", "期貨", "虛擬貨幣"]:
         try:
             tickers = {
                 "那斯達克期": "NQ=F",
@@ -1702,17 +1699,16 @@ def handle_message(event):
                 reply_lines.append(f"• {name} ｜ {sign}{chg_pct}%")
                 reply_lines.append(f"    現價: {curr_p} (短線支撐/壓力: {ema5})")
                 
-                # 收集給 AI 閱讀的簡要數據
                 summary_data_for_ai.append(f"{name}: {chg_pct:+.2f}%")
 
-            # 🧠 讓 AI 根據今天的各國與巨頭表現，動態生成一句專業戰略解讀
-            ai_insight = "市場多空交織，請嚴格控管風險。"
+            # 🧠 AI 動態生成：採用專業台股期貨操盤用語
+            ai_insight = "市場多空拔河，操作宜嚴守停損紀律。"
             try:
                 prompt = f"""
-                你是一位頂尖台股與總體經濟操盤手。以下是今日全球主要期貨、日韓股市、加密貨幣與美股 AI 巨頭的最新漲跌幅數據：
+                你是一位頂尖台股與期貨實戰操盤手。以下是今日全球主要期貨指數、日韓股市、加密貨幣與美股 AI 巨頭的最新漲跌幅數據：
                 {", ".join(summary_data_for_ai)}
                 
-                請根據以上數據，為戰友寫一句精闢、具備實戰前瞻性的「戰略解讀」（大約 40-60 字），直接給出結論與對台股的啟示，不要有任何廢話或稱呼。
+                請根據以上數據，寫一段道地的「實戰操盤點評」（大約 40-60 字），必須使用如：提款、撐盤力道、拔河格局、追高搶短、低基期、資金控管等股市期貨用語，直接給出結論與對次日台股的啟示，絕對不要有任何廢話或稱呼。
                 """
                 response = ai_model.generate_content(prompt)
                 if response and response.text:
@@ -1720,7 +1716,7 @@ def handle_message(event):
             except:
                 pass
 
-            reply_lines.append(f"\n💡 戰略解讀：{ai_insight}")
+            reply_lines.append(f"\n🎯 操盤手點評：{ai_insight}")
             reply_msg = "\n".join(reply_lines)
             
         except Exception as e:
@@ -2128,82 +2124,80 @@ def afternoon_review_loop():
                 review_lines.append("----------------------")
 
                 # ==========================================
-                # 🛠️ 區塊二：各策略分頁選股戰報績效驗證
-                # ==========================================
+            # 🛠️ 區塊二：各策略分頁選股戰報績效與明細驗證（個股明細版）
+            # ==========================================
+            try:
+                res_json = requests.get("https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json", timeout=5).json()
+            except:
+                res_json = {}
+
+            strat_groups = {
+                "🎯 MTS 完美共振區": [],
+                "🎖️ S級肥羊特戰區": [],
+                "👑 S級核心波段區": [],
+                "⚡ 當沖/隔日游擊區": []
+            }
+            
+            items_to_process = []
+            if isinstance(res_json, dict):
+                for k, v in res_json.items():
+                    if isinstance(v, dict):
+                        v["code"] = k
+                        items_to_process.append(v)
+            elif isinstance(res_json, list):
+                items_to_process = res_json
+
+            for info in items_to_process:
                 try:
-                    res_json = requests.get("https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json", timeout=5).json()
-                except:
-                    res_json = {}
-
-                strat_groups = {
-                    "🎯 MTS 完美共振區": [],
-                    "🎖️ S級肥羊特戰區": [],
-                    "👑 S級核心波段區": [],
-                    "⚡ 當沖/隔日游擊區": []
-                }
-                
-                items_to_process = []
-                if isinstance(res_json, dict):
-                    for k, v in res_json.items():
-                        if isinstance(v, dict):
-                            v["code"] = k
-                            items_to_process.append(v)
-                elif isinstance(res_json, list):
-                    items_to_process = res_json
-
-                for info in items_to_process:
-                    try:
-                        code = str(info.get("代碼", info.get("code", ""))).strip()
-                        name = info.get("name", info.get("商品", code))
-                        stype = str(info.get("type", "general"))
-                        
-                        if not code: continue
-
-                        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=1d"
-                        res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
-                        if not res.get('chart', {}).get('result'):
-                            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TWO?range=1d&interval=1d"
-                            res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
-
-                        meta = res['chart']['result'][0]['meta']
-                        close_p = meta.get('regularMarketPrice', 0)
-                        prev_close = meta.get('chartPreviousClose', close_p)
-                        
-                        if close_p > 0 and prev_close > 0:
-                            chg_pct = round(((close_p - prev_close) / prev_close) * 100, 2)
-                            item_data = {"name": name, "code": code, "chg": chg_pct, "is_win": chg_pct > 0}
-                            
-                            if stype == "mts":
-                                strat_groups["🎯 MTS 完美共振區"].append(item_data)
-                            elif stype == "b":
-                                strat_groups["🎖️ S級肥羊特戰區"].append(item_data)
-                            elif stype == "s":
-                                strat_groups["👑 S級核心波段區"].append(item_data)
-                            else:
-                                strat_groups["⚡ 當沖/隔日游擊區"].append(item_data)
-                    except:
-                        pass
-                
-                review_lines.append("📊 【昨日選股策略各分頁獨立績效驗證】")
-                total_valid_groups = 0
-                for group_name, stocks in strat_groups.items():
-                    if not stocks:
-                        continue
-                    total_valid_groups += 1
-                    count = len(stocks)
-                    wins = sum(1 for s in stocks if s["is_win"])
-                    win_rate = round((wins / count) * 100, 1)
-                    avg_chg = round(sum(s["chg"] for s in stocks) / count, 2)
-                    best_stock = max(stocks, key=lambda x: x["chg"]) if stocks else {"name": "-", "chg": 0}
+                    code = str(info.get("代碼", info.get("code", ""))).strip()
+                    name = info.get("name", info.get("商品", code))
+                    stype = str(info.get("type", "general"))
                     
-                    review_lines.append(
-                        f"• {group_name}\n"
-                        f"  ╰ 追蹤:{count}檔 ｜ 收盤收紅:{wins}檔 (勝率 {win_rate}%)\n"
-                        f"  ╰ 平均表現:{avg_chg:+.2f}% ｜ 最佳:{best_stock['name']}({best_stock['code']}) {best_stock['chg']:+.2f}%"
-                    )
+                    if not code: continue
+
+                    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=1d"
+                    res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
+                    if not res.get('chart', {}).get('result'):
+                        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TWO?range=1d&interval=1d"
+                        res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
+
+                    meta = res['chart']['result'][0]['meta']
+                    close_p = meta.get('regularMarketPrice', 0)
+                    prev_close = meta.get('chartPreviousClose', close_p)
+                    
+                    if close_p > 0 and prev_close > 0:
+                        chg_pct = round(((close_p - prev_close) / prev_close) * 100, 2)
+                        item_data = {"name": name, "code": code, "close": close_p, "chg": chg_pct, "is_win": chg_pct > 0}
+                        
+                        if stype == "mts":
+                            strat_groups["🎯 MTS 完美共振區"].append(item_data)
+                        elif stype == "b":
+                            strat_groups["🎖️ S級肥羊特戰區"].append(item_data)
+                        elif stype == "s":
+                            strat_groups["👑 S級核心波段區"].append(item_data)
+                        else:
+                            strat_groups["⚡ 當沖/隔日游擊區"].append(item_data)
+                except:
+                    pass
+            
+            review_lines.append("📊 【選股策略各分頁獨立績效與明細驗證】")
+            total_valid_groups = 0
+            for group_name, stocks in strat_groups.items():
+                if not stocks:
+                    continue
+                total_valid_groups += 1
+                count = len(stocks)
+                wins = sum(1 for s in stocks if s["is_win"])
+                win_rate = round((wins / count) * 100, 1)
+                avg_chg = round(sum(s["chg"] for s in stocks) / count, 2)
                 
-                if total_valid_groups == 0:
-                    review_lines.append("• 各策略分頁今日無有效追蹤標的數據。")
+                # 分頁群組總結
+                review_lines.append(f"• {group_name} (追蹤 {count} 檔 ｜ 勝率 {win_rate}% ｜ 平均 {avg_chg:+.2f}%)")
+                
+                # 💥 逐行列出每一檔個股的收盤價與漲跌幅！
+                for s in stocks:
+                    sign = "📈 +" if s["chg"] > 0 else ("📉 " if s["chg"] < 0 else "➖ ")
+                    review_lines.append(f"   - {s['name']}({s['code']}) ｜ 收盤:{s['close']} ({sign}{s['chg']:+.2f}%)")
                 
                 review_lines.append("----------------------")
                 review_lines.append("💡 參謀總結：完整記錄盤中爆量衝刺與各策略分頁表現，作為優化次日選股模型的黃金依據。")
