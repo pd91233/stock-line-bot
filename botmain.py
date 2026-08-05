@@ -1647,9 +1647,7 @@ def handle_message(event):
 # 💥 新增模組 1：國際夜盤與期貨速報
     if user_msg in ["夜盤", "國際局勢", "期貨", "虛擬貨幣"]:
         try:
-            # 🌍 擴充後的全方位全球資金與領頭羊雷達網
             tickers = {
-                # --- 總經與期貨指數 ---
                 "那斯達克期": "NQ=F",
                 "小道瓊期": "YM=F",
                 "日經 225": "^N225",
@@ -1660,8 +1658,6 @@ def handle_message(event):
                 "微型輕原油": "MCL=F",
                 "比特幣 (BTC)": "BTC-USD",
                 "以太幣 (ETH)": "ETH-USD",
-                
-                # --- 🚀 美股 AI 與重量級科技領頭羊 ---
                 "台積電 ADR": "TSM",
                 "輝達 (NVDA)": "NVDA",
                 "甲骨文 (ORCL)": "ORCL",
@@ -1675,6 +1671,7 @@ def handle_message(event):
                 "特斯拉 (TSLA)": "TSLA"
             }
             reply_lines = ["🌍 【股海觀浪・全球資金與科技領頭羊速報】\n"]
+            summary_data_for_ai = []
             
             for name, ticker in tickers.items():
                 url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=20d&includePrePost=true"
@@ -1702,10 +1699,28 @@ def handle_message(event):
                 ema5 = round(sum(valid_closes[-5:]) / 5, 2) if len(valid_closes) >= 5 else curr_p
                 
                 sign = "📈 +" if chg_pct > 0 else "📉 "
-                reply_lines.append(f"{sign}{chg_pct}% ｜ {name}")
+                reply_lines.append(f"• {name} ｜ {sign}{chg_pct}%")
                 reply_lines.append(f"    現價: {curr_p} (短線支撐/壓力: {ema5})")
-            
-            reply_lines.append("\n💡 戰略解讀：緊盯美光、博通與甲骨文等 AI 軟硬體風向球，提前預判台股相關供應鏈脈動。")
+                
+                # 收集給 AI 閱讀的簡要數據
+                summary_data_for_ai.append(f"{name}: {chg_pct:+.2f}%")
+
+            # 🧠 讓 AI 根據今天的各國與巨頭表現，動態生成一句專業戰略解讀
+            ai_insight = "市場多空交織，請嚴格控管風險。"
+            try:
+                prompt = f"""
+                你是一位頂尖台股與總體經濟操盤手。以下是今日全球主要期貨、日韓股市、加密貨幣與美股 AI 巨頭的最新漲跌幅數據：
+                {", ".join(summary_data_for_ai)}
+                
+                請根據以上數據，為戰友寫一句精闢、具備實戰前瞻性的「戰略解讀」（大約 40-60 字），直接給出結論與對台股的啟示，不要有任何廢話或稱呼。
+                """
+                response = ai_model.generate_content(prompt)
+                if response and response.text:
+                    ai_insight = response.text.strip()
+            except:
+                pass
+
+            reply_lines.append(f"\n💡 戰略解讀：{ai_insight}")
             reply_msg = "\n".join(reply_lines)
             
         except Exception as e:
