@@ -193,7 +193,7 @@ def smart_push_with_menu(group_id, message_text):
         ]
     )
     push_msg = TextSendMessage(
-        text=str(message_text)[:5000], 
+        text=str(message_text)[:4000],  # 💥 只要把這裡的 5000 改成 4000 即可！
         quick_reply=menu_quick_reply
     )
     
