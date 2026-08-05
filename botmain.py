@@ -128,6 +128,27 @@ def update_vips(data):
             json.dump(data, f, ensure_ascii=False, indent=4)
     except: pass
 
+
+# ==========================================================
+# 👇 請將這段「pCloud 雲端讀取當沖歷史」貼在這裡 👇
+# ==========================================================
+PCLOUD_INTRADAY_URL = "https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/intraday_cache.json"
+
+def read_intraday_cache():
+    try:
+        res = requests.get(f"{PCLOUD_INTRADAY_URL}?t={int(time.time())}", timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            if isinstance(data, list):
+                print(f"✅ [pCloud 補給成功] 成功從雲端載入 {len(data)} 筆當沖發報歷史紀錄！", flush=True)
+                return data
+    except Exception as e:
+        print(f"⚠️ [pCloud 讀取提醒] 目前雲端尚無歷史紀錄或連線中斷: {e}", flush=True)
+    return []
+
+# 啟動時從 pCloud 載入今日舊有的發報紀錄
+intraday_breakout_cache = read_intraday_cache()
+
 # ==========================================================
 # 🔑 1. API 金鑰與通訊參數設定 (雙彈匣火力升級)
 # ==========================================================
@@ -1907,6 +1928,9 @@ def continuous_radar_loop():
                         
                         if alert_msg and alert_msg not in intraday_breakout_cache:
                             intraday_breakout_cache.insert(0, alert_msg)
+                            
+                            # 💥 由於改用 pCloud 雲端，盤中發報會即時保留在記憶體中
+                            # 讓下午收盤戰報與手動「收盤戰報」指令能夠完美抓取到今日的所有歷史紀錄！
                             
                             current_cache = read_cache()
                             current_cache["intraday_alerts"] = intraday_breakout_cache[:10]
