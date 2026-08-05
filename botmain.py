@@ -1728,42 +1728,42 @@ if user_msg in ["夜盤", "國際局勢", "期貨", "虛擬貨幣"]:
 
 
 # 💥 優化版：盤中技術面轉折與買點即時篩選（與爆量通知互補）
-    if any(keyword in user_msg for keyword in ["轉折", "起漲", "發動", "轉強", "找買點", "尋找買點", "扣抵"]):
+if any(keyword in user_msg for keyword in ["轉折", "起漲", "發動", "轉強", "找買點", "尋找買點", "扣抵"]):
+    try:
         try:
-            try:
-                profile = line_bot_api.get_profile(user_id)
-                user_name = profile.display_name
-            except Exception:
-                user_name = "戰友"
+            profile = line_bot_api.get_profile(user_id)
+            user_name = profile.display_name
+        except Exception:
+            user_name = "戰友"
 
-            json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={int(time.time())}"
-            res_json = requests.get(json_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
+        json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={int(time.time())}"
+        res_json = requests.get(json_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
 
-            qualified_picks = []
-            target_dict = {}
-            if isinstance(res_json, list):
-                for item in res_json:
-                    code = str(item.get("代碼", item.get("code", "")))
-                    if code:
-                        target_dict[code] = item
-            else:
-                target_dict = res_json
+        qualified_picks = []
+        target_dict = {}
+        if isinstance(res_json, list):
+            for item in res_json:
+                code = str(item.get("代碼", item.get("code", "")))
+                if code:
+                    target_dict[code] = item
+        else:
+            target_dict = res_json
 
-            for code, info in target_dict.items():
-                name = info.get('name', info.get('商品', '未知'))
-                ind = info.get('ind', info.get('產業', ''))
-                y_close = float(info.get("y_close", 0))
-                ma5 = float(info.get("ma5", 0))
+        for code, info in target_dict.items():
+            name = info.get('name', info.get('商品', '未知'))
+            ind = info.get('ind', info.get('產業', ''))
+            y_close = float(info.get("y_close", 0))
+            ma5 = float(info.get("ma5", 0))
 
-                if y_close > 0 and ma5 > 0 and y_close >= ma5:
-                    qualified_picks.append({
-                        "id": code,
-                        "name": name,
-                        "ind": ind,
-                        "price": y_close,
-                        "ma5": ma5,
-                        "reason": "均線之上穩健排列，多方主導中"
-                    })
+            if y_close > 0 and ma5 > 0 and y_close >= ma5:
+                qualified_picks.append({
+                    "id": code,
+                    "name": name,
+                    "ind": ind,
+                    "price": y_close,
+                    "ma5": ma5,
+                    "reason": "均線之上穩健排列，多方主導中"
+                })
 
             if qualified_picks and len(qualified_picks) > 0:
                 top_picks = qualified_picks[:5]
