@@ -1419,7 +1419,7 @@ def handle_message(event):
 
 
 # 💥 優化版：盤中技術面轉折與買點即時篩選（與爆量通知互補）
-    if any(keyword in user_msg for keyword in ["轉折", "起漲", "發動", "轉強", "找買點", "扣抵"]):
+    if any(keyword in user_msg for keyword in ["轉折", "起漲", "發動", "轉強", "找買點", "尋找買點", "扣抵"])::
         try:
             try:
                 profile = line_bot_api.get_profile(user_id)
@@ -1488,9 +1488,8 @@ def handle_message(event):
             quick_reply=QuickReply(
                 items=[
                     QuickReplyButton(action=MessageAction(label="🌍 國際夜盤", text="夜盤")),
-                    QuickReplyButton(action=MessageAction(label="🎯 轉折起漲", text="轉折")),
-                    QuickReplyButton(action=MessageAction(label="📊 盤後選股", text="盤後選股")),
-                    QuickReplyButton(action=MessageAction(label="🛡️ 權限開通", text="雷達開通"))
+                    QuickReplyButton(action=MessageAction(label="🎯 尋找買點", text="尋找買點"))
+                    QuickReplyButton(action=MessageAction(label="📊 盤後選股", text="盤後選股"))
                 ]
             )
         )
@@ -1551,9 +1550,9 @@ def handle_message(event):
                 "style": "primary",
                 "color": "#059669",
                 "action": {
-                  "type": "message",
-                  "label": "🦅 智慧轉折雷達",
-                  "text": "轉折"
+                "type": "message",
+                "label": "🎯 尋找買點篩選",
+                "text": "尋找買點"
                 }
               },
               {
