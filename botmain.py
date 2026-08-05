@@ -1728,7 +1728,7 @@ if user_msg in ["夜盤", "國際局勢", "期貨", "虛擬貨幣"]:
 
 
 # 💥 優化版：盤中技術面轉折與買點即時篩選（與爆量通知互補）
-	if any(keyword in user_msg for keyword in ["轉折", "起漲", "發動", "轉強", "找買點", "尋找買點", "扣抵"]):
+    if any(keyword in user_msg for keyword in ["轉折", "起漲", "發動", "轉強", "找買點", "尋找買點", "扣抵"]):
         try:
             try:
                 profile = line_bot_api.get_profile(user_id)
@@ -1764,8 +1764,8 @@ if user_msg in ["夜盤", "國際局勢", "期貨", "虛擬貨幣"]:
                         "ma5": ma5,
                         "reason": "均線之上穩健排列，多方主導中"
                     })
-					
-	if qualified_picks and len(qualified_picks) > 0:
+
+            if qualified_picks and len(qualified_picks) > 0:
                 top_picks = qualified_picks[:5]
                 reply_lines = [
                     f"📊 【盤中技術面即時篩選・買點雷達】",
@@ -1784,7 +1784,7 @@ if user_msg in ["夜盤", "國際局勢", "期貨", "虛擬貨幣"]:
             reply_msg = f"⚠️ 盤中技術篩選異常：{e}"
 
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
-        return        
+        return
 
 
     # ==========================================================
