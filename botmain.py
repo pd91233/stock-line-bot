@@ -1749,43 +1749,43 @@ if any(keyword in user_msg for keyword in ["轉折", "起漲", "發動", "轉強
         else:
             target_dict = res_json
 
-			for code, info in target_dict.items():
-                name = info.get('name', info.get('商品', '未知'))
-                ind = info.get('ind', info.get('產業', ''))
-                y_close = float(info.get("y_close", 0))
-                ma5 = float(info.get("ma5", 0))
+		for code, info in target_dict.items():
+            name = info.get('name', info.get('商品', '未知'))
+            ind = info.get('ind', info.get('產業', ''))
+            y_close = float(info.get("y_close", 0))
+            ma5 = float(info.get("ma5", 0))
 
-                if y_close > 0 and ma5 > 0 and y_close >= ma5:
-                    qualified_picks.append({
-                        "id": code,
-                        "name": name,
-                        "ind": ind,
-                        "price": y_close,
-                        "ma5": ma5,
-                        "reason": "均線之上穩健排列，多方主導中"
-                    })
+            if y_close > 0 and ma5 > 0 and y_close >= ma5:
+                qualified_picks.append({
+                    "id": code,
+                    "name": name,
+                    "ind": ind,
+                    "price": y_close,
+                    "ma5": ma5,
+                    "reason": "均線之上穩健排列，多方主導中"
+                })
 
-            if qualified_picks and len(qualified_picks) > 0:
-                top_picks = qualified_picks[:5]
-                reply_lines = [
-                    "📊 【盤中技術面即時篩選・買點雷達】",
-                    f"報告 {user_name}，系統已完成盤中多維度技術篩選，目前符合轉折與穩健排列的標的如下：\n",
-                    "======================"
-                ]
-                for p in top_picks:
-                    reply_lines.append(f"🔹 {p['name']}({p['id']}) ｜ {p['ind']}\n現價：{p['price']} (5MA: {p['ma5']})\n💡 狀態：{p['reason']}")
-                    reply_lines.append("----------------------")
+        if qualified_picks and len(qualified_picks) > 0:
+            top_picks = qualified_picks[:5]
+            reply_lines = [
+                "📊 【盤中技術面即時篩選・買點雷達】",
+                f"報告 {user_name}，系統已完成盤中多維度技術篩選，目前符合轉折與穩健排列的標的如下：\n",
+                "======================"
+            ]
+            for p in top_picks:
+                reply_lines.append(f"🔹 {p['name']}({p['id']}) ｜ {p['ind']}\n現價：{p['price']} (5MA: {p['ma5']})\n💡 狀態：{p['reason']}")
+                reply_lines.append("----------------------")
                 
-                reply_lines.append("📌 提示：此清單為技術面即時篩選結果，請搭配當下大盤走勢與個人風險承受度評估進出！")
-                reply_msg = "\n".join(reply_lines)
-            else:
-                reply_msg = f"🔍 報告 {user_name}，目前盤中多空拉鋸，系統暫未篩選出符合嚴格均線轉折條件的標的。建議先觀望、等待主流資金明確表態！"
-        except Exception as e:
-            reply_msg = f"⚠️ 盤中技術篩選異常：{e}"
+            reply_lines.append("📌 提示：此清單為技術面即時篩選結果，請搭配當下大盤走勢與個人風險承受度評估進出！")
+            reply_msg = "\n".join(reply_lines)
+        else:
+            reply_msg = f"🔍 報告 {user_name}，目前盤中多空拉鋸，系統暫未篩選出符合嚴格均線轉折條件的標的。建議先觀望、等待主流資金明確表態！"
+    except Exception as e:
+        reply_msg = f"⚠️ 盤中技術篩選異常：{e}"
 
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
-        return
-
+    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
+    return
+	
 
     # ==========================================================
     # 重裝甲戰情面板 (Flex Message)
