@@ -1523,26 +1523,7 @@ def handle_message(event):
 
 
     # ==========================================================
-    # 💥 方案一：輕量級快捷按鈕 (Quick Reply)
-    # 觸發口令：輸入「呼叫雷達」或「快捷選單」
-    # ==========================================================
-    if user_msg in ["呼叫雷達", "快捷選單"]:
-        reply_msg = TextSendMessage(
-            text="📊 股海觀浪戰情中心：請選擇您要調閱的戰情雷達！",
-            quick_reply=QuickReply(
-                items=[
-                    QuickReplyButton(action=MessageAction(label="🌍 國際夜盤", text="夜盤")),
-                    QuickReplyButton(action=MessageAction(label="🎯 尋找買點", text="尋找買點")),
-                    QuickReplyButton(action=MessageAction(label="🧠 AI 盤勢講評", text="今日盤勢")),
-                    QuickReplyButton(action=MessageAction(label="📊 盤後選股", text="盤後選股"))
-                ]
-            )
-        )
-        line_bot_api.reply_message(event.reply_token, reply_msg)
-        return
-
-    # ==========================================================
-    # 💥 方案二：重裝甲戰情面板 (Flex Message)
+    # 重裝甲戰情面板 (Flex Message)
     # 觸發口令：輸入「主選單」或「指揮中心」
     # ==========================================================
     if user_msg in ["主選單", "指揮中心"]:
