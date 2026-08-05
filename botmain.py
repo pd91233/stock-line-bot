@@ -1749,7 +1749,7 @@ if any(keyword in user_msg for keyword in ["轉折", "起漲", "發動", "轉強
         else:
             target_dict = res_json
 
-		for code, info in target_dict.items():
+        for code, info in target_dict.items():
             name = info.get('name', info.get('商品', '未知'))
             ind = info.get('ind', info.get('產業', ''))
             y_close = float(info.get("y_close", 0))
