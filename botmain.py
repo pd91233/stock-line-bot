@@ -1033,11 +1033,10 @@ def generate_professional_analysis(stock_name, stock_code, realtime_str, current
     if volume > 100000: 
         signals.append("📊 量能顯著放大，市場關注度高")
         volume_score_text = "+15 分（量能顯著放大）"
-        score += 15 # 順便補上量能的微調加分
+        score += 15 
     else:
         signals.append("💤 量能相對沉寂，處於等待變盤階段")
 
-    # 確保分數不會超過 100 或低於 0
     score = max(0, min(100, score))
 
     # 4. 智慧支撐壓力計算
@@ -1070,7 +1069,7 @@ def generate_professional_analysis(stock_name, stock_code, realtime_str, current
         f"• 實戰攻防：上檔壓力約 {resistance_1} ｜ 下檔支撐約 {support_1}\n"
         f"• 綜合評分：{score} 分（基準 50 分 ｜ 中立區）\n"
         f"--------------------------\n"
-        f"💡 【評分說明】：本系統以 50 分為多空分水嶺（>75分偏多狙擊，<40分保守觀望）。50 分代表當下多空膠著、處於平衡或整理期。\n"
+        f"💡 【評分說明】：本系統以 50 分為多空分水嶺（>75分偏多狙擊，<40分保守觀望）。50 分代表當下多空膠著、處於平衡或整理期，非系統故障。\n"
         f"--------------------------\n"
         f"{action_advice}"
     )
@@ -1648,26 +1647,39 @@ def handle_message(event):
 # 💥 新增模組 1：國際夜盤與期貨速報
     if user_msg in ["夜盤", "國際局勢", "期貨", "虛擬貨幣"]:
         try:
-            # 擴充監控雷達網：涵蓋美股期指、台積電 ADR、虛擬貨幣、避險商品與恐慌指數
+            # 🌍 擴充後的全方位全球資金與領頭羊雷達網
             tickers = {
+                # --- 總經與期貨指數 ---
                 "那斯達克期": "NQ=F",
                 "小道瓊期": "YM=F",
-                "台積電 ADR": "TSM",
-                "比特幣 (BTC)": "BTC-USD",
-                "以太幣 (ETH)": "ETH-USD",
+                "日經 225": "^N225",
+                "南韓綜合": "^KS11",
                 "恐慌指數 VIX": "^VIX",
                 "美元兌台幣": "TWD=X",
                 "微型黃金": "MGC=F", 
-                "微型輕原油": "MCL=F"
+                "微型輕原油": "MCL=F",
+                "比特幣 (BTC)": "BTC-USD",
+                "以太幣 (ETH)": "ETH-USD",
+                
+                # --- 🚀 美股 AI 與重量級科技領頭羊 ---
+                "台積電 ADR": "TSM",
+                "輝達 (NVDA)": "NVDA",
+                "甲骨文 (ORCL)": "ORCL",
+                "博通 (AVGO)": "AVGO",
+                "美光 (MU)": "MU",
+                "微軟 (MSFT)": "MSFT",
+                "亞馬遜 (AMZN)": "AMZN",
+                "谷歌 (GOOGL)": "GOOGL",
+                "帕蘭泰爾 (PLTR)": "PLTR",
+                "蘋果 (AAPL)": "AAPL",
+                "特斯拉 (TSLA)": "TSLA"
             }
-            reply_lines = ["🌍 【股海觀浪・全球資金速報】\n"]
+            reply_lines = ["🌍 【股海觀浪・全球資金與科技領頭羊速報】\n"]
             
             for name, ticker in tickers.items():
-                # 💥 修改 1：網址加上 &includePrePost=true 強制抓取盤後與電子盤數據
                 url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=20d&includePrePost=true"
                 res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
                 
-                # 確保有抓到資料
                 if not res.get('chart', {}).get('result'):
                     reply_lines.append(f"⚠️ {name}：訊號中斷")
                     continue
@@ -1677,26 +1689,23 @@ def handle_message(event):
                 closes = indicators.get('close', [])
                 valid_closes = [c for c in closes if c is not None]
                 
-                # 💥 修改 2：🛡️ 強制優先抓取盤後/電子盤的即時報價，若無則退回常規盤報價
                 curr_p = meta.get('postMarketPrice', meta.get('regularMarketPrice'))
                 curr_p = round(curr_p, 2) if curr_p else 0.0
                 
                 prev_p = meta.get('chartPreviousClose', 0.0)
                 
-                # 預防除以零的錯誤
                 if prev_p > 0:
                     chg_pct = round(((curr_p - prev_p) / prev_p) * 100, 2)
                 else:
                     chg_pct = 0.0
                 
-                # 計算短線 EMA (5EMA) 判斷趨勢防線
                 ema5 = round(sum(valid_closes[-5:]) / 5, 2) if len(valid_closes) >= 5 else curr_p
                 
                 sign = "📈 +" if chg_pct > 0 else "📉 "
                 reply_lines.append(f"{sign}{chg_pct}% ｜ {name}")
-                reply_lines.append(f"   現價: {curr_p} (短線支撐/壓力: {ema5})")
+                reply_lines.append(f"    現價: {curr_p} (短線支撐/壓力: {ema5})")
             
-            reply_lines.append("\n💡 戰略解讀：緊盯比特幣與 VIX 動向，提前預判明日台股科技族群的資金風向。")
+            reply_lines.append("\n💡 戰略解讀：緊盯美光、博通與甲骨文等 AI 軟硬體風向球，提前預判台股相關供應鏈脈動。")
             reply_msg = "\n".join(reply_lines)
             
         except Exception as e:
