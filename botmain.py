@@ -228,7 +228,7 @@ intraday_breakout_cache = []
 intraday_alerted_codes = set() 
 stock_tick_memory = {}         
 
-def detect_intraday_breakout(code, name, ind="未知", ma5=0.0, y_high=0.0, s_type=""):
+def detect_intraday_breakout(code, name, ind="未知", ma5=0.0, y_high=0.0, s_type="", ma20=0.0, top_ind=""):
     import requests, time, datetime
     
     # 🛡️ 單日冷卻防護：今天已經通報過，直接跳過
@@ -256,111 +256,127 @@ def detect_intraday_breakout(code, name, ind="未知", ma5=0.0, y_high=0.0, s_ty
             if z <= 0 or y <= 0: return None
             
             chg_pct = round(((z - y) / y) * 100, 2)
+            gap_pct = round(((o - y) / y) * 100, 2) # 🎯 新增：開盤缺口計算
             
-            # 🛡️ 升級為真實 VWAP 演算法：結合成交量加權，徹底消除最高價無量灌水的盲點
-            # 優先嘗試抓取官方總成交量 v，若無則退回原先的典型價格估算
+            # VWAP 成交量加權均價估算
             try:
-                # 假設 v 是當日累積總張數/股數，若成交量足夠，採用成交量加權平均近似值
-                # 實戰精算：以當日成交均價 (總成交金額/總成交股數) 作為基準，若 API 無法取得金額則用現價與開高低綜合加權
                 vwap_est = round((o + h + l + (z * v / (v if v > 0 else 1))) / 4, 2) if v > 0 else round((o + h + l + z * 2) / 5, 2)
-                # 若算出來的 vwap 異常偏離現價超過 7%，自動啟動防呆回歸保險線
                 if abs(vwap_est - z) / z > 0.07:
                     vwap_est = round((o + h + l + z * 2) / 5, 2)
             except:
                 vwap_est = round((o + h + l + z * 2) / 5, 2)
 
             now_ts = time.time()
+            
+            # 🎯 新增：盤中時間動態加權濾網 (判定目前處於哪個戰區)
+            tz = datetime.timezone(datetime.timedelta(hours=8))
+            now_dt = datetime.datetime.now(tz)
+            time_str = now_dt.strftime("%H:%M:%S")
+            current_time_num = now_dt.hour * 100 + now_dt.minute
+            
+            if 900 <= current_time_num < 1000:
+                time_status = "golden"  # 黃金攻擊期
+            elif 1000 <= current_time_num < 1100:
+                time_status = "cooling" # 冷卻洗盤期
+            else:
+                time_status = "dead_water" # 午間死水期
 
             # 🧠 寫入動態矩陣記憶體
             if code not in stock_tick_memory:
                 stock_tick_memory[code] = []
+            stock_tick_memory[code].append((now_ts, z, v, h, l))
             
-            stock_tick_memory[code].append((now_ts, z, v, h))
-            
-            # 只保留最近 10 分鐘的記憶，避免拖慢雲端效能
             if len(stock_tick_memory[code]) > 10:
                 stock_tick_memory[code].pop(0)
 
             ticks = stock_tick_memory[code]
             
-            # 必須收集滿 5 分鐘 (約 6 個點) 才能進行雙週期比對
             if len(ticks) >= 6:
-                current_z, current_v, current_h = ticks[-1][1], ticks[-1][2], ticks[-1][3]
+                current_z, current_v = ticks[-1][1], ticks[-1][2]
                 z_1m_ago, v_1m_ago = ticks[-2][1], ticks[-2][2]
                 z_5m_ago, v_5m_ago = ticks[-6][1], ticks[-6][2]
 
-                # 🔫 算出版機：最近 1 分鐘的瞬間成交量
                 vol_1m = current_v - v_1m_ago
-                # 🛡️ 算出大局：最近 5 分鐘的總成交量，並推算平均每分鐘是多少
                 vol_5m = current_v - v_5m_ago
                 avg_1m_vol_in_5m = vol_5m / 5 if vol_5m > 0 else 1.0
+                ignite_value = vol_1m * current_z * 1000 # 點火資金(台幣)
 
-                # 💥 【全新雙層防線濾網】💥
+                # 💥 【終極防護：連續動能與假突破過濾】
+                # 1. 真實點火判定 (這分鐘必須是紅K或平盤往上吃，嚴禁外盤爆量下殺)
+                is_real_attack = current_z >= z_1m_ago 
                 
-                # 1. 均價線防護與短趨勢向上 (確保多方控盤)
+                # 2. 絕對量能與時間動態加權防護
+                is_volume_surge = False
+                if time_status == "golden":
+                    # 早盤標準：1.5倍均量 + 絕對量 > 150張 + 資金 > 800萬
+                    if vol_1m >= (avg_1m_vol_in_5m * 1.5) and vol_1m >= 150 and ignite_value >= 8000000:
+                        is_volume_surge = True
+                elif time_status == "cooling":
+                    # 中場標準：2.0倍均量 + 絕對量 > 250張 + 資金 > 1200萬
+                    if vol_1m >= (avg_1m_vol_in_5m * 2.0) and vol_1m >= 250 and ignite_value >= 12000000:
+                        is_volume_surge = True
+                elif time_status == "dead_water":
+                    # 午休標準：必須爆出超大絕對量 (大於400張或2000萬資金) 且 強勢過高
+                    is_breaking_high = (current_z >= h * 0.995)
+                    if vol_1m >= 400 and ignite_value >= 20000000 and is_breaking_high:
+                        is_volume_surge = True
+
+                # 3. 均價線防護與短趨勢向上
                 is_above_vwap = current_z >= vwap_est
                 is_trend_up = current_z >= z_5m_ago
                 
-                # 2. 降門檻點火偵測 (1.5倍爆量 + 300萬台幣資金)
-                is_volume_surge = vol_1m >= (avg_1m_vol_in_5m * 1.5)
-                is_ignited = (vol_1m * current_z * 1000) >= 3000000 
-                
-                if is_above_vwap and is_trend_up and is_volume_surge and is_ignited:
+                if is_above_vwap and is_trend_up and is_volume_surge and is_real_attack:
                     
-                    # 3. 雙層警戒線判斷
+                    # 🎯 【高階當沖定錨：天花板、開盤缺口、大均線】
+                    dist_to_high_pct = ((h - current_z) / current_z) * 100 if h > 0 else 0
+                    is_near_ceiling = (0 < dist_to_high_pct <= 0.8) and (current_time_num > 930) # 距離前高不到 0.8%
+                    is_below_20ma = (ma20 > 0 and current_z < ma20) # 跌破月線的弱勢股
+                    is_strong_gap = (gap_pct >= 2.0 and current_z >= o) # 強勢跳空且未破開盤
+
+                    # 判定警報級別
                     alert_type = None
-                    if 1.0 <= chg_pct <= 4.5:
-                        alert_type = "🌅 【破曉初升】安全起漲區 (適合佈局)"
+                    action_guide = ""
+                    
+                    # 情況 A：主力拉高出貨的假突破 (撞天花板 或 弱勢反彈)
+                    if is_near_ceiling or is_below_20ma:
+                        alert_type = "⚠️ 【兵臨城下】高檔測壓或反彈逃命波"
+                        action_guide = (
+                            f"🎯 【小白實戰指令：⛔ 空手觀望】\n"
+                            f"👉 戰況：{'距離今日高點極近，上方壓力沉重' if is_near_ceiling else f'股價連月線({ma20})都沒站上，長線偏空'}！\n"
+                            f"⚠️ 怎麼買：極可能是法人對倒或假點火，嚴禁此時低接或追高！\n"
+                            f"🛡️ 策略：今日動能預期已耗盡，建議直接放棄此檔，保留子彈尋找下一檔！"
+                        )
+                    # 情況 B：正常起漲與高檔誘多 (加入強制移動停利與 K棒低點防守)
+                    elif 1.0 <= chg_pct <= 4.5:
+                        alert_type = "🌅 【破曉初升】安全起漲點火"
+                        stop_loss_price = ticks[-1][4] if ticks[-1][4] > 0 else vwap_est # 取這根爆量1分K的最低點當防守
+                        action_guide = (
+                            f"🎯 【小白實戰指令：✅ 多方起漲】\n"
+                            f"👉 戰況：{'跳空強勢開局，' if is_strong_gap else ''}底部出量點火，實體紅K攻擊！\n"
+                            f"💰 委託：拉回 {vwap_est} ~ {current_z} 區間可分批低接。\n"
+                            f"🛡️ 防守：以起漲K棒低點 {stop_loss_price} 為最後防守線，跌破果斷停損！\n"
+                            f"⚠️ 軍規：盤中獲利拉開 2% 以上，請立刻將停損線上移至「自身成本價」，嚴格保本！"
+                        )
                     elif 4.5 < chg_pct <= 7.0:
-                        alert_type = "⚠️ 【極限動能】高風險誘多區 (請縮小部位)"
+                        alert_type = "🔥 【極限動能】高檔強勢換手區"
+                        action_guide = (
+                            f"🎯 【小白實戰指令：⚠️ 縮小部位短打】\n"
+                            f"👉 戰況：短線衝太快，正乖離過大，此處僅適合極短線當沖高手！\n"
+                            f"⚠️ 怎麼買：切勿被爆量沖昏頭去重倉追高！\n"
+                            f"🛡️ 策略：強勢股若拉回不破 {vwap_est}，才可小注試單，一旦跌破立刻逃命。"
+                        )
                         
-                    # 只要落入兩大射擊區間，立刻擊發警報！
                     if alert_type:
-                        tz = datetime.timezone(datetime.timedelta(hours=8))
-                        time_str = datetime.datetime.now(tz).strftime("%H:%M:%S")
+                        intraday_alerted_codes.add(code)
                         
-                        intraday_alerted_codes.add(code) # 鎖上保險栓
+                        # 🎯 族群共振標籤
+                        hot_tag = f"🌟 [主流共振：{ind}]" if (top_ind != "" and top_ind in ind) else f"🏷️ [{ind}]"
                         
-                        # 💥 加上主流族群的專屬視覺標記
-                        hot_tag = "👑 [主流領頭羊]" if "半導體" in ind else f"🏷️ [{ind}]"
-                        
-                        # ==========================================
-                        # 💡 升級版多維度判斷：小白專屬實戰指令生成
-                        # ==========================================
-                        status_prefix = f"突破昨高({y_high})動能強勁！" if (current_z > y_high > 0) else "底部出量點火！"
-
-                        if current_z < ma5 and ma5 > 0:
-                            # 跌破 5MA 的弱勢反彈，最危險的接刀陷阱
-                            action_guide = (
-                                f"🎯 【小白實戰指令：⚠️ 弱勢反彈陷阱】\n"
-                                f"👉 戰況：股價連 5日線({ma5}) 都還沒站上！\n"
-                                f"⚠️ 怎麼買：上方套牢壓力重，這只是死貓反彈，嚴禁追高進場！\n"
-                                f"🛡️ 防守：空手觀望，把錢留給真正的強勢股。"
-                            )
-                        elif "安全" in alert_type or "初升" in alert_type:
-                            # 站上 5MA 的安全起漲區
-                            ma5_text = f"站穩 5日線({ma5})" if ma5 > 0 else "站穩均價線"
-                            buy_range = f"{vwap_est} ~ {current_z}"
-                            action_guide = (
-                                f"🎯 【小白實戰指令：✅ 多方起漲】\n"
-                                f"👉 戰況：{ma5_text}，{status_prefix}\n"
-                                f"💰 委託價：拉回 {buy_range} 區間可分批低接\n"
-                                f"🛡️ 停損線：嚴守均價線 {vwap_est}，跌破站不回就果斷停損！"
-                            )
-                        else:
-                            # 高風險誘多區 (現價 > VWAP，但漲幅過高)
-                            action_guide = (
-                                f"🎯 【小白實戰指令：⚠️ 高檔誘多警戒】\n"
-                                f"👉 戰況：短線衝太快，正乖離過大，極易引發當沖客獲利了結賣壓！\n"
-                                f"⚠️ 怎麼買：切勿被爆量沖昏頭去追高！\n"
-                                f"🛡️ 防守：耐心等股價量縮拉回 {vwap_est} 附近有守再說，目前空手觀望。"
-                            )
-
                         return (
                             f"[{time_str}] ⚡ {name}({code}) {alert_type}\n"
                             f"{hot_tag} | 現價：{current_z} (均價線:{vwap_est})\n"
-                            f"漲幅：{chg_pct}%\n"
-                            f"🔥 1分爆量：{int(vol_1m)} 張 (達5分均速 {round(vol_1m/avg_1m_vol_in_5m, 1)}倍)\n"
+                            f"漲幅：{chg_pct}% | 開盤缺口：{gap_pct}%\n"
+                            f"🔥 1分絕對爆量：{int(vol_1m)} 張 (點火資金 {int(ignite_value/10000)}萬)\n"
                             f"----------------------\n"
                             f"{action_guide}"
                         )
@@ -988,7 +1004,11 @@ def generate_professional_analysis(stock_name, stock_code, realtime_str, current
 # ==========================================================
 # 🚀 5. 全市場真實資金流向排行與精選戰報交集過濾引擎
 # ==========================================================
+# 新增一個全域變數來儲存今日資金主攻族群
+global_true_market_top_ind = ""
+
 def execute_force_refresh():
+    global global_true_market_top_ind # 宣告使用全域變數
     headers = {"User-Agent": "Mozilla/5.0"}
     # 💥 預先定義所有變數，防止 NameError
     twii_chg = 0.0
@@ -1637,9 +1657,10 @@ def continuous_radar_loop():
                         ma5 = float(info.get("ma5", 0))
                         y_high = float(info.get("y_high", 0))
                         s_type = str(info.get("type", "general"))
+                        ma20 = float(info.get("ma20", 0)) # 新增抓取月線
                         
                         # 🎯 將大數據一併傳送給雷達進行多維度判定
-                        alert_msg = detect_intraday_breakout(code, name, ind, ma5, y_high, s_type)
+                        alert_msg = detect_intraday_breakout(code, name, ind, ma5, y_high, s_type, ma20, global_true_market_top_ind)
                         
                         if alert_msg and alert_msg not in intraday_breakout_cache:
                             intraday_breakout_cache.insert(0, alert_msg)
