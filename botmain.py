@@ -2036,7 +2036,7 @@ def afternoon_review_loop():
     
     print("📡 [收盤檢討哨] 多分頁選股戰報與當沖鑑識雙效驗證引擎已就位，等待下午 13:40 後執行...", flush=True)
     
-    last_sent_date = "" # 記錄今天是否已經發送過，絕不重複發送
+    last_sent_date = ""
 
     while True:
         try:
@@ -2045,15 +2045,11 @@ def afternoon_review_loop():
             current_time_num = now.hour * 100 + now.minute
             current_date_str = now.strftime("%Y-%m-%d")
             
-            # 💡 升級判定：只要是非週末 且 時間大於等於 13:40 且 今天還沒發送過
             if not is_weekend and current_time_num >= 1340 and last_sent_date != current_date_str:
                 print("🔍 [戰場鑑識] 時間已過 13:40，開始執行收盤結算與分頁覆盤...", flush=True)
                 
                 review_lines = ["📊 【股海觀浪・全方位戰場鑑識與分頁驗證】\n" + "----------------------"]
                 
-                # ==========================================
-                # 🛠️ 區塊一：盤中 1分/5分爆量雷達標的驗證結算
-                # ==========================================
                 if intraday_breakout_cache:
                     stock_records = {}
                     for alert in intraday_breakout_cache:
@@ -2123,83 +2119,76 @@ def afternoon_review_loop():
                 
                 review_lines.append("----------------------")
 
-                # ==========================================
-            # 🛠️ 區塊二：各策略分頁選股戰報績效與明細驗證（個股明細版）
-            # ==========================================
-            try:
-                res_json = requests.get("https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json", timeout=5).json()
-            except:
-                res_json = {}
-
-            strat_groups = {
-                "🎯 MTS 完美共振區": [],
-                "🎖️ S級肥羊特戰區": [],
-                "👑 S級核心波段區": [],
-                "⚡ 當沖/隔日游擊區": []
-            }
-            
-            items_to_process = []
-            if isinstance(res_json, dict):
-                for k, v in res_json.items():
-                    if isinstance(v, dict):
-                        v["code"] = k
-                        items_to_process.append(v)
-            elif isinstance(res_json, list):
-                items_to_process = res_json
-
-            for info in items_to_process:
                 try:
-                    code = str(info.get("代碼", info.get("code", ""))).strip()
-                    name = info.get("name", info.get("商品", code))
-                    stype = str(info.get("type", "general"))
-                    
-                    if not code: continue
-
-                    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=1d"
-                    res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
-                    if not res.get('chart', {}).get('result'):
-                        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TWO?range=1d&interval=1d"
-                        res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
-
-                    meta = res['chart']['result'][0]['meta']
-                    close_p = meta.get('regularMarketPrice', 0)
-                    prev_close = meta.get('chartPreviousClose', close_p)
-                    
-                    if close_p > 0 and prev_close > 0:
-                        chg_pct = round(((close_p - prev_close) / prev_close) * 100, 2)
-                        item_data = {"name": name, "code": code, "close": close_p, "chg": chg_pct, "is_win": chg_pct > 0}
-                        
-                        if stype == "mts":
-                            strat_groups["🎯 MTS 完美共振區"].append(item_data)
-                        elif stype == "b":
-                            strat_groups["🎖️ S級肥羊特戰區"].append(item_data)
-                        elif stype == "s":
-                            strat_groups["👑 S級核心波段區"].append(item_data)
-                        else:
-                            strat_groups["⚡ 當沖/隔日游擊區"].append(item_data)
+                    res_json = requests.get("https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json", timeout=5).json()
                 except:
-                    pass
-            
-            review_lines.append("📊 【選股策略各分頁獨立績效與明細驗證】")
-            total_valid_groups = 0
-            for group_name, stocks in strat_groups.items():
-                if not stocks:
-                    continue
-                total_valid_groups += 1
-                count = len(stocks)
-                wins = sum(1 for s in stocks if s["is_win"])
-                win_rate = round((wins / count) * 100, 1)
-                avg_chg = round(sum(s["chg"] for s in stocks) / count, 2)
+                    res_json = {}
+
+                strat_groups = {
+                    "🎯 MTS 完美共振區": [],
+                    "🎖️ S級肥羊特戰區": [],
+                    "👑 S級核心波段區": [],
+                    "⚡ 當沖/隔日游擊區": []
+                }
                 
-                # 分頁群組總結
-                review_lines.append(f"• {group_name} (追蹤 {count} 檔 ｜ 勝率 {win_rate}% ｜ 平均 {avg_chg:+.2f}%)")
+                items_to_process = []
+                if isinstance(res_json, dict):
+                    for k, v in res_json.items():
+                        if isinstance(v, dict):
+                            v["code"] = k
+                            items_to_process.append(v)
+                elif isinstance(res_json, list):
+                    items_to_process = res_json
+
+                for info in items_to_process:
+                    try:
+                        code = str(info.get("代碼", info.get("code", ""))).strip()
+                        name = info.get("name", info.get("商品", code))
+                        stype = str(info.get("type", "general"))
+                        
+                        if not code: continue
+
+                        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=1d"
+                        res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
+                        if not res.get('chart', {}).get('result'):
+                            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TWO?range=1d&interval=1d"
+                            res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
+
+                        meta = res['chart']['result'][0]['meta']
+                        close_p = meta.get('regularMarketPrice', 0)
+                        prev_close = meta.get('chartPreviousClose', close_p)
+                        
+                        if close_p > 0 and prev_close > 0:
+                            chg_pct = round(((close_p - prev_close) / prev_close) * 100, 2)
+                            item_data = {"name": name, "code": code, "close": close_p, "chg": chg_pct, "is_win": chg_pct > 0}
+                            
+                            if stype == "mts":
+                                strat_groups["🎯 MTS 完美共振區"].append(item_data)
+                            elif stype == "b":
+                                strat_groups["🎖️ S級肥羊特戰區"].append(item_data)
+                            elif stype == "s":
+                                strat_groups["👑 S級核心波段區"].append(item_data)
+                            else:
+                                strat_groups["⚡ 當沖/隔日游擊區"].append(item_data)
+                    except:
+                        pass
                 
-                # 💥 逐行列出每一檔個股的收盤價與漲跌幅！
-                for s in stocks:
-                    sign = "📈 +" if s["chg"] > 0 else ("📉 " if s["chg"] < 0 else "➖ ")
-                    review_lines.append(f"   - {s['name']}({s['code']}) ｜ 收盤:{s['close']} ({sign}{s['chg']:+.2f}%)")
-                
-                review_lines.append("----------------------")
+                review_lines.append("📊 【選股策略各分頁獨立績效與明細驗證】")
+                for group_name, stocks in strat_groups.items():
+                    if not stocks:
+                        continue
+                    count = len(stocks)
+                    wins = sum(1 for s in stocks if s["is_win"])
+                    win_rate = round((wins / count) * 100, 1)
+                    avg_chg = round(sum(s["chg"] for s in stocks) / count, 2)
+                    
+                    review_lines.append(f"• {group_name} (追蹤 {count} 檔 ｜ 勝率 {win_rate}% ｜ 平均 {avg_chg:+.2f}%)")
+                    
+                    for s in stocks:
+                        sign = "📈 +" if s["chg"] > 0 else ("📉 " if s["chg"] < 0 else "➖ ")
+                        review_lines.append(f"   - {s['name']}({s['code']}) ｜ 收盤:{s['close']} ({sign}{s['chg']:+.2f}%)")
+                    
+                    review_lines.append("----------------------")
                 review_lines.append("💡 參謀總結：完整記錄盤中爆量衝刺與各策略分頁表現，作為優化次日選股模型的黃金依據。")
                 
                 final_report = "\n".join(review_lines)
@@ -2209,7 +2198,7 @@ def afternoon_review_loop():
                     "C47bfa8e16a7216bd54dceb3b5e90cfa0"
                 ]
                 
-                # 💥 【關鍵修復】把打卡動作搬到這裡！提早記錄今天已嘗試發送，阻斷無限迴圈！
+                # 💥 阻斷無限迴圈的打卡點
                 last_sent_date = current_date_str
                 
                 for group_id in TARGET_GROUP_IDS:
@@ -2223,7 +2212,7 @@ def afternoon_review_loop():
         except Exception as e:
             print(f"⚠️ 戰場鑑識異常: {e}", flush=True)
             
-        time.sleep(30) # 每 30 秒檢查一次時間
+        time.sleep(30)
 
 
 # 啟動盤中巡邏引擎
