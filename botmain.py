@@ -1528,13 +1528,13 @@ def handle_message(event):
     # ==========================================================
     if user_msg in ["呼叫雷達", "快捷選單"]:
         reply_msg = TextSendMessage(
-            text="🦅 股海觀浪戰情中心：請選擇您要呼叫的雷達！",
+            text="📊 股海觀浪戰情中心：請選擇您要調閱的戰情雷達！",
             quick_reply=QuickReply(
                 items=[
                     QuickReplyButton(action=MessageAction(label="🌍 國際夜盤", text="夜盤")),
-                    QuickReplyButton(action=MessageAction(label="🎯 尋找買點", text="尋找買點"))
+                    QuickReplyButton(action=MessageAction(label="🎯 尋找買點", text="尋找買點")),
+                    QuickReplyButton(action=MessageAction(label="🧠 AI 盤勢講評", text="今日盤勢")),
                     QuickReplyButton(action=MessageAction(label="📊 盤後選股", text="盤後選股"))
-                    QuickReplyButton(action=MessageAction(label="🧠 AI 盤勢講評", text="今日盤勢"))
                 ]
             )
         )
