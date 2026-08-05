@@ -944,10 +944,7 @@ def fetch_realtime_data(stock_code):
 # ==========================================================
 
 def generate_professional_analysis(stock_name, stock_code, realtime_str, current_price, ma5, ma20, volume, chip_status):
-    """
-    結合技術面、量價與籌碼，進行專業操盤手級別的動態綜合評估（保留完整文字版）
-    """
-    score = 50  # 基礎分
+    score = 50 
     signals = []
     
     # 1. 均線與趨勢結構判斷
@@ -971,20 +968,27 @@ def generate_professional_analysis(stock_name, stock_code, realtime_str, current
         signals.append("⚖️ 籌碼結構相對平穩，多空拔河中")
         
     # 3. 量價結構評估
-    if volume > 100000:  # 大量標準
+    if volume > 100000: 
         signals.append("📊 量能顯著放大，市場關注度高")
     else:
         signals.append("💤 量能相對沉寂，處於等待變盤階段")
 
-    # 4. 綜合操盤手建議產出
-    if score >= 75:
-        action_advice = "🔥 【操盤手戰略：偏多狙擊】多方結構扎實，可沿關鍵支撐（如 5 日線）分批佈局，嚴守停損。"
-    elif score <= 40:
-        action_advice = "🛑 【操盤手戰略：保守觀望】短線趨勢偏弱或籌碼凌亂，切勿盲目接刀，建議等帶量突破或量縮止穩再說。"
+    # 4. 💥 新增：智慧支撐壓力計算（依據現價與 5MA 推算當日攻防價位）
+    if current_price > 0:
+        pivot = current_price
+        resistance_1 = round(pivot * 1.015, 2)  # 上檔壓力 (+1.5%)
+        support_1 = round(pivot * 0.985, 2)     # 下檔支撐 (-1.5%)
     else:
-        action_advice = "⚖️ 【操盤手戰略：區間應對】目前多空不明、處於橫盤整理，適合在上下檔支撐壓力間做區間看待，切勿追高殺低。"
+        resistance_1, support_1 = 0, 0
 
-    # 組合完整戰情報告（保留所有完整字句，僅縮短分隔線以防破圖）
+    # 5. 綜合操盤手建議產出
+    if score >= 75:
+        action_advice = "🔥 【操盤手戰略：偏多狙擊】多方結構扎實，可沿關鍵支撐分批佈局，嚴守停損。"
+    elif score <= 40:
+        action_advice = "🛑 【操盤手戰略：保守觀望】短線趨勢偏弱，切勿盲目接刀，建議等帶量突破再說。"
+    else:
+        action_advice = "⚖️ 【操盤手戰略：區間應對】目前多空不明、處於橫盤整理，適合在上下檔支撐壓力間操作。"
+
     report = (
         f"🎯 【專業操盤手立體戰情室】\n"
         f"📌 標的：{stock_name} ({stock_code})\n"
@@ -994,6 +998,7 @@ def generate_professional_analysis(stock_name, stock_code, realtime_str, current
         f"🔍 【多維度深度審查】\n"
         f"• 趨勢結構：{trend_text}\n"
         f"• 籌碼量價：{' ｜ '.join(signals)}\n"
+        f"• 實戰攻防：上檔壓力約 {resistance_1} ｜ 下檔支撐約 {support_1}\n"
         f"• 綜合評分：{score} 分（滿分 100 分）\n"
         f"--------------------------\n"
         f"{action_advice}"
@@ -1232,6 +1237,45 @@ def handle_message(event):
         reply_text = f"{cache_data.get('fundsText', '')}\n\n精選標的流向：\n{cache_data.get('stocksText', '')}"
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text[:5000]))
         return
+
+
+# 💥 新增模組：AI 總結今日盤勢與收盤講評
+    if user_msg in ["今日盤勢", "AI講評", "盤勢分析", "收盤講評"]:
+        try:
+            try:
+                profile = line_bot_api.get_profile(user_id)
+                user_name = profile.display_name
+            except Exception:
+                user_name = "戰友"
+
+            cache_data = read_cache()
+            funds_summary = cache_data.get('fundsText', '目前無大盤數據')
+            stocks_summary = cache_data.get('stocksText', '目前無主流數據')
+
+            # 呼叫 Gemini 進行專業盤勢總結編排
+            prompt = f"""
+            你是一位頂尖的台股操盤手與總體經濟分析師。請根據以下今日的盤勢數據與資金流向，為戰友寫一篇精簡有力、專業且具備前瞻性的「今日盤勢總結與明日觀盤重點」（大約150-200字，分段清晰，帶有股市實戰風格）：
+            - 大盤與資金流向摘要：{funds_summary}
+            - 盤面主流族群/精選標的：{stocks_summary}
+            """
+            
+            response = ai_model.generate_content(prompt)
+            ai_commentary = response.text.strip() if response and response.text else "目前 AI 大腦正在冷卻中，請稍後再試。"
+
+            reply_msg = (
+                f"🧠 【股海觀浪・AI 每日盤勢總結】\n"
+                f"報告 {user_name}，今日戰情剖析如下：\n"
+                f"----------------------\n"
+                f"{ai_commentary}\n"
+                f"----------------------\n"
+                f"💡 提醒：盤勢瞬息萬變，操作請嚴格執行資金控管與停損紀律！"
+            )
+        except Exception as e:
+            reply_msg = f"⚠️ AI 盤勢講評生成異常：{e}"
+
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
+        return
+
 
     # 💥 新增：讓用戶隨時透過 LINE 調閱完整盤後選股網址
     if user_msg in ["盤後選股", "選股策略", "最新選股"]:
@@ -1490,6 +1534,7 @@ def handle_message(event):
                     QuickReplyButton(action=MessageAction(label="🌍 國際夜盤", text="夜盤")),
                     QuickReplyButton(action=MessageAction(label="🎯 尋找買點", text="尋找買點"))
                     QuickReplyButton(action=MessageAction(label="📊 盤後選股", text="盤後選股"))
+                    QuickReplyButton(action=MessageAction(label="🧠 AI 盤勢講評", text="今日盤勢"))
                 ]
             )
         )
@@ -1510,7 +1555,7 @@ def handle_message(event):
             "contents": [
               {
                 "type": "text",
-                "text": "股海觀浪・戰情指揮中心",
+                "text": "股海觀浪・漫步股海",
                 "weight": "bold",
                 "color": "#fbbf24",
                 "size": "xl"
@@ -1525,7 +1570,7 @@ def handle_message(event):
             "contents": [
               {
                 "type": "text",
-                "text": "請點擊下方按鈕，調閱最新情報：",
+                "text": "請點擊下方按鈕，調閱最新資訊：",
                 "size": "sm",
                 "color": "#94a3b8",
                 "wrap": True
@@ -1553,6 +1598,16 @@ def handle_message(event):
                 "type": "message",
                 "label": "🎯 尋找買點篩選",
                 "text": "尋找買點"
+                }
+              },
+              {
+                "type": "button",
+                "style": "primary",
+                "color": "#d97706",
+                "action": {
+                  "type": "message",
+                  "label": "🧠 AI 每日盤勢講評",
+                  "text": "今日盤勢"
                 }
               },
               {
