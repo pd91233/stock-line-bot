@@ -1195,23 +1195,35 @@ def handle_message(event):
     user_msg = event.message.text.strip()
     user_id = event.source.user_id  
     
-    if user_msg == "雷達開通":
+    # 💥 新增：讓使用者隨時點名查詢當日已被系統鎖定的標的清單
+    if user_msg in ["今日雷達", "今日飆股", "雷達清單"]:
         try:
-            profile = line_bot_api.get_profile(user_id)
-            user_name = profile.display_name
-        except:
-            user_name = "未知特戰隊員"
+            try:
+                profile = line_bot_api.get_profile(user_id)
+                user_name = profile.display_name
+            except:
+                user_name = "戰友"
 
-        vips = read_vips()
-        if user_id not in vips:
-            vips[user_id] = {
-                "name": user_name,
-                "perms": {"1min": True, "5min": True, "report": True}
-            }
-            update_vips(vips)
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ 歡迎歸隊，{user_name}！\n您的專屬「當沖雷達與戰報」已成功列入發射名單。"))
-        else:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"⚠️ {user_name}，您的通訊座標已經在作戰名單中，無須重複開通！"))
+            if intraday_breakout_cache and len(intraday_breakout_cache) > 0:
+                recent_alerts = intraday_breakout_cache[:5]
+                reply_lines = [
+                    f"📈 【盤中選股雷達・今日飆股追蹤紀錄】",
+                    f"報告 {user_name}，以下為今日盤中已被系統鎖定的完整實戰紀錄：\n",
+                    "======================"
+                ]
+                for alert in recent_alerts:
+                    clean_alert = alert.replace("群組同步跟單急報", "實戰發報通知").replace("小白當沖實戰指令", "操作指引")
+                    reply_lines.append(clean_alert)
+                    reply_lines.append("----------------------")
+                
+                reply_lines.append("💡 提示：以上為今日發報之歷史軌跡，實際進出場請依當下盤勢與風險控制為準！")
+                reply_msg = "\n".join(reply_lines)
+            else:
+                reply_msg = f"🔍 報告 {user_name}，今日盤中目前尚無符合條件的標的。系統正嚴格過濾盤勢、避開假突破中，請耐心等候主流資金表態！"
+        except Exception as e:
+            reply_msg = f"⚠️ 查詢今日雷達清單異常：{e}"
+
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg[:5000]))
         return
 
     # 支援大盤、雷達或戰報的即時行情查詢
