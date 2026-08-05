@@ -2209,16 +2209,16 @@ def afternoon_review_loop():
                     "C47bfa8e16a7216bd54dceb3b5e90cfa0"
                 ]
                 
+                # 💥 【關鍵修復】把打卡動作搬到這裡！提早記錄今天已嘗試發送，阻斷無限迴圈！
+                last_sent_date = current_date_str
+                
                 for group_id in TARGET_GROUP_IDS:
                     smart_push_with_menu(
                         group_id,
                         final_report
                     )
                 
-                print("🚀 全方位爆量雷達與分頁驗證戰報已自動空投（附帶功能選單）！", flush=True)
-                
-                # 記錄今天已發送，避免今天之內重複觸發
-                last_sent_date = current_date_str
+                print("🚀 全方位爆量雷達與分頁驗證戰報已嘗試空投！", flush=True)
             
         except Exception as e:
             print(f"⚠️ 戰場鑑識異常: {e}", flush=True)
