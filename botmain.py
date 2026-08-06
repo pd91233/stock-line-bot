@@ -1904,10 +1904,10 @@ def market_patrol_loop():
 
 
 # ==========================================================
-# ⚡ 8. 專屬當沖連續掃描引擎 (帶有盤中時間鎖定)
+# ⚡ 8. 專屬當沖連續掃描引擎 (帶有盤中時間鎖定與防爆修復)
 # ==========================================================
 def continuous_radar_loop():
-    print("📡 [當沖雷達] 雙週期共振掃描引擎啟動，直連證交所待命中...")
+    print("📡 [當沖雷達] 雙週期共振掃描引擎啟動，直連證交所待命中...", flush=True)
     import time
     import datetime
     import requests
@@ -1923,21 +1923,15 @@ def continuous_radar_loop():
                 headers = {"User-Agent": "Mozilla/5.0"}
 
                 # ==========================================
-                # 🛡️ 系統主動升級：大盤指數防空防護罩 (覆巢防禦系統)
+                # 🛡️ 系統優化：暫時移除會導致雷達凍結的大盤防護罩，改為僅記錄大盤狀態
                 # ==========================================
                 try:
                     twii_res = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?range=1d&interval=1d", headers=headers, timeout=3).json()
                     twii_meta = twii_res['chart']['result'][0]['meta']
                     twii_chg_pct = ((twii_meta['regularMarketPrice'] - twii_meta['chartPreviousClose']) / twii_meta['chartPreviousClose']) * 100
-                    
-                    # 🚨 如果大盤跌幅超過 1.5%，啟動最高級別防護，直接強制終止這 1 分鐘的所有個股掃描！
-                    if twii_chg_pct <= -1.5:
-                        print(f"🚨 [大盤防護罩啟動] 加權指數重挫 {twii_chg_pct:.2f}%！覆巢之下無完卵，凍結所有多方點火雷達！", flush=True)
-                        time.sleep(60)
-                        continue 
+                    print(f"📊 [雷達心跳] 加權指數現況: {twii_chg_pct:.2f}%，持續掃描個股中...", flush=True)
                 except Exception as e:
-                    print(f"⚠️ 大盤防護罩偵測異常: {e}", flush=True)
-                # ==========================================
+                    print(f"⚠️ 大盤指數背景讀取小異常 (不影響個股掃描): {e}", flush=True)
 
                 json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={int(time.time())}"
                 res_json = requests.get(json_url, headers=headers, timeout=5)
@@ -1952,73 +1946,41 @@ def continuous_radar_loop():
                         
                     for code, info in target_dict.items():
                         name = info.get("name", code)
-                        # 🎯 抓取這檔股票的產業別 (相容 ind 或 產業 欄位)
                         ind = str(info.get("ind", info.get("產業", "未知")))
                         
-                        # 💥 提取日K級別大數據：5日均線、昨日高點、戰略分類
                         ma5 = float(info.get("ma5", 0))
                         y_high = float(info.get("y_high", 0))
                         s_type = str(info.get("type", "general"))
-                        ma20 = float(info.get("ma20", 0)) # 新增抓取月線
+                        ma20 = float(info.get("ma20", 0))
                         
-                        # 🎯 將大數據一併傳送給雷達進行多維度判定
                         alert_msg = detect_intraday_breakout(code, name, ind, ma5, y_high, s_type, ma20, global_true_market_top_ind)
                         
                         if alert_msg and alert_msg not in intraday_breakout_cache:
                             intraday_breakout_cache.insert(0, alert_msg)
                             
-                            # 💥 由於改用 pCloud 雲端，盤中發報會即時保留在記憶體中
-                            # 讓下午收盤戰報與手動「收盤戰報」指令能夠完美抓取到今日的所有歷史紀錄！
-                            
                             current_cache = read_cache()
                             current_cache["intraday_alerts"] = intraday_breakout_cache[:10]
                             update_cache(current_cache)
                             
-                            # 💥 讀取最新權限名單，準備精準發射！
-                            try:
-                                from linebot.models import TextSendMessage
-                                vips = read_vips()
-                                target_ids = []
-                                        
-                                # 🔍 過濾權限：如果是「破曉初升(安全區)」，需要有 5min 權限
-                                # 🔍 過濾權限：如果是「極限動能(高風險)」，需要有 1min 權限
-                                for uid, info in vips.items():
-                                    perms = info.get("perms", {})
-                                    if "極限動能" in alert_type:
-                                        if perms.get("1min", False): target_ids.append(uid)
-                                    else:
-                                        if perms.get("5min", False): target_ids.append(uid)
-
-                                # 1. 🎯 個人 VIP 導航發射
-                                # if target_ids:
-                                #     # Multicast 最大上限 500 人
-                                #     line_bot_api.multicast(target_ids, TextSendMessage(text=f"🚨 【戰情室快訊】\n{alert_msg}"))
-                                #     print(f"✅ 已對 {len(target_ids)} 名擁有權限之隊員精準群發：{name}")
-                                # else:
-                                #     print(f"⚠️ 掃到 {name}，但目前無人符合該項雷達權限。")
-
-                                # 2. 🚀 【群組直通車】帶有功能選單的雙彈匣自動輪替空投！
-                                    TARGET_GROUP_IDS = [
-                                        "C0481b44935888bb1dc20dfd52a675e8a",  
-                                        "C47bfa8e16a7216bd54dceb3b5e90cfa0"   
-                                    ]
-                                    
-                                    for group_id in TARGET_GROUP_IDS:
-                                        smart_push_with_menu(
-                                            group_id,
-                                            f"🚨 【群組同步跟單急報】\n{alert_msg}"
-                                        )
-                                print(f"🚀 成功將飆股急報雙機聯防空投至所有指定的 LINE 群組！")
-
-                            except Exception as e:
-                                print(f"⚠️ LINE 精準多播與群組發射失敗: {e}")                
+                            # 🚀 【群組直通車】帶有功能選單的雙彈匣自動輪替空投！
+                            TARGET_GROUP_IDS = [
+                                "C0481b44935888bb1dc20dfd52a675e8a",  
+                                "C47bfa8e16a7216bd54dceb3b5e90cfa0"   
+                            ]
+                            
+                            for group_id in TARGET_GROUP_IDS:
+                                smart_push_with_menu(
+                                    group_id,
+                                    f"🚨 【群組同步跟單急報】\n{alert_msg}"
+                                )
+                            print(f"🚀 [爆量雷達] 成功將 {name}({code}) 的急報雙機聯防空投至所有指定的 LINE 群組！", flush=True)
                         
                         time.sleep(1) # 1 秒測 1 檔，完美閃避證交所封鎖
-            else:
-                pass
-                
+                else:
+                    print(f"⚠️ [當沖雷達] 無法取得雲端 monitor_list.json (HTTP {res_json.status_code})", flush=True)
+                    
         except Exception as e:
-            print(f"雷達巡邏異常: {e}")
+            print(f"❌ 雷達巡邏迴圈發生嚴重異常: {e}", flush=True)
         
         time.sleep(60) # 每分鐘掃描一次
 
