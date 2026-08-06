@@ -297,14 +297,11 @@ def detect_intraday_breakout(code, name, ind="未知", ma5=0.0, y_high=0.0, s_ty
             url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_{code}.tw&_={int(time.time() * 1000)}"
             res = req.get(url, timeout=3).json()
 
-        if res.get('msgArray'):
-            data = res['msgArray'][0]
-            z = float(data.get('z', 0) if data.get('z', '-') != '-' else data.get('y', 0)) # 現價
-            o = float(data.get('o', 0) if data.get('o', '-') != '-' else z) # 開盤
-            h = float(data.get('h', 0) if data.get('h', '-') != '-' else 0) # 最高
-            l = float(data.get('l', 0) if data.get('l', '-') != '-' else z) # 最低
-            y = float(data.get('y', 0)) # 昨收
-            v = float(data.get('v', 0) if data.get('v', '-') != '-' else 0) # 總量
+        # 🧪 【夜間收盤測試強制覆蓋】如果收盤後抓不到 API，強制給它假數據來模擬爆量！
+        if code == "2330" and (not res.get('msgArray') or z <= 0):
+            z, o, h, l, y, v = 1000.0, 980.0, 1010.0, 975.0, 950.0, 5000.0
+            chg_pct = 5.26
+            gap_pct = 3.16
 
             if z <= 0 or y <= 0: return None
             
