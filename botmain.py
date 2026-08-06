@@ -1915,7 +1915,7 @@ def continuous_radar_loop():
             current_time_num = now.hour * 100 + now.minute
             
             # 🔒 09:00 到 13:30 之間雷達才運作
-            if not is_weekend and (900 <= current_time_num <= 1330):
+            if True:  # 🧪 夜間強制全時段放行測試
                 
                 headers = {"User-Agent": "Mozilla/5.0"}
 
