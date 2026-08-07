@@ -1599,11 +1599,11 @@ def handle_message(event):
             review_lines.append("💡 參謀總結：完整記錄盤中爆量衝刺與各策略分頁表現，作為優化次日選股模型的黃金依據。")
                 
                 reply_msg = "\n".join(review_lines)
-        except Exception as e:
-            reply_msg = f"⚠️ 手調收盤戰報異常：{e}"
+            except Exception as e:
+                reply_msg = f"⚠️ 手調收盤戰報異常：{e}"
 
-        smart_reply_with_menu(event, reply_msg[:4000])
-        return
+            smart_reply_with_menu(event, reply_msg[:4000])
+            return
 
 
     # ==========================================================
