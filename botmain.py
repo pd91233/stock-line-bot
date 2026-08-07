@@ -11,7 +11,7 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction, ImageSendMessage,
-    JoinEvent, SourceGroup, FlexSendMessage
+    JoinEvent, SourceGroup, FlexSendMessage, BubbleContainer, BoxComponent, ButtonComponent
 )
 from bs4 import BeautifulSoup
 import json
