@@ -1434,8 +1434,8 @@ def handle_message(event):
         return
 
 
-    # ==========================================================
-    # 👇 請將這段「手動收盤戰報指令」貼在盤後選股的下方 👇
+# ==========================================================
+    # 👇 手調收盤戰報指令
     # ==========================================================
     if user_msg in ["收盤戰報", "收盤結算", "今日結算"]:
         try:
@@ -1520,7 +1520,7 @@ def handle_message(event):
             review_lines.append("----------------------")
 
             # ==========================================
-            # 🛠️ 區塊二：各策略分頁選股戰報績效與明細驗證（個股明細版）
+            # 🛠️ 區塊二：各策略分頁選股戰報績效與明細驗證
             # ==========================================
             try:
                 res_json = requests.get("https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json", timeout=5).json()
@@ -1577,33 +1577,30 @@ def handle_message(event):
                     pass
             
             review_lines.append("📊 【選股策略各分頁獨立績效與明細驗證】")
-            total_valid_groups = 0
             for group_name, stocks in strat_groups.items():
                 if not stocks:
                     continue
-                total_valid_groups += 1
                 count = len(stocks)
                 wins = sum(1 for s in stocks if s["is_win"])
                 win_rate = round((wins / count) * 100, 1)
                 avg_chg = round(sum(s["chg"] for s in stocks) / count, 2)
                 
-                # 分頁群組總結
                 review_lines.append(f"• {group_name} (追蹤 {count} 檔 ｜ 勝率 {win_rate}% ｜ 平均 {avg_chg:+.2f}%)")
                 
-                # 💥 逐行列出每一檔個股的收盤價與漲跌幅！
                 for s in stocks:
                     sign = "📈 +" if s["chg"] > 0 else ("📉 " if s["chg"] < 0 else "➖ ")
                     review_lines.append(f"   - {s['name']}({s['code']}) ｜ 收盤:{s['close']} ({sign}{s['chg']:+.2f}%)")
                 
                 review_lines.append("----------------------")
+            
             review_lines.append("💡 參謀總結：完整記錄盤中爆量衝刺與各策略分頁表現，作為優化次日選股模型的黃金依據。")
-                
-                reply_msg = "\n".join(review_lines)
-            except Exception as e:
-                reply_msg = f"⚠️ 手調收盤戰報異常：{e}"
+            
+            reply_msg = "\n".join(review_lines)
+        except Exception as e:
+            reply_msg = f"⚠️ 手調收盤戰報異常：{e}"
 
-            smart_reply_with_menu(event, reply_msg[:4000])
-            return
+        smart_reply_with_menu(event, reply_msg[:4000])
+        return
 
 
     # ==========================================================
