@@ -182,8 +182,32 @@ def smart_push_message(group_id, message):
 
 
 # ==========================================================
-# 👇 請將這段新增的「帶選單推播函數」精準貼在這裡 👇
+# 🌐 雲端動態彈藥庫同步器：從 pCloud 載入最新 tokens.json
 # ==========================================================
+PCLOUD_TOKENS_URL = "https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/tokens.json"
+
+def fetch_cloud_tokens():
+    """讓雲端母艦動態從 pCloud 下載統帥在電腦新增的機器人清單"""
+    try:
+        res = requests.get(f"{PCLOUD_TOKENS_URL}?t={int(time.time())}", timeout=5)
+        if res.status_code == 200:
+            tokens_data = res.json()
+            if isinstance(tokens_data, list) and len(tokens_data) > 0:
+                print(f"✅ [雲端彈藥庫同步] 成功從 pCloud 載入 {len(tokens_data)} 筆機器人金鑰！", flush=True)
+                return tokens_data
+    except Exception as e:
+        print(f"⚠️ [雲端彈藥庫警告] 無法從 pCloud 讀取 tokens.json，改用 Render 環境變數備援: {e}", flush=True)
+    
+    # 若雲端下載失敗的備援：讀取 Render 原本的環境變數
+    fallback_tokens = []
+    t1 = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN', '')
+    if t1: fallback_tokens.append({"name": "一號機", "token": t1})
+    t2 = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN_2', '')
+    if t2: fallback_tokens.append({"name": "二號機", "token": t2})
+    return fallback_tokens
+
+
+# 升級版：支援 pCloud 動態無限擴編的發射樞紐
 def smart_push_with_menu(group_id, message_text):
     menu_quick_reply = QuickReply(
         items=[
@@ -194,21 +218,35 @@ def smart_push_with_menu(group_id, message_text):
         ]
     )
     push_msg = TextSendMessage(
-        text=str(message_text)[:4000],  # 💥 只要把這裡的 5000 改成 4000 即可！
+        text=str(message_text)[:4000],  
         quick_reply=menu_quick_reply
     )
     
-    try:
-        # 優先使用一號機發射
-        line_bot_api.push_message(group_id, push_msg)
-    except Exception as e:
+    # 🎯 每次要發送爆量通知前，自動去 pCloud 抓取最新金鑰清單！
+    tokens_data = fetch_cloud_tokens()
+    
+    success_sent = False
+    for idx, item in enumerate(tokens_data, start=1):
+        token = item.get("token", "").strip()
+        if not token: continue
+        
         try:
-            # 一號機失敗時切換二號機補槍
-            line_bot_api_2.push_message(group_id, push_msg)
-            print("🚀 二號機帶選單推播補槍成功！", flush=True)
-        except Exception as e2:
-            print(f"❌ 雙機帶選單推播皆失敗: {e2}", flush=True)
-# ==========================================================
+            temp_api = LineBotApi(token)
+            temp_api.push_message(group_id, push_msg)
+            print(f"🚀 [雲端彈藥庫] 第 {idx} 號機 ({item.get('name', '未命名')}) 帶選單推播成功！", flush=True)
+            success_sent = True
+            break
+        except Exception as api_err:
+            err_str = str(api_err)
+            if "429" in err_str or "limit" in err_str.lower() or "LineBotApiError" in err_str:
+                print(f"⚠️ [第 {idx} 號機額度耗盡/429] 雲端自動切換下一台機器人...", flush=True)
+                continue
+            else:
+                print(f"⚠️ 第 {idx} 號機發射受阻 ({err_str})，嘗試切換...", flush=True)
+                continue
+                
+    if not success_sent:
+        print("❌ [發射崩潰] 雲端所有機器人彈藥庫皆已達 429 額度上限！", flush=True)
 # ==========================================================
 # 💎 升級版：雙排高質感戰情快捷面板 (通用的 Flex 產生器)
 # ==========================================================
