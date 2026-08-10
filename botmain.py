@@ -207,7 +207,7 @@ def fetch_cloud_tokens():
     return fallback_tokens
 
 
-# 升級版：支援 pCloud 動態無限擴編的發射樞紐
+# 升級版：支援 pCloud 動態無限擴編與「群組自動偵測」的發射樞紐
 def smart_push_with_menu(group_id, message_text):
     menu_quick_reply = QuickReply(
         items=[
@@ -228,25 +228,38 @@ def smart_push_with_menu(group_id, message_text):
     success_sent = False
     for idx, item in enumerate(tokens_data, start=1):
         token = item.get("token", "").strip()
+        bot_name = item.get("name", f"第 {idx} 號機")
         if not token: continue
         
         try:
             temp_api = LineBotApi(token)
+            
+            # 💥 【神級雷達防線：開槍前先查水表】
+            # 先問 LINE 官方：這隻機器人現在有在這個群組裡面嗎？
+            try:
+                temp_api.get_group_member_count(group_id)
+            except Exception:
+                # 如果發生錯誤，代表機器人不在群組內！
+                print(f"⚠️ [跳過] {bot_name} 不在目標群組中，尋找下一台...", flush=True)
+                continue  # 👈 直接跳過，不浪費子彈，換下一隻！
+            
+            # 確定在群組裡面，才真正對目標群組開槍！
             temp_api.push_message(group_id, push_msg)
-            print(f"🚀 [雲端彈藥庫] 第 {idx} 號機 ({item.get('name', '未命名')}) 帶選單推播成功！", flush=True)
+            print(f"🚀 [雲端彈藥庫] {bot_name} 帶選單推播成功！", flush=True)
             success_sent = True
-            break
+            break # 發射成功，任務完成，跳出迴圈！
+            
         except Exception as api_err:
             err_str = str(api_err)
             if "429" in err_str or "limit" in err_str.lower() or "LineBotApiError" in err_str:
-                print(f"⚠️ [第 {idx} 號機額度耗盡/429] 雲端自動切換下一台機器人...", flush=True)
+                print(f"⚠️ [{bot_name} 額度耗盡/429] 雲端自動切換下一台機器人...", flush=True)
                 continue
             else:
-                print(f"⚠️ 第 {idx} 號機發射受阻 ({err_str})，嘗試切換...", flush=True)
+                print(f"⚠️ {bot_name} 發射受阻 ({err_str})，嘗試切換...", flush=True)
                 continue
                 
     if not success_sent:
-        print("❌ [發射崩潰] 雲端所有機器人彈藥庫皆已達 429 額度上限！", flush=True)
+        print(f"❌ [發射崩潰] 群組 {group_id} 查無可用的機器人，或所有駐紮機器人彈藥皆已耗盡！", flush=True)
 # ==========================================================
 # 💎 升級版：雙排高質感戰情快捷面板 (通用的 Flex 產生器)
 # ==========================================================
