@@ -1642,29 +1642,40 @@ def handle_message(event):
 
 
     # ==========================================================
-    # 🧮 💥 新增模組：LINE 當月發射次數查詢與自動預警
+    # 🧮 💥 升級模組：LINE 當月發射次數動態查詢 (支援無限彈藥庫)
     # ==========================================================
     if user_msg in ["次數", "額度", "剩餘發數", "子彈"]:
         try:
-            # 抓取一號機與二號機的真實使用量
-            usage_1 = line_bot_api.get_message_quota_consumption().total_usage
-            usage_2 = line_bot_api_2.get_message_quota_consumption().total_usage
+            # 🎯 直接向 pCloud 呼叫最新擴編的機器人清單
+            tokens_data = fetch_cloud_tokens()
             
-            remain_1 = 200 - usage_1
-            remain_2 = 200 - usage_2
+            reply_lines = ["📊 【股海觀浪・彈藥庫實時庫存】", "----------------------"]
+            active_gun = "無 (彈藥全部耗盡)"
             
-            # 判斷目前主力槍管
-            active_gun = "一號機 (主戰)" if remain_1 > 0 else "二號機 (備用中)"
+            # 動態巡航：有幾隻就查幾隻！
+            for idx, item in enumerate(tokens_data, start=1):
+                name = item.get("name", f"第 {idx} 號機")
+                token = item.get("token", "").strip()
+                if not token: continue
+                
+                try:
+                    temp_api = LineBotApi(token)
+                    used = temp_api.get_message_quota_consumption().total_usage
+                    remain = 200 - used
+                    reply_lines.append(f"🔫 {name}：已用 {used}/200 則 (剩 {remain} 則)")
+                    
+                    # 抓出第一隻還有子彈的機器人當作主力火線
+                    if remain > 0 and active_gun == "無 (彈藥全部耗盡)":
+                        active_gun = f"{name} (發射中)"
+                except Exception as api_err:
+                    reply_lines.append(f"🔫 {name}：連線讀取失敗")
+                    
+            reply_lines.append("----------------------")
+            reply_lines.append(f"🎯 目前主力火線：{active_gun}")
+            reply_lines.append("💡 備註：每月 1 號系統將自動重置免費發射額度。")
             
-            reply_msg = (
-                f"📊 【股海觀浪・彈藥庫實時庫存】\n"
-                f"----------------------\n"
-                f"🔫 一號機：已用 {usage_1} / 200 則 (剩 {remain_1} 則)\n"
-                f"🔫 二號機：已用 {usage_2} / 200 則 (剩 {remain_2} 則)\n"
-                f"----------------------\n"
-                f"🎯 目前主力火線：{active_gun}\n"
-                f"💡 備註：每月 1 號系統將自動重置免費發射額度。"
-            )
+            reply_msg = "\n".join(reply_lines)
+            
         except Exception as e:
             reply_msg = f"⚠️ 彈藥庫數據連線受阻: {e}"
             
@@ -2056,6 +2067,12 @@ def continuous_radar_loop():
                             current_cache = read_cache()
                             current_cache["intraday_alerts"] = intraday_breakout_cache[:10]
                             update_cache(current_cache)
+                            
+                            # 🚨 【新增：同步觸發網頁版 Web Push 防空警報！】
+                            try:
+                                trigger_air_raid_alarm(f"🔥 {name} ({code}) 爆量點火！", alert_msg)
+                            except Exception as push_err:
+                                print(f"⚠️ Web Push 警報觸發失敗: {push_err}", flush=True)
                             
                             # 🚀 【群組直通車】帶有功能選單的雙彈匣自動輪替空投！
                             TARGET_GROUP_IDS = [
