@@ -207,7 +207,7 @@ def fetch_cloud_tokens():
     return fallback_tokens
 
 
-# 升級版：支援 pCloud 動態無限擴編與「群組自動偵測」的發射樞紐
+# 升級版：支援 pCloud 動態無限擴編與「群組自動偵測 (跨版本相容)」的發射樞紐
 def smart_push_with_menu(group_id, message_text):
     menu_quick_reply = QuickReply(
         items=[
@@ -234,16 +234,19 @@ def smart_push_with_menu(group_id, message_text):
         try:
             temp_api = LineBotApi(token)
             
-            # 💥 【神級雷達防線：開槍前先查水表】
-            # 先問 LINE 官方：這隻機器人現在有在這個群組裡面嗎？
+            # 💥 【神級雷達防線：開槍前先查水表 (跨套件版本相容)】
             try:
-                temp_api.get_group_member_count(group_id)
-            except Exception:
-                # 如果發生錯誤，代表機器人不在群組內！
-                print(f"⚠️ [跳過] {bot_name} 不在目標群組中，尋找下一台...", flush=True)
+                # 自動偵測並相容不同版本的 LINE 套件函數名稱
+                if hasattr(temp_api, 'get_group_summary'):
+                    temp_api.get_group_summary(group_id)
+                else:
+                    temp_api.get_group_members_count(group_id)
+            except Exception as check_err:
+                # 如果發生錯誤，代表機器人不在群組內 (或是被官方阻擋)！
+                print(f"⚠️ [跳過] {bot_name} 不在目標群組中，尋找下一台... ({check_err})", flush=True)
                 continue  # 👈 直接跳過，不浪費子彈，換下一隻！
             
-            # 確定在群組裡面，才真正對目標群組開槍！
+            # 確定在群組裡面，才真正對目標群組使用「精準導彈 (push_message)」開槍！
             temp_api.push_message(group_id, push_msg)
             print(f"🚀 [雲端彈藥庫] {bot_name} 帶選單推播成功！", flush=True)
             success_sent = True
