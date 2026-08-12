@@ -403,171 +403,6 @@ fundamental_full_cache = []  # 全域戰略區快取 (全市場 2000 檔)
 
 
 # ==========================================================
-# ⚡ [雙層雷達版] 當沖雷達：破曉初升 vs 極限動能 雙重偵測引擎
-# ==========================================================
-intraday_breakout_cache = []   
-intraday_alerted_codes = set() 
-stock_tick_memory = {}         
-
-def detect_intraday_breakout(code, name, ind="未知", ma5=0.0, y_high=0.0, s_type="", ma20=0.0, top_ind=""):
-    import requests, time, datetime
-    
-    # 🛡️ 單日冷卻防護：今天已經通報過，直接跳過
-    if code in intraday_alerted_codes:
-        return None
-
-    try:
-        # 直連證交所，獲取當下 0 秒延遲的最新報價
-        req = requests.Session()
-        url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{code}.tw&_={int(time.time() * 1000)}"
-        res = req.get(url, timeout=3).json()
-        if not res.get('msgArray'):
-            url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_{code}.tw&_={int(time.time() * 1000)}"
-            res = req.get(url, timeout=3).json()
-
-        if res.get('msgArray'):
-            data = res['msgArray'][0]
-            z = float(data.get('z', 0) if data.get('z', '-') != '-' else data.get('y', 0)) # 現價
-            o = float(data.get('o', 0) if data.get('o', '-') != '-' else z) # 開盤
-            h = float(data.get('h', 0) if data.get('h', '-') != '-' else 0) # 最高
-            l = float(data.get('l', 0) if data.get('l', '-') != '-' else z) # 最低
-            y = float(data.get('y', 0)) # 昨收
-            v = float(data.get('v', 0) if data.get('v', '-') != '-' else 0) # 總量
-
-            if z <= 0 or y <= 0: return None
-            
-            chg_pct = round(((z - y) / y) * 100, 2)
-            gap_pct = round(((o - y) / y) * 100, 2) # 🎯 新增：開盤缺口計算
-            
-            # VWAP 成交量加權均價估算
-            try:
-                vwap_est = round((o + h + l + (z * v / (v if v > 0 else 1))) / 4, 2) if v > 0 else round((o + h + l + z * 2) / 5, 2)
-                if abs(vwap_est - z) / z > 0.07:
-                    vwap_est = round((o + h + l + z * 2) / 5, 2)
-            except:
-                vwap_est = round((o + h + l + z * 2) / 5, 2)
-
-            now_ts = time.time()
-            
-            # 🎯 新增：盤中時間動態加權濾網 (判定目前處於哪個戰區)
-            tz = datetime.timezone(datetime.timedelta(hours=8))
-            now_dt = datetime.datetime.now(tz)
-            time_str = now_dt.strftime("%H:%M:%S")
-            current_time_num = now_dt.hour * 100 + now_dt.minute
-            
-            if 900 <= current_time_num < 1000:
-                time_status = "golden"  # 黃金攻擊期
-            elif 1000 <= current_time_num < 1100:
-                time_status = "cooling" # 冷卻洗盤期
-            else:
-                time_status = "dead_water" # 午間死水期
-
-            # 🧠 寫入動態矩陣記憶體
-            if code not in stock_tick_memory:
-                stock_tick_memory[code] = []
-            stock_tick_memory[code].append((now_ts, z, v, h, l))
-            
-            if len(stock_tick_memory[code]) > 10:
-                stock_tick_memory[code].pop(0)
-
-            ticks = stock_tick_memory[code]
-            
-            if len(ticks) >= 6:
-                current_z, current_v = ticks[-1][1], ticks[-1][2]
-                z_1m_ago, v_1m_ago = ticks[-2][1], ticks[-2][2]
-                z_5m_ago, v_5m_ago = ticks[-6][1], ticks[-6][2]
-
-                vol_1m = current_v - v_1m_ago
-                vol_5m = current_v - v_5m_ago
-                avg_1m_vol_in_5m = vol_5m / 5 if vol_5m > 0 else 1.0
-                ignite_value = vol_1m * current_z * 1000 # 點火資金(台幣)
-
-                # 💥 【終極防護：連續動能與假突破過濾】
-                # 1. 真實點火判定 (這分鐘必須是紅K或平盤往上吃，嚴禁外盤爆量下殺)
-                is_real_attack = current_z >= z_1m_ago 
-                
-                # 2. 絕對量能與時間動態加權防護
-                is_volume_surge = False
-                if time_status == "golden":
-                    # 早盤標準：1.5倍均量 + 絕對量 > 150張 + 資金 > 800萬
-                    if vol_1m >= (avg_1m_vol_in_5m * 1.5) and vol_1m >= 150 and ignite_value >= 8000000:
-                        is_volume_surge = True
-                elif time_status == "cooling":
-                    # 中場標準：2.0倍均量 + 絕對量 > 250張 + 資金 > 1200萬
-                    if vol_1m >= (avg_1m_vol_in_5m * 2.0) and vol_1m >= 250 and ignite_value >= 12000000:
-                        is_volume_surge = True
-                elif time_status == "dead_water":
-                    # 午休標準：必須爆出超大絕對量 (大於400張或2000萬資金) 且 強勢過高
-                    is_breaking_high = (current_z >= h * 0.995)
-                    if vol_1m >= 400 and ignite_value >= 20000000 and is_breaking_high:
-                        is_volume_surge = True
-
-                # 3. 均價線防護與短趨勢向上
-                is_above_vwap = current_z >= vwap_est
-                is_trend_up = current_z >= z_5m_ago
-                
-                if is_above_vwap and is_trend_up and is_volume_surge and is_real_attack:
-                    
-                    # 🎯 【高階當沖定錨：天花板、開盤缺口、大均線】
-                    dist_to_high_pct = ((h - current_z) / current_z) * 100 if h > 0 else 0
-                    is_near_ceiling = (0 < dist_to_high_pct <= 0.8) and (current_time_num > 930) # 距離前高不到 0.8%
-                    is_below_20ma = (ma20 > 0 and current_z < ma20) # 跌破月線的弱勢股
-                    is_strong_gap = (gap_pct >= 2.0 and current_z >= o) # 強勢跳空且未破開盤
-
-                    # 判定警報級別
-                    alert_type = None
-                    action_guide = ""
-                    
-                    # 情況 A：主力拉高出貨的假突破 (撞天花板 或 弱勢反彈)
-                    if is_near_ceiling or is_below_20ma:
-                        alert_type = "⚠️ 【兵臨城下】高檔測壓或反彈逃命波"
-                        action_guide = (
-                            f"🎯 【小白實戰指令：⛔ 空手觀望】\n"
-                            f"👉 戰況：{'距離今日高點極近，上方壓力沉重' if is_near_ceiling else f'股價連月線({ma20})都沒站上，長線偏空'}！\n"
-                            f"⚠️ 怎麼買：極可能是法人對倒或假點火，嚴禁此時低接或追高！\n"
-                            f"🛡️ 策略：今日動能預期已耗盡，建議直接放棄此檔，保留子彈尋找下一檔！"
-                        )
-                    # 情況 B：正常起漲與高檔誘多 (加入強制移動停利與 K棒低點防守)
-                    elif 1.0 <= chg_pct <= 4.5:
-                        alert_type = "🌅 【破曉初升】安全起漲點火"
-                        stop_loss_price = ticks[-1][4] if ticks[-1][4] > 0 else vwap_est # 取這根爆量1分K的最低點當防守
-                        action_guide = (
-                            f"🎯 【小白實戰指令：✅ 多方起漲】\n"
-                            f"👉 戰況：{'跳空強勢開局，' if is_strong_gap else ''}底部出量點火，實體紅K攻擊！\n"
-                            f"💰 委託：拉回 {vwap_est} ~ {current_z} 區間可分批低接。\n"
-                            f"🛡️ 防守：以起漲K棒低點 {stop_loss_price} 為最後防守線，跌破果斷停損！\n"
-                            f"⚠️ 軍規：盤中獲利拉開 2% 以上，請立刻將停損線上移至「自身成本價」，嚴格保本！"
-                        )
-                    elif 4.5 < chg_pct <= 7.0:
-                        alert_type = "🔥 【極限動能】高檔強勢換手區"
-                        action_guide = (
-                            f"🎯 【小白實戰指令：⚠️ 縮小部位短打】\n"
-                            f"👉 戰況：短線衝太快，正乖離過大，此處僅適合極短線當沖高手！\n"
-                            f"⚠️ 怎麼買：切勿被爆量沖昏頭去重倉追高！\n"
-                            f"🛡️ 策略：強勢股若拉回不破 {vwap_est}，才可小注試單，一旦跌破立刻逃命。"
-                        )
-                        
-                    if alert_type:
-                        intraday_alerted_codes.add(code)
-                        
-                        # 🎯 族群共振標籤
-                        hot_tag = f"🌟 [主流共振：{ind}]" if (top_ind != "" and top_ind in ind) else f"🏷️ [{ind}]"
-                        
-                        return (
-                            f"[{time_str}] ⚡ {name}({code}) {alert_type}\n"
-                            f"{hot_tag} | 現價：{current_z} (均價線:{vwap_est})\n"
-                            f"漲幅：{chg_pct}% | 開盤缺口：{gap_pct}%\n"
-                            f"🔥 1分絕對爆量：{int(vol_1m)} 張 (點火資金 {int(ignite_value/10000)}萬)\n"
-                            f"----------------------\n"
-                            f"{action_guide}"
-                        )
-
-    except Exception as e:
-        pass
-    return None
-
-
-# ==========================================================
 # 🧠 [終極防空版] 重大訊息解碼獵犬 (金鑰與模型智慧防錯安全對接)
 # ==========================================================
 self_assessed_cache = []
@@ -2025,92 +1860,202 @@ def market_patrol_loop():
             time.sleep(30)
 
 
+
+
 # ==========================================================
-# ⚡ 8. 專屬當沖連續掃描引擎 (帶有盤中時間鎖定與防爆修復)
+# ⚡ 8. 專屬當沖連續掃描引擎 (全市場 2000 檔批次陣列雷達)
 # ==========================================================
+stock_tick_memory = {}
+intraday_alerted_codes = set()
+
+def process_tick_data(data, meta_info, top_ind):
+    """陣列雷達核心處理單元：直接處理已抓到的批次報價 JSON"""
+    import time, datetime
+    code = data.get('c')
+    if not code or code in intraday_alerted_codes: return None
+    
+    try:
+        name = meta_info.get('name', code)
+        ind = meta_info.get('ind', '未知')
+        ma20 = float(meta_info.get('ma20', 0) if meta_info.get('ma20', '-') != '-' else 0)
+        
+        z = float(data.get('z', 0) if data.get('z', '-') != '-' else data.get('y', 0))
+        o = float(data.get('o', 0) if data.get('o', '-') != '-' else z)
+        h = float(data.get('h', 0) if data.get('h', '-') != '-' else 0)
+        l = float(data.get('l', 0) if data.get('l', '-') != '-' else z)
+        y = float(data.get('y', 0))
+        v = float(data.get('v', 0) if data.get('v', '-') != '-' else 0)
+        
+        if z <= 0 or y <= 0: return None
+        
+        chg_pct = round(((z - y) / y) * 100, 2)
+        gap_pct = round(((o - y) / y) * 100, 2)
+        
+        try:
+            vwap_est = round((o + h + l + (z * v / (v if v > 0 else 1))) / 4, 2) if v > 0 else round((o + h + l + z * 2) / 5, 2)
+            if abs(vwap_est - z) / z > 0.07: vwap_est = round((o + h + l + z * 2) / 5, 2)
+        except:
+            vwap_est = round((o + h + l + z * 2) / 5, 2)
+
+        now_ts = time.time()
+        tz = datetime.timezone(datetime.timedelta(hours=8))
+        now_dt = datetime.datetime.now(tz)
+        time_str = now_dt.strftime("%H:%M:%S")
+        current_time_num = now_dt.hour * 100 + now_dt.minute
+
+        if 900 <= current_time_num < 1000: time_status = "golden"
+        elif 1000 <= current_time_num < 1100: time_status = "cooling"
+        else: time_status = "dead_water"
+
+        if code not in stock_tick_memory: stock_tick_memory[code] = []
+        stock_tick_memory[code].append((now_ts, z, v, h, l))
+        if len(stock_tick_memory[code]) > 10: stock_tick_memory[code].pop(0)
+
+        ticks = stock_tick_memory[code]
+        if len(ticks) >= 6:
+            current_z, current_v = ticks[-1][1], ticks[-1][2]
+            z_1m_ago, v_1m_ago = ticks[-2][1], ticks[-2][2]
+            z_5m_ago, v_5m_ago = ticks[-6][1], ticks[-6][2]
+
+            vol_1m = current_v - v_1m_ago
+            vol_5m = current_v - v_5m_ago
+            avg_1m_vol_in_5m = vol_5m / 5 if vol_5m > 0 else 1.0
+            ignite_value = vol_1m * current_z * 1000
+
+            is_real_attack = current_z >= z_1m_ago
+            is_volume_surge = False
+            
+            if time_status == "golden":
+                if vol_1m >= (avg_1m_vol_in_5m * 1.5) and vol_1m >= 150 and ignite_value >= 8000000:
+                    is_volume_surge = True
+            elif time_status == "cooling":
+                if vol_1m >= (avg_1m_vol_in_5m * 2.0) and vol_1m >= 250 and ignite_value >= 12000000:
+                    is_volume_surge = True
+            elif time_status == "dead_water":
+                is_breaking_high = (current_z >= h * 0.995)
+                if vol_1m >= 400 and ignite_value >= 20000000 and is_breaking_high:
+                    is_volume_surge = True
+
+            is_above_vwap = current_z >= vwap_est
+            is_trend_up = current_z >= z_5m_ago
+
+            if is_above_vwap and is_trend_up and is_volume_surge and is_real_attack:
+                dist_to_high_pct = ((h - current_z) / current_z) * 100 if h > 0 else 0
+                is_near_ceiling = (0 < dist_to_high_pct <= 0.8) and (current_time_num > 930)
+                is_below_20ma = (ma20 > 0 and current_z < ma20)
+                is_strong_gap = (gap_pct >= 2.0 and current_z >= o)
+
+                alert_type = None
+                action_guide = ""
+                
+                if is_near_ceiling or is_below_20ma:
+                    alert_type = "⚠️ 【兵臨城下】高檔測壓或反彈逃命波"
+                    action_guide = f"🎯 【小白實戰指令：⛔ 空手觀望】\n👉 戰況：{'距離今日高點極近，上方壓力沉重' if is_near_ceiling else '長線偏空'}！\n⚠️ 怎麼買：極可能是法人對倒或假點火，嚴禁此時低接或追高！\n🛡️ 策略：今日動能預期已耗盡，建議直接放棄此檔！"
+                elif 1.0 <= chg_pct <= 4.5:
+                    alert_type = "🌅 【破曉初升】安全起漲點火"
+                    stop_loss_price = ticks[-1][4] if ticks[-1][4] > 0 else vwap_est
+                    action_guide = f"🎯 【小白實戰指令：✅ 多方起漲】\n👉 戰況：{'跳空強勢開局，' if is_strong_gap else ''}底部出量點火，實體紅K攻擊！\n💰 委託：拉回 {vwap_est} ~ {current_z} 區間可分批低接。\n🛡️ 防守：以起漲K棒低點 {stop_loss_price} 為最後防守線！"
+                elif 4.5 < chg_pct <= 7.0:
+                    alert_type = "🔥 【極限動能】高檔強勢換手區"
+                    action_guide = f"🎯 【小白實戰指令：⚠️ 縮小部位短打】\n👉 戰況：短線衝太快，正乖離過大！\n⚠️ 怎麼買：切勿被爆量沖昏頭去重倉追高！\n🛡️ 策略：強勢股若拉回不破 {vwap_est}，才可小注試單。"
+                    
+                if alert_type:
+                    intraday_alerted_codes.add(code)
+                    hot_tag = f"🌟 [主流共振：{ind}]" if (top_ind != "" and top_ind in ind) else f"🏷️ [{ind}]"
+                    return (
+                        f"[{time_str}] ⚡ {name}({code}) {alert_type}\n"
+                        f"{hot_tag} | 現價：{current_z} (均價線:{vwap_est})\n"
+                        f"漲幅：{chg_pct}% | 開盤缺口：{gap_pct}%\n"
+                        f"🔥 1分絕對爆量：{int(vol_1m)} 張 (點火資金 {int(ignite_value/10000)}萬)\n"
+                        f"----------------------\n"
+                        f"{action_guide}"
+                    )
+    except Exception:
+        pass
+    return None
+
 def continuous_radar_loop():
-    print("📡 [當沖雷達] 雙週期共振掃描引擎啟動，直連證交所待命中...", flush=True)
-    import time
-    import datetime
-    import requests
+    print("📡 [當沖雷達] 全市場 2000 檔陣列掃描引擎啟動，待命中...", flush=True)
+    import time, datetime, requests
+    
     while True:
         try:
-            now = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
+            now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
             is_weekend = now.weekday() >= 5
             current_time_num = now.hour * 100 + now.minute
             
             # 🔒 09:00 到 13:30 之間雷達才運作
             if not is_weekend and (900 <= current_time_num <= 1330):
-                
                 headers = {"User-Agent": "Mozilla/5.0"}
-
-                # ==========================================
-                # 🛡️ 系統優化：暫時移除會導致雷達凍結的大盤防護罩，改為僅記錄大盤狀態
-                # ==========================================
-                try:
-                    twii_res = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?range=1d&interval=1d", headers=headers, timeout=3).json()
-                    twii_meta = twii_res['chart']['result'][0]['meta']
-                    twii_chg_pct = ((twii_meta['regularMarketPrice'] - twii_meta['chartPreviousClose']) / twii_meta['chartPreviousClose']) * 100
-                    print(f"📊 [雷達心跳] 加權指數現況: {twii_chg_pct:.2f}%，持續掃描個股中...", flush=True)
-                except Exception as e:
-                    print(f"⚠️ 大盤指數背景讀取小異常 (不影響個股掃描): {e}", flush=True)
-
-                json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={int(time.time())}"
-                res_json = requests.get(json_url, headers=headers, timeout=5)
                 
-                if res_json.status_code == 200:
-                    raw_data = res_json.json()
+                # 💡 取得全市場股票名單 (由基本面引擎提供)
+                current_cache = read_cache()
+                full_stocks = current_cache.get("fundamental_full", [])
+                
+                if not full_stocks:
+                    time.sleep(10)
+                    continue
+
+                # 💥 陣列掃描核心：每次打包 40 檔股票一起問證交所！
+                batch_size = 40
+                for i in range(0, len(full_stocks), batch_size):
+                    batch = full_stocks[i:i+batch_size]
                     
-                    if isinstance(raw_data, list):
-                        target_dict = {str(item.get("代碼")): {"name": item.get("商品", item.get("代碼"))} for item in raw_data if "代碼" in item}
-                    else:
-                        target_dict = raw_data
-                        
-                    for code, info in target_dict.items():
-                        name = info.get("name", code)
-                        ind = str(info.get("ind", info.get("產業", "未知")))
-                        
-                        ma5 = float(info.get("ma5", 0))
-                        y_high = float(info.get("y_high", 0))
-                        s_type = str(info.get("type", "general"))
-                        ma20 = float(info.get("ma20", 0))
-                        
-                        alert_msg = detect_intraday_breakout(code, name, ind, ma5, y_high, s_type, ma20, global_true_market_top_ind)
-                        
-                        if alert_msg and alert_msg not in intraday_breakout_cache:
-                            intraday_breakout_cache.insert(0, alert_msg)
+                    ex_ch_list = []
+                    stock_meta = {}
+                    for s in batch:
+                        code = str(s.get('code', '')).strip()
+                        market = s.get('market', '上市')
+                        prefix = "tse" if market == "上市" else "otc"
+                        if code:
+                            ex_ch_list.append(f"{prefix}_{code}.tw")
+                            stock_meta[code] = s
                             
-                            current_cache = read_cache()
-                            current_cache["intraday_alerts"] = intraday_breakout_cache[:10]
-                            update_cache(current_cache)
-                            
-                            # 🚨 【新增：同步觸發網頁版 Web Push 防空警報！】
-                            try:
-                                trigger_air_raid_alarm(f"🔥 {name} ({code}) 爆量點火！", alert_msg)
-                            except Exception as push_err:
-                                print(f"⚠️ Web Push 警報觸發失敗: {push_err}", flush=True)
-                            
-                            # 🚀 【群組直通車】帶有功能選單的雙彈匣自動輪替空投！
-                            TARGET_GROUP_IDS = [
-                                "C0481b44935888bb1dc20dfd52a675e8a",  
-                                "C47bfa8e16a7216bd54dceb3b5e90cfa0"   
-                            ]
-                            
-                            for group_id in TARGET_GROUP_IDS:
-                                smart_push_with_menu(
-                                    group_id,
-                                    f"🚨 【群組同步跟單急報】\n{alert_msg}"
-                                )
-                            print(f"🚀 [爆量雷達] 成功將 {name}({code}) 的急報雙機聯防空投至所有指定的 LINE 群組！", flush=True)
-                        
-                        time.sleep(1) # 1 秒測 1 檔，完美閃避證交所封鎖
-                else:
-                    print(f"⚠️ [當沖雷達] 無法取得雲端 monitor_list.json (HTTP {res_json.status_code})", flush=True)
+                    if not ex_ch_list: continue
                     
+                    channels = "|".join(ex_ch_list)
+                    api_url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={channels}&_={int(time.time() * 1000)}"
+                    
+                    try:
+                        res = requests.get(api_url, headers=headers, timeout=5).json()
+                        if 'msgArray' in res:
+                            for data in res['msgArray']:
+                                code = data.get('c')
+                                # 將抓到的報價送入運算核心
+                                alert_msg = process_tick_data(data, stock_meta.get(code, {}), global_true_market_top_ind)
+                                
+                                if alert_msg and alert_msg not in intraday_breakout_cache:
+                                    intraday_breakout_cache.insert(0, alert_msg)
+                                    
+                                    # 更新前端快取
+                                    new_cache = read_cache()
+                                    new_cache["intraday_alerts"] = intraday_breakout_cache[:10]
+                                    update_cache(new_cache)
+                                    
+                                    # 🚨 觸發 Web Push 防空警報
+                                    try:
+                                        trigger_air_raid_alarm(f"🔥 {stock_meta.get(code, {}).get('name', code)} ({code}) 爆量點火！", alert_msg)
+                                    except: pass
+                                    
+                                    # 🚀 觸發 LINE 雙機聯防群發
+                                    TARGET_GROUP_IDS = [
+                                        "C0481b44935888bb1dc20dfd52a675e8a",  
+                                        "C47bfa8e16a7216bd54dceb3b5e90cfa0"   
+                                    ]
+                                    for group_id in TARGET_GROUP_IDS:
+                                        smart_push_with_menu(group_id, f"🚨 【全市場同步跟單急報】\n{alert_msg}")
+                                    
+                                    print(f"🚀 [全市場雷達] 成功捕獲 {code} 爆量並空投戰報！", flush=True)
+                    except Exception:
+                        pass
+                    
+                    # 💥 每問完 40 檔，休息 1.2 秒。2000 檔大約只需 60 秒就能掃完一圈！
+                    time.sleep(1.2)
+                    
+            else:
+                time.sleep(60) # 非盤中時間，每分鐘檢查一次
         except Exception as e:
-            print(f"❌ 雷達巡邏迴圈發生嚴重異常: {e}", flush=True)
-        
-        time.sleep(60) # 每分鐘掃描一次
+            time.sleep(60)
 
 
 # ==========================================================
