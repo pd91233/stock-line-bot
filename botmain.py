@@ -1925,16 +1925,16 @@ def process_tick_data(data, meta_info, top_ind):
             is_real_attack = current_z >= z_1m_ago
             is_volume_surge = False
             
-            # 💥 高靈敏度參數：大幅調降引爆門檻！
-            if time_status == "golden":
-                if vol_1m >= (avg_1m_vol_in_5m * 1.5) and vol_1m >= 80 and ignite_value >= 3000000:
-                    is_volume_surge = True
-            elif time_status == "cooling":
+            # 💥 實戰黃金平衡參數：精準捕捉主力初級點火
+            if time_status == "golden": # 09:00 ~ 10:00 (剛開盤，主力小火就能點燃群眾)
                 if vol_1m >= (avg_1m_vol_in_5m * 1.5) and vol_1m >= 100 and ignite_value >= 5000000:
                     is_volume_surge = True
-            elif time_status == "dead_water":
+            elif time_status == "cooling": # 10:00 ~ 11:00 (盤中降溫，需要更大資金確認)
+                if vol_1m >= (avg_1m_vol_in_5m * 1.5) and vol_1m >= 150 and ignite_value >= 8000000:
+                    is_volume_surge = True
+            elif time_status == "dead_water": # 11:00 以後 (死水期，必須是破今高+千萬級別別別資金才有效)
                 is_breaking_high = (current_z >= h * 0.995)
-                if vol_1m >= 150 and ignite_value >= 8000000 and is_breaking_high:
+                if vol_1m >= 200 and ignite_value >= 12000000 and is_breaking_high:
                     is_volume_surge = True
 
             is_above_vwap = current_z >= vwap_est
