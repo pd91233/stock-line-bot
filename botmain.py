@@ -1974,20 +1974,22 @@ def process_tick_data(data, meta_info, top_ind):
     return None
 
 def continuous_radar_loop():
-    print("📡 [當沖雷達] 啟動終極 V8 穿甲通道 (搭載毒蘋果隔離演算法)，全面突破封鎖...", flush=True)
+    print("📡 [當沖雷達] 啟動 👑皇家 V8 隔離引擎 (Yahoo Spark API)，全面突破封鎖...", flush=True)
     import time, datetime, requests
     
-    # 內部函數：負責向 Yahoo 請求並解析，若遭遇 400 則回傳 False 要求拆分
+    # 內部函數：負責向 Yahoo 請求並解析，若遭遇 400 則回傳 False 要求拆分單點突破！
     def fetch_and_process(symbols_list, stock_meta_dict, headers):
         symbols_str = ",".join(symbols_list)
-        # 💥 補回 range 與 interval 參數，符合 Yahoo spark 引擎的標準格式
-        api_url = f"https://query1.finance.yahoo.com/v8/finance/spark?symbols={symbols_str}&range=1d&interval=1m"
+        # 💥 拔除 range 與 interval，讓 Yahoo 用最穩定的預設值回傳，徹底避免參數衝突的 400 錯誤
+        api_url = f"https://query1.finance.yahoo.com/v8/finance/spark?symbols={symbols_str}"
         
         try:
             res = requests.get(api_url, headers=headers, timeout=5)
             if res.status_code == 200:
                 res_json = res.json()
                 results = res_json.get('spark', {}).get('result', [])
+                
+                if not results: return True
                 
                 for data in results:
                     if not data or not data.get('response'): continue
@@ -2012,7 +2014,6 @@ def continuous_radar_loop():
                     
                     if alert_msg and alert_msg not in intraday_breakout_cache:
                         intraday_breakout_cache.insert(0, alert_msg)
-                        
                         new_cache = read_cache()
                         new_cache["intraday_alerts"] = intraday_breakout_cache[:10]
                         update_cache(new_cache)
@@ -2031,11 +2032,10 @@ def continuous_radar_loop():
                         print(f"🚀 [全市場雷達] 成功捕獲 {code} 爆量！", flush=True)
                 return True
             elif res.status_code == 400:
-                # 💥 抓到了！這批名單裡面有毒蘋果，回傳 False 啟動隔離機制
-                return False
+                return False # 💥 抓到了！這批名單裡面有毒蘋果，回傳 False 通知主迴圈拆分！
         except Exception:
             pass
-        return True # 其他網路超時錯誤不拆分，直接換下一批
+        return True 
 
     # --- 雷達主迴圈 ---
     while True:
@@ -2065,8 +2065,8 @@ def continuous_radar_loop():
                         market = s.get('market', '上市')
                         suffix = ".TW" if market == "上市" else ".TWO"
                         
-                        # 只准許 4 碼正規股票進入
-                        if code and len(code) == 4:
+                        # 💥 終極防護：限定「4位數」而且必須「全是數字」，徹底封殺毒蘋果！
+                        if code and len(code) == 4 and code.isdigit():
                             sym = f"{code}{suffix}"
                             ex_ch_list.append(sym)
                             stock_meta[code] = s
@@ -2080,14 +2080,13 @@ def continuous_radar_loop():
                     if not is_success:
                         for single_sym in ex_ch_list:
                             fetch_and_process([single_sym], stock_meta, headers)
-                            time.sleep(0.1) # 單兵狙擊時放慢速度避免被鎖
+                            time.sleep(0.05) # 單兵狙擊時稍微喘息，避免被鎖
                             
                     if i == 0:
                         now_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
-                        print(f"👁️ [{now_str}] V8 智慧隔離掃描中... 記憶體已追蹤 {len(stock_tick_memory)} 檔標的。", flush=True)
+                        print(f"👁️ [{now_str}] 👑皇家 V8 隔離引擎掃描中... 記憶體已追蹤 {len(stock_tick_memory)} 檔標的。", flush=True)
                         
                     time.sleep(1.0)
-                    
             else:
                 time.sleep(60) 
         except Exception as e:
