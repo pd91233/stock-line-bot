@@ -1974,12 +1974,9 @@ def process_tick_data(data, meta_info, top_ind):
     return None
 
 def continuous_radar_loop():
-    print("📡 [當沖雷達] 啟動 Google 隱形跳板陣列掃描引擎，繞過證交所封鎖...", flush=True)
+    print("📡 [當沖雷達] 啟動終極穿甲通道 (Yahoo V8 Spark API)，全面突破封鎖...", flush=True)
     import time, datetime, requests
-    import urllib.parse
     
-    # 💥 掛載統帥的專屬 Google Apps Script 隱形跳板
-    GAS_URL = "https://script.google.com/macros/s/AKfycbxaWJMbteJXq-rOwT7r6dlXq1rDSPgL6hoO2djKoregMZZIWx8WZjadMI9fnTKjTDOCXg/exec"
     error_count = 0 
     
     while True:
@@ -1990,7 +1987,7 @@ def continuous_radar_loop():
             
             # 🔒 09:00 到 13:30 之間雷達才運作
             if not is_weekend and (900 <= current_time_num <= 1330):
-                headers = {"User-Agent": "Mozilla/5.0"}
+                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
                 
                 current_cache = read_cache()
                 full_stocks = current_cache.get("fundamental_full", [])
@@ -2008,29 +2005,45 @@ def continuous_radar_loop():
                     for s in batch:
                         code = str(s.get('code', '')).strip()
                         market = s.get('market', '上市')
-                        prefix = "tse" if market == "上市" else "otc"
+                        suffix = ".TW" if market == "上市" else ".TWO"
                         if code:
-                            ex_ch_list.append(f"{prefix}_{code}.tw")
+                            ex_ch_list.append(f"{code}{suffix}")
                             stock_meta[code] = s
                             
                     if not ex_ch_list: continue
                     
-                    channels = "|".join(ex_ch_list)
+                    symbols = ",".join(ex_ch_list)
                     
-                    # 💥 終極越獄戰術：把證交所的網址，包裝成參數丟給 Google 跳板！
-                    target_url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={channels}&_={int(time.time() * 1000)}"
-                    encoded_url = urllib.parse.quote(target_url, safe='')
-                    proxy_url = f"{GAS_URL}?url={encoded_url}"
+                    # 💥 終極穿甲彈：使用不會報 401 且支援批次的 Yahoo V8 Spark API
+                    api_url = f"https://query1.finance.yahoo.com/v8/finance/spark?symbols={symbols}&range=1d&interval=1d"
                     
                     try:
-                        # 透過 Google 伺服器去抓資料，並稍微拉長 Timeout 時間
-                        res = requests.get(proxy_url, headers=headers, timeout=10)
+                        res = requests.get(api_url, headers=headers, timeout=5)
                         if res.status_code == 200:
                             res_json = res.json()
-                            if 'msgArray' in res_json:
-                                for data in res_json['msgArray']:
-                                    code = data.get('c')
-                                    alert_msg = process_tick_data(data, stock_meta.get(code, {}), global_true_market_top_ind)
+                            if 'spark' in res_json and 'result' in res_json['spark']:
+                                results = res_json['spark']['result']
+                                
+                                for data in results:
+                                    if not data or not data.get('response'): continue
+                                    
+                                    meta = data['response'][0].get('meta', {})
+                                    code = data.get('symbol', '').split('.')[0]
+                                    
+                                    if 'regularMarketPrice' not in meta: continue
+
+                                    # 將 Yahoo 資料翻譯成雷達能看懂的格式
+                                    formatted_data = {
+                                        'c': code,
+                                        'z': meta.get('regularMarketPrice', '-'),
+                                        'y': meta.get('chartPreviousClose', meta.get('previousClose', '-')),
+                                        'o': meta.get('regularMarketPrice', '-'), # Spark 預設以現價為基準
+                                        'h': meta.get('regularMarketDayHigh', meta.get('regularMarketPrice', '-')),
+                                        'l': meta.get('regularMarketDayLow', meta.get('regularMarketPrice', '-')),
+                                        'v': meta.get('regularMarketVolume', 0) / 1000  # Yahoo 單位為股，轉成張
+                                    }
+                                    
+                                    alert_msg = process_tick_data(formatted_data, stock_meta.get(code, {}), global_true_market_top_ind)
                                     
                                     if alert_msg and alert_msg not in intraday_breakout_cache:
                                         intraday_breakout_cache.insert(0, alert_msg)
@@ -2054,15 +2067,15 @@ def continuous_radar_loop():
                         else:
                             error_count += 1
                             if error_count % 10 == 0:
-                                print(f"⚠️ [Google跳板異常] 狀態碼: {res.status_code}", flush=True)
+                                print(f"⚠️ [V8通道異常] 狀態碼: {res.status_code}", flush=True)
                     except Exception as e:
                         error_count += 1
                         if error_count % 10 == 0:
-                            print(f"⚠️ [跳板連線超時] Google 轉發網路可能壅塞: {e}", flush=True)
+                            print(f"⚠️ [雷達連線超時]: {e}", flush=True)
                     
                     if i == 0:
                         now_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
-                        print(f"👁️ [{now_str}] Google 隱形通道掃描中... 記憶體已追蹤 {len(stock_tick_memory)} 檔標的。", flush=True)
+                        print(f"👁️ [{now_str}] 終極 V8 穿甲掃描中... 記憶體已追蹤 {len(stock_tick_memory)} 檔標的。", flush=True)
                         
                     time.sleep(1.2)
                     
