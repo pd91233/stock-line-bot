@@ -1974,79 +1974,29 @@ def process_tick_data(data, meta_info, top_ind):
     return None
 
 def continuous_radar_loop():
-    print("📡 [當沖雷達] 啟動 👑皇家 V8 陣列精煉引擎，確保 100% 報價解碼...", flush=True)
+    print("📡 [當沖雷達] 廢棄二手數據！啟動【台股官方直連引擎】(JSESSIONID 通行證破解版)...", flush=True)
     import time, datetime, requests
     
-    # 內部函數：負責向 Yahoo 請求並精煉 K 線陣列，若遭遇 400 則回傳 False 要求拆分！
-    def fetch_and_process(symbols_list, stock_meta_dict, headers):
-        symbols_str = ",".join(symbols_list)
-        api_url = f"https://query1.finance.yahoo.com/v8/finance/spark?symbols={symbols_str}"
-        
+    # 💥 核心武器：建立一個具備「記憶 Cookie」能力的真實瀏覽器 Session
+    twse_session = requests.Session()
+    twse_session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "zh-TW,zh;q=0.9",
+        "X-Requested-With": "XMLHttpRequest"
+    })
+
+    # 💥 拿門票函數：開機或斷線時，先去首頁抓取 Cookie
+    def refresh_twse_cookie():
         try:
-            res = requests.get(api_url, headers=headers, timeout=5)
-            if res.status_code == 200:
-                res_json = res.json()
-                results = res_json.get('spark', {}).get('result', [])
-                
-                if not results: return True
-                
-                for spark_data in results:
-                    if not spark_data or not spark_data.get('response'): continue
-                    
-                    resp = spark_data['response'][0]
-                    meta = resp.get('meta', {})
-                    code = spark_data.get('symbol', '').split('.')[0]
-                    
-                    # 💥 確保有昨日收盤基準價
-                    if 'chartPreviousClose' not in meta and 'previousClose' not in meta: continue
-                    
-                    indicators = resp.get('indicators', {}).get('quote', [{}])[0]
-                    closes = indicators.get('close', [])
-                    volumes = indicators.get('volume', [])
-                    
-                    # 💥 陣列精煉術：過濾掉 Yahoo 偶爾傳來的 None 空值，避免當機
-                    valid_closes = [c for c in closes if c is not None]
-                    valid_vols = [v for v in volumes if v is not None]
-                    
-                    if not valid_closes or not valid_vols: continue
-                    
-                    # 💥 完美提煉：從陣列中直接計算最高、最低與累積張數，確保數值型態絕對安全！
-                    formatted_data = {
-                        'c': code,
-                        'z': valid_closes[-1],
-                        'y': meta.get('chartPreviousClose', meta.get('previousClose', valid_closes[0])),
-                        'o': valid_closes[0],
-                        'h': max(valid_closes),
-                        'l': min(valid_closes),
-                        'v': sum(valid_vols) / 1000.0  # Yahoo 單位為股，加總後除以 1000 轉成台股張數
-                    }
-                    
-                    alert_msg = process_tick_data(formatted_data, stock_meta_dict.get(code, {}), global_true_market_top_ind)
-                    
-                    if alert_msg and alert_msg not in intraday_breakout_cache:
-                        intraday_breakout_cache.insert(0, alert_msg)
-                        new_cache = read_cache()
-                        new_cache["intraday_alerts"] = intraday_breakout_cache[:10]
-                        update_cache(new_cache)
-                        
-                        try:
-                            trigger_air_raid_alarm(f"🔥 {stock_meta_dict.get(code, {}).get('name', code)} 爆量點火！", alert_msg)
-                        except: pass
-                        
-                        TARGET_GROUP_IDS = [
-                            "C0481b44935888bb1dc20dfd52a675e8a", 
-                            "C47bfa8e16a7216bd54dceb3b5e90cfa0"  
-                        ]
-                        for group_id in TARGET_GROUP_IDS:
-                            smart_push_with_menu(group_id, f"🚨 【全市場同步跟單急報】\n{alert_msg}")
-                        
-                        print(f"🚀 [全市場雷達] 成功捕獲 {code} 爆量！", flush=True)
-                return True
-            elif res.status_code == 400:
-                return False 
-        except Exception:
-            pass
-        return True 
+            twse_session.get("https://mis.twse.com.tw/stock/index.jsp", timeout=5)
+            print("✅ [雷達通訊] 已成功取得台灣證交所 Cookie 通行證！準備進場掃描！", flush=True)
+        except Exception as e:
+            print(f"⚠️ [雷達通訊] 取得通行證失敗: {e}", flush=True)
+
+    # 開機先拿一次門票
+    refresh_twse_cookie()
+    error_count = 0 
 
     # --- 雷達主迴圈 ---
     while True:
@@ -2055,9 +2005,8 @@ def continuous_radar_loop():
             is_weekend = now.weekday() >= 5
             current_time_num = now.hour * 100 + now.minute
             
+            # 🔒 09:00 到 13:30 之間雷達才運作
             if not is_weekend and (900 <= current_time_num <= 1330):
-                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"}
-                
                 current_cache = read_cache()
                 full_stocks = current_cache.get("fundamental_full", [])
                 
@@ -2065,7 +2014,7 @@ def continuous_radar_loop():
                     time.sleep(10)
                     continue
 
-                batch_size = 20
+                batch_size = 40
                 for i in range(0, len(full_stocks), batch_size):
                     batch = full_stocks[i:i+batch_size]
                     
@@ -2074,27 +2023,75 @@ def continuous_radar_loop():
                     for s in batch:
                         code = str(s.get('code', '')).strip()
                         market = s.get('market', '上市')
-                        suffix = ".TW" if market == "上市" else ".TWO"
+                        prefix = "tse" if market == "上市" else "otc"
                         
+                        # 嚴格過濾 4 碼純種股票
                         if code and len(code) == 4 and code.isdigit():
-                            sym = f"{code}{suffix}"
-                            ex_ch_list.append(sym)
+                            ex_ch_list.append(f"{prefix}_{code}.tw")
                             stock_meta[code] = s
                             
                     if not ex_ch_list: continue
                     
-                    is_success = fetch_and_process(ex_ch_list, stock_meta, headers)
+                    channels = "|".join(ex_ch_list)
+                    api_url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={channels}&_={int(time.time() * 1000)}"
                     
-                    if not is_success:
-                        for single_sym in ex_ch_list:
-                            fetch_and_process([single_sym], stock_meta, headers)
-                            time.sleep(0.05) 
-                            
+                    try:
+                        # 💥 帶著剛剛拿到的官方 Cookie 去敲門！
+                        res = twse_session.get(api_url, timeout=5)
+                        
+                        if res.status_code == 200:
+                            res_json = res.json()
+                            if 'msgArray' in res_json:
+                                # 成功拿到資料，將誤差歸零
+                                error_count = 0 
+                                for data in res_json['msgArray']:
+                                    code = data.get('c')
+                                    # 這裡使用的是 100% 最真實、零延遲的官方資料！
+                                    alert_msg = process_tick_data(data, stock_meta.get(code, {}), global_true_market_top_ind)
+                                    
+                                    if alert_msg and alert_msg not in intraday_breakout_cache:
+                                        intraday_breakout_cache.insert(0, alert_msg)
+                                        new_cache = read_cache()
+                                        new_cache["intraday_alerts"] = intraday_breakout_cache[:10]
+                                        update_cache(new_cache)
+                                        
+                                        try:
+                                            trigger_air_raid_alarm(f"🔥 {stock_meta.get(code, {}).get('name', code)} 爆量點火！", alert_msg)
+                                        except: pass
+                                        
+                                        TARGET_GROUP_IDS = [
+                                            "C0481b44935888bb1dc20dfd52a675e8a", 
+                                            "C47bfa8e16a7216bd54dceb3b5e90cfa0"  
+                                        ]
+                                        for group_id in TARGET_GROUP_IDS:
+                                            smart_push_with_menu(group_id, f"🚨 【全市場同步跟單急報】\n{alert_msg}")
+                                        
+                                        print(f"🚀 [全市場雷達] 成功捕獲 {code} 爆量！", flush=True)
+                            else:
+                                # 狀態碼 200，但沒有 msgArray，代表 Cookie 被沒收了
+                                error_count += 1
+                                if error_count > 3:
+                                    print("⚠️ [雷達通訊] 通行證似乎過期，正在重新申請...", flush=True)
+                                    refresh_twse_cookie()
+                                    error_count = 0
+                        else:
+                            error_count += 1
+                            if error_count > 3:
+                                refresh_twse_cookie()
+                                error_count = 0
+                                
+                    except Exception as e:
+                        error_count += 1
+                        if error_count > 3:
+                            refresh_twse_cookie()
+                            error_count = 0
+                    
                     if i == 0:
                         now_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
-                        print(f"👁️ [{now_str}] 👑皇家 V8 精煉引擎掃描中... 記憶體已追蹤 {len(stock_tick_memory)} 檔標的。", flush=True)
+                        print(f"👁️ [{now_str}] 台股官方引擎掃描中... 記憶體已穩健追蹤 {len(stock_tick_memory)} 檔標的。", flush=True)
                         
-                    time.sleep(1.0)
+                    time.sleep(1.2)
+                    
             else:
                 time.sleep(60) 
         except Exception as e:
