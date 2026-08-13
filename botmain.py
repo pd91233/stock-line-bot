@@ -1974,13 +1974,12 @@ def process_tick_data(data, meta_info, top_ind):
     return None
 
 def continuous_radar_loop():
-    print("📡 [當沖雷達] 啟動 👑皇家 V8 隔離引擎 (Yahoo Spark API)，全面突破封鎖...", flush=True)
+    print("📡 [當沖雷達] 啟動 👑皇家 V8 陣列精煉引擎，確保 100% 報價解碼...", flush=True)
     import time, datetime, requests
     
-    # 內部函數：負責向 Yahoo 請求並解析，若遭遇 400 則回傳 False 要求拆分單點突破！
+    # 內部函數：負責向 Yahoo 請求並精煉 K 線陣列，若遭遇 400 則回傳 False 要求拆分！
     def fetch_and_process(symbols_list, stock_meta_dict, headers):
         symbols_str = ",".join(symbols_list)
-        # 💥 拔除 range 與 interval，讓 Yahoo 用最穩定的預設值回傳，徹底避免參數衝突的 400 錯誤
         api_url = f"https://query1.finance.yahoo.com/v8/finance/spark?symbols={symbols_str}"
         
         try:
@@ -1991,23 +1990,35 @@ def continuous_radar_loop():
                 
                 if not results: return True
                 
-                for data in results:
-                    if not data or not data.get('response'): continue
+                for spark_data in results:
+                    if not spark_data or not spark_data.get('response'): continue
                     
-                    meta = data['response'][0].get('meta', {})
-                    code = data.get('symbol', '').split('.')[0]
+                    resp = spark_data['response'][0]
+                    meta = resp.get('meta', {})
+                    code = spark_data.get('symbol', '').split('.')[0]
                     
-                    if 'regularMarketPrice' not in meta: continue
-
-                    # 翻譯 Yahoo 資料
+                    # 💥 確保有昨日收盤基準價
+                    if 'chartPreviousClose' not in meta and 'previousClose' not in meta: continue
+                    
+                    indicators = resp.get('indicators', {}).get('quote', [{}])[0]
+                    closes = indicators.get('close', [])
+                    volumes = indicators.get('volume', [])
+                    
+                    # 💥 陣列精煉術：過濾掉 Yahoo 偶爾傳來的 None 空值，避免當機
+                    valid_closes = [c for c in closes if c is not None]
+                    valid_vols = [v for v in volumes if v is not None]
+                    
+                    if not valid_closes or not valid_vols: continue
+                    
+                    # 💥 完美提煉：從陣列中直接計算最高、最低與累積張數，確保數值型態絕對安全！
                     formatted_data = {
                         'c': code,
-                        'z': meta.get('regularMarketPrice', '-'),
-                        'y': meta.get('chartPreviousClose', meta.get('previousClose', '-')),
-                        'o': meta.get('regularMarketPrice', '-'), 
-                        'h': meta.get('regularMarketDayHigh', meta.get('regularMarketPrice', '-')),
-                        'l': meta.get('regularMarketDayLow', meta.get('regularMarketPrice', '-')),
-                        'v': meta.get('regularMarketVolume', 0) / 1000  # 轉成張數
+                        'z': valid_closes[-1],
+                        'y': meta.get('chartPreviousClose', meta.get('previousClose', valid_closes[0])),
+                        'o': valid_closes[0],
+                        'h': max(valid_closes),
+                        'l': min(valid_closes),
+                        'v': sum(valid_vols) / 1000.0  # Yahoo 單位為股，加總後除以 1000 轉成台股張數
                     }
                     
                     alert_msg = process_tick_data(formatted_data, stock_meta_dict.get(code, {}), global_true_market_top_ind)
@@ -2032,7 +2043,7 @@ def continuous_radar_loop():
                         print(f"🚀 [全市場雷達] 成功捕獲 {code} 爆量！", flush=True)
                 return True
             elif res.status_code == 400:
-                return False # 💥 抓到了！這批名單裡面有毒蘋果，回傳 False 通知主迴圈拆分！
+                return False 
         except Exception:
             pass
         return True 
@@ -2065,7 +2076,6 @@ def continuous_radar_loop():
                         market = s.get('market', '上市')
                         suffix = ".TW" if market == "上市" else ".TWO"
                         
-                        # 💥 終極防護：限定「4位數」而且必須「全是數字」，徹底封殺毒蘋果！
                         if code and len(code) == 4 and code.isdigit():
                             sym = f"{code}{suffix}"
                             ex_ch_list.append(sym)
@@ -2073,18 +2083,16 @@ def continuous_radar_loop():
                             
                     if not ex_ch_list: continue
                     
-                    # 🚀 第一次攻擊：批次掃描
                     is_success = fetch_and_process(ex_ch_list, stock_meta, headers)
                     
-                    # 🛡️ 隔離機制啟動：如果批次被 400 退件，立刻拆成單發狙擊！
                     if not is_success:
                         for single_sym in ex_ch_list:
                             fetch_and_process([single_sym], stock_meta, headers)
-                            time.sleep(0.05) # 單兵狙擊時稍微喘息，避免被鎖
+                            time.sleep(0.05) 
                             
                     if i == 0:
                         now_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
-                        print(f"👁️ [{now_str}] 👑皇家 V8 隔離引擎掃描中... 記憶體已追蹤 {len(stock_tick_memory)} 檔標的。", flush=True)
+                        print(f"👁️ [{now_str}] 👑皇家 V8 精煉引擎掃描中... 記憶體已追蹤 {len(stock_tick_memory)} 檔標的。", flush=True)
                         
                     time.sleep(1.0)
             else:
