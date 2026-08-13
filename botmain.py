@@ -1973,30 +1973,42 @@ def process_tick_data(data, meta_info, top_ind):
         pass
     return None
 
+
+
 def continuous_radar_loop():
-    print("📡 [當沖雷達] 廢棄二手數據！啟動【台股官方直連引擎】(JSESSIONID 通行證破解版)...", flush=True)
+    print("📡 [當沖雷達] 廢棄推算數據！啟動【Yahoo V7 真實數據引擎】(Crumb 憑證解鎖版)...", flush=True)
     import time, datetime, requests
     
-    # 💥 核心武器：建立一個具備「記憶 Cookie」能力的真實瀏覽器 Session
-    twse_session = requests.Session()
-    twse_session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/javascript, */*; q=0.01",
-        "Accept-Language": "zh-TW,zh;q=0.9",
-        "X-Requested-With": "XMLHttpRequest"
-    })
-
-    # 💥 拿門票函數：開機或斷線時，先去首頁抓取 Cookie
-    def refresh_twse_cookie():
+    # 💥 核心武器：建立 Yahoo 專屬 Session，模擬真實瀏覽器行為
+    yahoo_session = requests.Session()
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7"
+    }
+    yahoo_session.headers.update(headers)
+    
+    crumb = None
+    
+    # 💥 解鎖函數：自動獲取 Yahoo API 通行證
+    def get_yahoo_crumb():
+        nonlocal crumb
         try:
-            twse_session.get("https://mis.twse.com.tw/stock/index.jsp", timeout=5)
-            print("✅ [雷達通訊] 已成功取得台灣證交所 Cookie 通行證！準備進場掃描！", flush=True)
+            # 1. 拜訪首頁取得 Cookie
+            yahoo_session.get("https://fc.yahoo.com", timeout=5)
+            # 2. 拿 Cookie 換取 Crumb 憑證
+            res = yahoo_session.get("https://query1.finance.yahoo.com/v1/test/getcrumb", timeout=5)
+            if res.status_code == 200:
+                crumb = res.text.strip()
+                print(f"✅ [Yahoo 解鎖] 成功取得 V7 報價 API 通行證 (Crumb): {crumb}", flush=True)
+            else:
+                print(f"⚠️ [Yahoo 解鎖失敗] 狀態碼: {res.status_code}", flush=True)
         except Exception as e:
-            print(f"⚠️ [雷達通訊] 取得通行證失敗: {e}", flush=True)
-
-    # 開機先拿一次門票
-    refresh_twse_cookie()
-    error_count = 0 
+            print(f"⚠️ [Yahoo 解鎖異常]: {e}", flush=True)
+            
+    # 開機先拿一次通行證
+    get_yahoo_crumb()
+    error_count = 0
 
     # --- 雷達主迴圈 ---
     while True:
@@ -2014,6 +2026,11 @@ def continuous_radar_loop():
                     time.sleep(10)
                     continue
 
+                # 如果憑證遺失，重新申請
+                if not crumb:
+                    get_yahoo_crumb()
+                    time.sleep(2)
+                    
                 batch_size = 40
                 for i in range(0, len(full_stocks), batch_size):
                     batch = full_stocks[i:i+batch_size]
@@ -2023,72 +2040,81 @@ def continuous_radar_loop():
                     for s in batch:
                         code = str(s.get('code', '')).strip()
                         market = s.get('market', '上市')
-                        prefix = "tse" if market == "上市" else "otc"
+                        suffix = ".TW" if market == "上市" else ".TWO"
                         
                         # 嚴格過濾 4 碼純種股票
                         if code and len(code) == 4 and code.isdigit():
-                            ex_ch_list.append(f"{prefix}_{code}.tw")
+                            ex_ch_list.append(f"{code}{suffix}")
                             stock_meta[code] = s
                             
                     if not ex_ch_list: continue
                     
-                    channels = "|".join(ex_ch_list)
-                    api_url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={channels}&_={int(time.time() * 1000)}"
+                    symbols_str = ",".join(ex_ch_list)
+                    
+                    # 💥 帶著 Crumb 憑證呼叫 V7 Quote API！拿取 100% 真實的累積成交量！
+                    api_url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols_str}&crumb={crumb}"
                     
                     try:
-                        # 💥 帶著剛剛拿到的官方 Cookie 去敲門！
-                        res = twse_session.get(api_url, timeout=5)
+                        res = yahoo_session.get(api_url, timeout=5)
                         
                         if res.status_code == 200:
-                            res_json = res.json()
-                            if 'msgArray' in res_json:
-                                # 成功拿到資料，將誤差歸零
-                                error_count = 0 
-                                for data in res_json['msgArray']:
-                                    code = data.get('c')
-                                    # 這裡使用的是 100% 最真實、零延遲的官方資料！
-                                    alert_msg = process_tick_data(data, stock_meta.get(code, {}), global_true_market_top_ind)
-                                    
-                                    if alert_msg and alert_msg not in intraday_breakout_cache:
-                                        intraday_breakout_cache.insert(0, alert_msg)
-                                        new_cache = read_cache()
-                                        new_cache["intraday_alerts"] = intraday_breakout_cache[:10]
-                                        update_cache(new_cache)
-                                        
-                                        try:
-                                            trigger_air_raid_alarm(f"🔥 {stock_meta.get(code, {}).get('name', code)} 爆量點火！", alert_msg)
-                                        except: pass
-                                        
-                                        TARGET_GROUP_IDS = [
-                                            "C0481b44935888bb1dc20dfd52a675e8a", 
-                                            "C47bfa8e16a7216bd54dceb3b5e90cfa0"  
-                                        ]
-                                        for group_id in TARGET_GROUP_IDS:
-                                            smart_push_with_menu(group_id, f"🚨 【全市場同步跟單急報】\n{alert_msg}")
-                                        
-                                        print(f"🚀 [全市場雷達] 成功捕獲 {code} 爆量！", flush=True)
-                            else:
-                                # 狀態碼 200，但沒有 msgArray，代表 Cookie 被沒收了
-                                error_count += 1
-                                if error_count > 3:
-                                    print("⚠️ [雷達通訊] 通行證似乎過期，正在重新申請...", flush=True)
-                                    refresh_twse_cookie()
-                                    error_count = 0
-                        else:
-                            error_count += 1
-                            if error_count > 3:
-                                refresh_twse_cookie()
-                                error_count = 0
+                            error_count = 0 # 成功拿資料，錯誤歸零
+                            results = res.json().get('quoteResponse', {}).get('result', [])
+                            
+                            for data in results:
+                                code = data.get('symbol', '').split('.')[0]
                                 
+                                # 💥 擷取最真實的官方數據，絕不用算的！
+                                formatted_data = {
+                                    'c': code,
+                                    'z': data.get('regularMarketPrice', '-'),
+                                    'y': data.get('regularMarketPreviousClose', '-'),
+                                    'o': data.get('regularMarketOpen', '-'),
+                                    'h': data.get('regularMarketDayHigh', '-'),
+                                    'l': data.get('regularMarketDayLow', '-'),
+                                    'v': data.get('regularMarketVolume', 0) / 1000.0  # Yahoo 總量是股，直接除以 1000 就是精準的張數
+                                }
+                                
+                                # 過濾掉尚未開盤或無成交量的標的
+                                if formatted_data['z'] == '-' or formatted_data['v'] == 0:
+                                    continue
+                                    
+                                alert_msg = process_tick_data(formatted_data, stock_meta.get(code, {}), global_true_market_top_ind)
+                                
+                                if alert_msg and alert_msg not in intraday_breakout_cache:
+                                    intraday_breakout_cache.insert(0, alert_msg)
+                                    new_cache = read_cache()
+                                    new_cache["intraday_alerts"] = intraday_breakout_cache[:10]
+                                    update_cache(new_cache)
+                                    
+                                    try:
+                                        trigger_air_raid_alarm(f"🔥 {stock_meta.get(code, {}).get('name', code)} 爆量點火！", alert_msg)
+                                    except: pass
+                                    
+                                    TARGET_GROUP_IDS = [
+                                        "C0481b44935888bb1dc20dfd52a675e8a", 
+                                        "C47bfa8e16a7216bd54dceb3b5e90cfa0"  
+                                    ]
+                                    for group_id in TARGET_GROUP_IDS:
+                                        smart_push_with_menu(group_id, f"🚨 【全市場同步跟單急報】\n{alert_msg}")
+                                    
+                                    print(f"🚀 [全市場雷達] 成功捕獲 {code} 爆量！", flush=True)
+                        elif res.status_code == 401:
+                            # 401 代表 Crumb 憑證失效
+                            error_count += 1
+                            if error_count > 2:
+                                print("⚠️ [Yahoo 憑證失效] 正在重新申請 Crumb...", flush=True)
+                                crumb = None # 清除舊憑證，觸發重新申請
+                                error_count = 0
+                        else:
+                            print(f"⚠️ [V7 通道異常] 狀態碼: {res.status_code}", flush=True)
+                            
                     except Exception as e:
-                        error_count += 1
-                        if error_count > 3:
-                            refresh_twse_cookie()
-                            error_count = 0
+                        pass
                     
                     if i == 0:
                         now_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
-                        print(f"👁️ [{now_str}] 台股官方引擎掃描中... 記憶體已穩健追蹤 {len(stock_tick_memory)} 檔標的。", flush=True)
+                        print(f"👁️ [{now_str}] Yahoo V7 真實數據引擎掃描中... 記憶體已穩健追蹤 {len(stock_tick_memory)} 檔標的。", flush=True)
                         
                     time.sleep(1.2)
                     
@@ -2096,7 +2122,6 @@ def continuous_radar_loop():
                 time.sleep(60) 
         except Exception as e:
             time.sleep(60)
-
 
 # ==========================================================
 # 📊 💥 終極完全體：下午 1:40 多分頁選股戰報績效驗證與當沖鑑識哨
