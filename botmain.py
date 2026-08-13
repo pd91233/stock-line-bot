@@ -1974,9 +1974,12 @@ def process_tick_data(data, meta_info, top_ind):
     return None
 
 def continuous_radar_loop():
-    print("📡 [當沖雷達] 啟動 Yahoo 國際通道陣列掃描引擎，繞過證交所封鎖...", flush=True)
+    print("📡 [當沖雷達] 啟動 Google 隱形跳板陣列掃描引擎，繞過證交所封鎖...", flush=True)
     import time, datetime, requests
+    import urllib.parse
     
+    # 💥 掛載統帥的專屬 Google Apps Script 隱形跳板
+    GAS_URL = "https://script.google.com/macros/s/AKfycbxaWJMbteJXq-rOwT7r6dlXq1rDSPgL6hoO2djKoregMZZIWx8WZjadMI9fnTKjTDOCXg/exec"
     error_count = 0 
     
     while True:
@@ -1987,8 +1990,7 @@ def continuous_radar_loop():
             
             # 🔒 09:00 到 13:30 之間雷達才運作
             if not is_weekend and (900 <= current_time_num <= 1330):
-                # 換上偽裝的 User-Agent
-                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+                headers = {"User-Agent": "Mozilla/5.0"}
                 
                 current_cache = read_cache()
                 full_stocks = current_cache.get("fundamental_full", [])
@@ -2006,70 +2008,61 @@ def continuous_radar_loop():
                     for s in batch:
                         code = str(s.get('code', '')).strip()
                         market = s.get('market', '上市')
-                        # 轉換為 Yahoo 的代號格式 (上市 .TW / 上櫃 .TWO)
-                        suffix = ".TW" if market == "上市" else ".TWO"
+                        prefix = "tse" if market == "上市" else "otc"
                         if code:
-                            ex_ch_list.append(f"{code}{suffix}")
+                            ex_ch_list.append(f"{prefix}_{code}.tw")
                             stock_meta[code] = s
                             
                     if not ex_ch_list: continue
                     
-                    symbols = ",".join(ex_ch_list)
-                    # 🚀 透過 Yahoo Finance 批次 API 繞過證交所封鎖！
-                    api_url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols}"
+                    channels = "|".join(ex_ch_list)
+                    
+                    # 💥 終極越獄戰術：把證交所的網址，包裝成參數丟給 Google 跳板！
+                    target_url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={channels}&_={int(time.time() * 1000)}"
+                    encoded_url = urllib.parse.quote(target_url, safe='')
+                    proxy_url = f"{GAS_URL}?url={encoded_url}"
                     
                     try:
-                        res = requests.get(api_url, headers=headers, timeout=5)
+                        # 透過 Google 伺服器去抓資料，並稍微拉長 Timeout 時間
+                        res = requests.get(proxy_url, headers=headers, timeout=10)
                         if res.status_code == 200:
                             res_json = res.json()
-                            results = res_json.get('quoteResponse', {}).get('result', [])
-                            
-                            for data in results:
-                                code = data.get('symbol', '').split('.')[0]
-                                # 翻譯 Yahoo 的資料格式，餵給我們的雷達引擎
-                                formatted_data = {
-                                    'c': code,
-                                    'z': data.get('regularMarketPrice', '-'),
-                                    'y': data.get('regularMarketPreviousClose', '-'),
-                                    'o': data.get('regularMarketOpen', '-'),
-                                    'h': data.get('regularMarketDayHigh', '-'),
-                                    'l': data.get('regularMarketDayLow', '-'),
-                                    'v': data.get('regularMarketVolume', 0) / 1000  # Yahoo 單位是股，轉換成張
-                                }
-                                
-                                alert_msg = process_tick_data(formatted_data, stock_meta.get(code, {}), global_true_market_top_ind)
-                                
-                                if alert_msg and alert_msg not in intraday_breakout_cache:
-                                    intraday_breakout_cache.insert(0, alert_msg)
+                            if 'msgArray' in res_json:
+                                for data in res_json['msgArray']:
+                                    code = data.get('c')
+                                    alert_msg = process_tick_data(data, stock_meta.get(code, {}), global_true_market_top_ind)
                                     
-                                    new_cache = read_cache()
-                                    new_cache["intraday_alerts"] = intraday_breakout_cache[:10]
-                                    update_cache(new_cache)
-                                    
-                                    try:
-                                        trigger_air_raid_alarm(f"🔥 {stock_meta.get(code, {}).get('name', code)} 爆量點火！", alert_msg)
-                                    except: pass
-                                    
-                                    TARGET_GROUP_IDS = [
-                                        "C0481b44935888bb1dc20dfd52a675e8a", 
-                                        "C47bfa8e16a7216bd54dceb3b5e90cfa0"  
-                                    ]
-                                    for group_id in TARGET_GROUP_IDS:
-                                        smart_push_with_menu(group_id, f"🚨 【全市場同步跟單急報】\n{alert_msg}")
-                                    
-                                    print(f"🚀 [全市場雷達] 成功捕獲 {code} 爆量並空投戰報！", flush=True)
+                                    if alert_msg and alert_msg not in intraday_breakout_cache:
+                                        intraday_breakout_cache.insert(0, alert_msg)
+                                        
+                                        new_cache = read_cache()
+                                        new_cache["intraday_alerts"] = intraday_breakout_cache[:10]
+                                        update_cache(new_cache)
+                                        
+                                        try:
+                                            trigger_air_raid_alarm(f"🔥 {stock_meta.get(code, {}).get('name', code)} 爆量點火！", alert_msg)
+                                        except: pass
+                                        
+                                        TARGET_GROUP_IDS = [
+                                            "C0481b44935888bb1dc20dfd52a675e8a", 
+                                            "C47bfa8e16a7216bd54dceb3b5e90cfa0"  
+                                        ]
+                                        for group_id in TARGET_GROUP_IDS:
+                                            smart_push_with_menu(group_id, f"🚨 【全市場同步跟單急報】\n{alert_msg}")
+                                        
+                                        print(f"🚀 [全市場雷達] 成功捕獲 {code} 爆量並空投戰報！", flush=True)
                         else:
                             error_count += 1
-                            if error_count % 50 == 0:
-                                print(f"⚠️ [Yahoo 異常] 狀態碼: {res.status_code}", flush=True)
+                            if error_count % 10 == 0:
+                                print(f"⚠️ [Google跳板異常] 狀態碼: {res.status_code}", flush=True)
                     except Exception as e:
                         error_count += 1
-                        if error_count % 50 == 0:
-                            print(f"⚠️ [雷達異常] 網路連線超時: {e}", flush=True)
+                        if error_count % 10 == 0:
+                            print(f"⚠️ [跳板連線超時] Google 轉發網路可能壅塞: {e}", flush=True)
                     
                     if i == 0:
                         now_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
-                        print(f"👁️ [{now_str}] Yahoo 通道掃描中... 記憶體已追蹤 {len(stock_tick_memory)} 檔標的。", flush=True)
+                        print(f"👁️ [{now_str}] Google 隱形通道掃描中... 記憶體已追蹤 {len(stock_tick_memory)} 檔標的。", flush=True)
                         
                     time.sleep(1.2)
                     
