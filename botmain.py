@@ -2028,7 +2028,7 @@ def continuous_radar_loop():
             current_time_num = now.hour * 100 + now.minute
             
             # 💥 強制在 13:24 準時關閉！絕對不掃描 13:25~13:30 的收盤大單！
-                if not is_weekend and (900 <= current_time_num <= 1324):
+            if not is_weekend and (900 <= current_time_num <= 1324):
                 current_cache = read_cache()
                 full_stocks = current_cache.get("fundamental_full", [])
                 
