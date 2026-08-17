@@ -1928,15 +1928,15 @@ def process_tick_data(data, meta_info, top_ind):
             is_real_attack = current_z >= z_1m_ago
             is_volume_surge = False
             
-            # 💥【極度敏感測試參數】：只要有一點點量就觸發，證明雷達會叫！
+            # 💥【實戰爆量參數】：過濾雜訊，只抓真正具備攻擊動能的主力單！
             if time_status == "golden":
-                if vol_1m >= 10 and ignite_value >= 500000: # 只要 10 張，50萬台幣
+                if vol_1m >= 50 and ignite_value >= 3000000: # 1分K大於50張 且 點火資金大於300萬
                     is_volume_surge = True
             elif time_status == "cooling":
-                if vol_1m >= 20 and ignite_value >= 1000000: # 只要 20 張，100萬台幣
+                if vol_1m >= 100 and ignite_value >= 5000000: # 1分K大於100張 且 點火資金大於500萬
                     is_volume_surge = True
             elif time_status == "dead_water":
-                if vol_1m >= 30 and ignite_value >= 2000000: # 只要 30 張，200萬台幣
+                if vol_1m >= 150 and ignite_value >= 8000000: # 1分K大於150張 且 點火資金大於800萬
                     is_volume_surge = True
 
             is_above_vwap = current_z >= vwap_est
@@ -2027,7 +2027,8 @@ def continuous_radar_loop():
             is_weekend = now.weekday() >= 5
             current_time_num = now.hour * 100 + now.minute
             
-            if not is_weekend and (900 <= current_time_num <= 1330):
+            # 💥 強制在 13:24 準時關閉！絕對不掃描 13:25~13:30 的收盤大單！
+                if not is_weekend and (900 <= current_time_num <= 1324):
                 current_cache = read_cache()
                 full_stocks = current_cache.get("fundamental_full", [])
                 
@@ -2059,7 +2060,8 @@ def continuous_radar_loop():
                             if alert_msg and alert_msg not in intraday_breakout_cache:
                                 intraday_breakout_cache.insert(0, alert_msg)
                                 new_cache = read_cache()
-                                new_cache["intraday_alerts"] = intraday_breakout_cache[:10]
+                                # 💥 拔除 [:10] 封印，保留全天候完整發報紀錄！
+                                new_cache["intraday_alerts"] = intraday_breakout_cache
                                 update_cache(new_cache)
                                 
                                 try:
@@ -2114,7 +2116,8 @@ def afternoon_review_loop():
 
                 # 1. 💥 打破記憶體隔離：強制從實體 JSON 快取讀取雷達紀錄！
                 current_live_cache = read_cache()
-                radar_alerts = current_live_cache.get("intraday_alerts", intraday_breakout_cache)
+                # 💥 捨棄被截斷的快取，強制讀取全域變數中全天候的完整紀錄
+                radar_alerts = intraday_breakout_cache
 
                 # --- 盤中爆量雷達結算 ---
                 if radar_alerts:
