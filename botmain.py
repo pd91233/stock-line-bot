@@ -1960,9 +1960,8 @@ def process_tick_data(data, meta_info, top_ind):
                 action_guide = f"🎯 【操盤手強制指令：嚴禁追高】\n👉 戰況解讀：正乖離達 {bias:+.1f}%，瞬間漲幅過大！\n🔪 動作：切勿市價追高！靜待量縮拉回測試。"
 
             # ==========================================================
-            # 🕵️‍♂️ 裝甲五：【MIS 五檔照妖鏡交叉驗證】(瞬間攔截假突破)
+            # 🕵️‍♂️ 裝甲五：【MIS 五檔照妖鏡交叉驗證】(一擊必殺抹除假突破)
             # ==========================================================
-            pressure_warning = ""
             try:
                 market_type = "tse" if meta_info.get("market", "上市") == "上市" else "otc"
                 mis_url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={market_type}_{code}.tw&_={int(time.time()*1000)}"
@@ -1978,11 +1977,9 @@ def process_tick_data(data, meta_info, top_ind):
                     
                     if ask_total > 0 and bid_total > 0:
                         if ask_total > bid_total * 1.5:
-                            pressure_warning = f"\n🩸 【籌碼敗象】五檔委賣高達 {ask_total} 張 (買盤僅 {bid_total} 張)，上方反壓極重，提防主力誘多出貨！"
+                            return None # 🩸 籌碼敗象：上方反壓極重，主力誘多出貨，直接消音！
                         elif bid_total > ask_total * 3:
-                            pressure_warning = f"\n🧱 【虛假防禦】五檔委買高達 {bid_total} 張，下方異常大單墊檔，提防主力抽單多殺多！"
-                        else:
-                            pressure_warning = f"\n⚖️ 【五檔籌碼】委買 {bid_total} 張 vs 委賣 {ask_total} 張，動能真實健康。"
+                            return None # 🧱 虛假防禦：下方異常大單墊檔，提防主力抽單多殺多，直接消音！
             except Exception as e:
                 pass
             # ==========================================================
@@ -1996,15 +1993,13 @@ def process_tick_data(data, meta_info, top_ind):
                 f"[{time_str}] ⚡ {name}({code}) {alert_type}\n"
                 f"{hot_tag} | 現價：{current_z} (均價線:{vwap_est})\n"
                 f"漲幅：{chg_pct:+.2f}% | 均價乖離：{bias:+.1f}%\n"
-                f"🔥 絕對爆量：{int(vol_1m)} 張 (點火資金 {int(ignite_value/10000)}萬){resonance_text}"
-                f"{pressure_warning}\n"
+                f"🔥 絕對爆量：{int(vol_1m)} 張 (點火資金 {int(ignite_value/10000)}萬){resonance_text}\n"
                 f"----------------------\n"
                 f"{action_guide}"
             )
     except Exception:
         pass
     return None
-
 
 
 def continuous_radar_loop():
