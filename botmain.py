@@ -1887,12 +1887,11 @@ def process_tick_data(data, meta_info, top_ind):
         
         if z <= 0 or y <= 0: return None
         
-        # 💥 統帥防禦裝甲一：今日累積總量低於 500 張 (0.5千張) 的冷門標的直接無視，徹底封殺大戶騙線！
+        # 💥 統帥防禦裝甲一：總量極度冷門股直接無視
         if v < 0.5: 
             return None
         
         chg_pct = round(((z - y) / y) * 100, 2)
-        gap_pct = round(((o - y) / y) * 100, 2)
         
         try:
             vwap_est = round((o + h + l + (z * v / (v if v > 0 else 1))) / 4, 2) if v > 0 else round((o + h + l + z * 2) / 5, 2)
@@ -1921,8 +1920,6 @@ def process_tick_data(data, meta_info, top_ind):
             z_5m_ago, v_5m_ago = ticks[-6][1], ticks[-6][2]
 
             vol_1m = current_v - v_1m_ago
-            vol_5m = current_v - v_5m_ago
-            avg_1m_vol_in_5m = vol_5m / 5 if vol_5m > 0 else 1.0
             ignite_value = vol_1m * current_z * 1000
 
             is_real_attack = current_z >= z_1m_ago
@@ -1939,40 +1936,61 @@ def process_tick_data(data, meta_info, top_ind):
                 if vol_1m >= 150 and ignite_value >= 8000000: # 1分K大於150張 且 點火資金大於800萬
                     is_volume_surge = True
 
-            is_above_vwap = current_z >= vwap_est
-            is_trend_up = current_z >= z_5m_ago
+            # 若沒有攻擊量能，直接省下運算資源
+            if not (is_volume_surge and is_real_attack): return None
 
-            if is_above_vwap and is_trend_up and is_volume_surge and is_real_attack:
-                dist_to_high_pct = ((h - current_z) / current_z) * 100 if h > 0 else 0
-                is_near_ceiling = (0 < dist_to_high_pct <= 0.8) and (current_time_num > 930)
-                is_below_20ma = (ma20 > 0 and current_z < ma20)
-                is_strong_gap = (gap_pct >= 2.0 and current_z >= o)
+            # 💥 均線動能判定裝甲 (計算極短線均線斜率)
+            ma5_now = sum([t[1] for t in ticks[-5:]]) / 5
+            ma5_prev = sum([t[1] for t in ticks[-6:-1]]) / 5
+            
+            is_ma_up = ma5_now > ma5_prev
+            is_cross_vwap = (z_1m_ago < vwap_est and current_z >= vwap_est)
+            
+            # ⛔ 垃圾訊號濾網：如果均線向下，且沒有貫穿均價線，直接判定為「死貓反彈」，消音！
+            if not is_ma_up and not is_cross_vwap:
+                return None
 
-                alert_type = None
-                action_guide = ""
-                
-                # 💥 統帥防禦裝甲二：若判定為「空手觀望」(高檔測壓或破月線)，直接消音不發報！
-                if is_near_ceiling or is_below_20ma:
-                    return None
-                elif 1.0 <= chg_pct <= 4.5:
-                    alert_type = "🌅 【破曉初升】安全起漲點火"
-                    stop_loss_price = ticks[-1][4] if ticks[-1][4] > 0 else vwap_est
-                    action_guide = f"🎯 【小白實戰指令：✅ 多方起漲】\n👉 戰況：{'跳空強勢開局，' if is_strong_gap else ''}底部出量點火，實體紅K攻擊！\n💰 委託：拉回 {vwap_est} ~ {current_z} 區間可分批低接。\n🛡️ 防守：以起漲K棒低點 {stop_loss_price} 為最後防守線！"
-                elif 4.5 < chg_pct <= 9.0: # 放寬漲幅上限
-                    alert_type = "🔥 【極限動能】高檔強勢換手區"
-                    action_guide = f"🎯 【小白實戰指令：⚠️ 縮小部位短打】\n👉 戰況：短線衝太快，正乖離過大！\n⚠️ 怎麼買：切勿被爆量沖昏頭去重倉追高！\n🛡️ 策略：強勢股若拉回不破 {vwap_est}，才可小注試單。"
-                    
-                if alert_type:
-                    intraday_alerted_codes.add(code)
-                    hot_tag = f"🌟 [主流共振：{ind}]" if (top_ind != "" and top_ind in ind) else f"🏷️ [{ind}]"
-                    return (
-                        f"[{time_str}] ⚡ {name}({code}) {alert_type}\n"
-                        f"{hot_tag} | 現價：{current_z} (均價線:{vwap_est})\n"
-                        f"漲幅：{chg_pct}% | 開盤缺口：{gap_pct}%\n"
-                        f"🔥 1分絕對爆量：{int(vol_1m)} 張 (點火資金 {int(ignite_value/10000)}萬)\n"
-                        f"----------------------\n"
-                        f"{action_guide}"
-                    )
+            # ⛔ 空方趨勢濾網：低於月線(20MA)的弱勢股，放棄不抓
+            is_below_20ma = (ma20 > 0 and current_z < ma20)
+            if is_below_20ma: return None
+            
+            # 💡 雙引擎與動態文案派發系統
+            alert_type = ""
+            action_guide = ""
+            
+            # ⚔️ 引擎一：【絕地逆襲引擎】(由下往上貫穿均價線)
+            if not is_ma_up and is_cross_vwap:
+                alert_type = "💥 【破底翻突襲】爆量貫穿均價線！"
+                action_guide = f"🎯 【實戰戰術：低檔 V 轉搶短】\n👉 戰況解讀：短均線雖下彎，但主力瞬間爆量扭轉劣勢，強攻站上均價線！\n🛡️ 生死防線：逆勢單極度凶險！以剛突破的均價線 {vwap_est} 為絕對防禦，跌破立刻市價撤退！"
+            
+            # ⚔️ 引擎二：【主升段推進引擎】(均線翻揚且在均價線之上)
+            elif is_ma_up and current_z >= vwap_est:
+                alert_type = "🚀 【主升段點火】均線多頭強勢推升！"
+                action_guide = f"🎯 【實戰戰術：右側順勢加碼】\n👉 戰況解讀：短均線全面上揚，多方控盤爆量續攻，趨勢極度健康！\n🛡️ 移動防線：趨勢穩健，請沿著上揚的走勢偏多操作，若爆量跌破均價線 {vwap_est} 則拔檔！"
+            
+            else:
+                return None # 例外狀況不發報
+
+            # 🛡️ 裝甲三：【極限過熱警告】(乖離率 Bias 自動攔截)
+            bias = ((current_z - vwap_est) / vwap_est) * 100 if vwap_est > 0 else 0
+            if bias >= 2.5:
+                alert_type = "⚠️ 【高檔爆量・極端過熱】"
+                action_guide = f"🎯 【操盤手強制指令：嚴禁追高】\n👉 戰況解讀：短線正乖離已達 {bias:+.1f}%，瞬間漲幅過大，爆量極可能是竭盡缺口！\n🔪 動作：切勿在此刻市價追高！請靜待量縮拉回測試均線支撐。"
+
+            # 🌟 裝甲四：【主流族群共振加持】
+            is_resonance = (top_ind != "" and top_ind in ind)
+            hot_tag = f"🌟 [主流資金共振：{ind}]" if is_resonance else f"🏷️ [{ind}]"
+            resonance_text = " (🔥主攻部隊)" if is_resonance else ""
+
+            intraday_alerted_codes.add(code)
+            return (
+                f"[{time_str}] ⚡ {name}({code}) {alert_type}\n"
+                f"{hot_tag} | 現價：{current_z} (均價線:{vwap_est})\n"
+                f"漲幅：{chg_pct:+.2f}% | 均價乖離：{bias:+.1f}%\n"
+                f"🔥 絕對爆量：{int(vol_1m)} 張 (點火資金 {int(ignite_value/10000)}萬){resonance_text}\n"
+                f"----------------------\n"
+                f"{action_guide}"
+            )
     except Exception:
         pass
     return None
