@@ -1869,7 +1869,7 @@ stock_tick_memory = {}
 intraday_alerted_codes = set()
 
 def process_tick_data(data, meta_info, top_ind):
-    import time, datetime
+    import time, datetime, requests
     code = data.get('c')
     if not code or code in intraday_alerted_codes: return None
     
@@ -1886,10 +1886,7 @@ def process_tick_data(data, meta_info, top_ind):
         v = float(data.get('v', 0) if data.get('v', '-') != '-' else 0)
         
         if z <= 0 or y <= 0: return None
-        
-        # 💥 統帥防禦裝甲一：總量極度冷門股直接無視
-        if v < 0.5: 
-            return None
+        if v < 0.5: return None
         
         chg_pct = round(((z - y) / y) * 100, 2)
         
@@ -1925,59 +1922,71 @@ def process_tick_data(data, meta_info, top_ind):
             is_real_attack = current_z >= z_1m_ago
             is_volume_surge = False
             
-            # 💥【實戰爆量參數】：過濾雜訊，只抓真正具備攻擊動能的主力單！
             if time_status == "golden":
-                if vol_1m >= 50 and ignite_value >= 3000000: # 1分K大於50張 且 點火資金大於300萬
-                    is_volume_surge = True
+                if vol_1m >= 50 and ignite_value >= 3000000: is_volume_surge = True
             elif time_status == "cooling":
-                if vol_1m >= 100 and ignite_value >= 5000000: # 1分K大於100張 且 點火資金大於500萬
-                    is_volume_surge = True
+                if vol_1m >= 100 and ignite_value >= 5000000: is_volume_surge = True
             elif time_status == "dead_water":
-                if vol_1m >= 150 and ignite_value >= 8000000: # 1分K大於150張 且 點火資金大於800萬
-                    is_volume_surge = True
+                if vol_1m >= 150 and ignite_value >= 8000000: is_volume_surge = True
 
-            # 若沒有攻擊量能，直接省下運算資源
             if not (is_volume_surge and is_real_attack): return None
 
-            # 💥 均線動能判定裝甲 (計算極短線均線斜率)
             ma5_now = sum([t[1] for t in ticks[-5:]]) / 5
             ma5_prev = sum([t[1] for t in ticks[-6:-1]]) / 5
             
             is_ma_up = ma5_now > ma5_prev
             is_cross_vwap = (z_1m_ago < vwap_est and current_z >= vwap_est)
             
-            # ⛔ 垃圾訊號濾網：如果均線向下，且沒有貫穿均價線，直接判定為「死貓反彈」，消音！
-            if not is_ma_up and not is_cross_vwap:
-                return None
+            if not is_ma_up and not is_cross_vwap: return None
 
-            # ⛔ 空方趨勢濾網：低於月線(20MA)的弱勢股，放棄不抓
             is_below_20ma = (ma20 > 0 and current_z < ma20)
             if is_below_20ma: return None
             
-            # 💡 雙引擎與動態文案派發系統
             alert_type = ""
             action_guide = ""
             
-            # ⚔️ 引擎一：【絕地逆襲引擎】(由下往上貫穿均價線)
             if not is_ma_up and is_cross_vwap:
                 alert_type = "💥 【破底翻突襲】爆量貫穿均價線！"
-                action_guide = f"🎯 【實戰戰術：低檔 V 轉搶短】\n👉 戰況解讀：短均線雖下彎，但主力瞬間爆量扭轉劣勢，強攻站上均價線！\n🛡️ 生死防線：逆勢單極度凶險！以剛突破的均價線 {vwap_est} 為絕對防禦，跌破立刻市價撤退！"
-            
-            # ⚔️ 引擎二：【主升段推進引擎】(均線翻揚且在均價線之上)
+                action_guide = f"🎯 【實戰戰術：低檔 V 轉搶短】\n👉 戰況解讀：主力瞬間爆量強攻站上均價線！\n🛡️ 生死防線：以均價線 {vwap_est} 為絕對防禦，跌破立刻撤退！"
             elif is_ma_up and current_z >= vwap_est:
                 alert_type = "🚀 【主升段點火】均線多頭強勢推升！"
-                action_guide = f"🎯 【實戰戰術：右側順勢加碼】\n👉 戰況解讀：短均線全面上揚，多方控盤爆量續攻，趨勢極度健康！\n🛡️ 移動防線：趨勢穩健，請沿著上揚的走勢偏多操作，若爆量跌破均價線 {vwap_est} 則拔檔！"
-            
+                action_guide = f"🎯 【實戰戰術：右側順勢加碼】\n👉 戰況解讀：短均線上揚，趨勢極度健康！\n🛡️ 移動防線：沿著上揚走勢操作，爆量跌破 {vwap_est} 則拔檔！"
             else:
-                return None # 例外狀況不發報
+                return None 
 
-            # 🛡️ 裝甲三：【極限過熱警告】(乖離率 Bias 自動攔截)
             bias = ((current_z - vwap_est) / vwap_est) * 100 if vwap_est > 0 else 0
             if bias >= 2.5:
                 alert_type = "⚠️ 【高檔爆量・極端過熱】"
-                action_guide = f"🎯 【操盤手強制指令：嚴禁追高】\n👉 戰況解讀：短線正乖離已達 {bias:+.1f}%，瞬間漲幅過大，爆量極可能是竭盡缺口！\n🔪 動作：切勿在此刻市價追高！請靜待量縮拉回測試均線支撐。"
+                action_guide = f"🎯 【操盤手強制指令：嚴禁追高】\n👉 戰況解讀：正乖離達 {bias:+.1f}%，瞬間漲幅過大！\n🔪 動作：切勿市價追高！靜待量縮拉回測試。"
 
-            # 🌟 裝甲四：【主流族群共振加持】
+            # ==========================================================
+            # 🕵️‍♂️ 裝甲五：【MIS 五檔照妖鏡交叉驗證】(瞬間攔截假突破)
+            # ==========================================================
+            pressure_warning = ""
+            try:
+                market_type = "tse" if meta_info.get("market", "上市") == "上市" else "otc"
+                mis_url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={market_type}_{code}.tw&_={int(time.time()*1000)}"
+                mis_res = requests.get(mis_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=2).json()
+                
+                if 'msgArray' in mis_res and len(mis_res['msgArray']) > 0:
+                    info = mis_res['msgArray'][0]
+                    ask_vols = [int(v) for v in info.get('f', '').split('_') if v.isdigit()]
+                    bid_vols = [int(g) for g in info.get('g', '').split('_') if g.isdigit()]
+                    
+                    ask_total = sum(ask_vols)
+                    bid_total = sum(bid_vols)
+                    
+                    if ask_total > 0 and bid_total > 0:
+                        if ask_total > bid_total * 1.5:
+                            pressure_warning = f"\n🩸 【籌碼敗象】五檔委賣高達 {ask_total} 張 (買盤僅 {bid_total} 張)，上方反壓極重，提防主力誘多出貨！"
+                        elif bid_total > ask_total * 3:
+                            pressure_warning = f"\n🧱 【虛假防禦】五檔委買高達 {bid_total} 張，下方異常大單墊檔，提防主力抽單多殺多！"
+                        else:
+                            pressure_warning = f"\n⚖️ 【五檔籌碼】委買 {bid_total} 張 vs 委賣 {ask_total} 張，動能真實健康。"
+            except Exception as e:
+                pass
+            # ==========================================================
+
             is_resonance = (top_ind != "" and top_ind in ind)
             hot_tag = f"🌟 [主流資金共振：{ind}]" if is_resonance else f"🏷️ [{ind}]"
             resonance_text = " (🔥主攻部隊)" if is_resonance else ""
@@ -1987,7 +1996,8 @@ def process_tick_data(data, meta_info, top_ind):
                 f"[{time_str}] ⚡ {name}({code}) {alert_type}\n"
                 f"{hot_tag} | 現價：{current_z} (均價線:{vwap_est})\n"
                 f"漲幅：{chg_pct:+.2f}% | 均價乖離：{bias:+.1f}%\n"
-                f"🔥 絕對爆量：{int(vol_1m)} 張 (點火資金 {int(ignite_value/10000)}萬){resonance_text}\n"
+                f"🔥 絕對爆量：{int(vol_1m)} 張 (點火資金 {int(ignite_value/10000)}萬){resonance_text}"
+                f"{pressure_warning}\n"
                 f"----------------------\n"
                 f"{action_guide}"
             )
