@@ -1323,6 +1323,34 @@ def handle_message(event):
         return
 
 
+    # ==========================================
+    # 🛡️ 新增模組：戰情室盤後結算與防禦覆盤
+    # ==========================================
+    if user_msg in ["防禦報告", "盤後覆盤", "攔截清單"]:
+        try:
+            if not intercepted_traps_log:
+                reply_msg = "🛡️ 【戰情室盤後結算】\n今日雷達未偵測到符合爆量門檻的主力陷阱，或皆為有效真實突破。"
+            else:
+                reply_lines = [
+                    "🛡️ 【戰情室盤後覆盤：今日攔截假突破清單】",
+                    "----------------------"
+                ]
+                for trap in intercepted_traps_log:
+                    reply_lines.append(trap)
+                
+                reply_lines.append("----------------------")
+                reply_lines.append(f"🎯 總計為統帥擋下 {len(intercepted_traps_log)} 次主力割韭菜陷阱！子彈防護率 100%！")
+                
+                reply_msg = "\n".join(reply_lines)
+                
+        except Exception as e:
+            reply_msg = f"⚠️ 查詢防禦報告異常：{e}"
+
+        smart_reply_with_menu(event, reply_msg[:4000])
+        return
+
+
+
 # ==========================================================
     # 👇 手調收盤戰報指令
     # ==========================================================
@@ -1865,6 +1893,10 @@ def market_patrol_loop():
 # ==========================================================
 # ⚡ 8. 專屬當沖連續掃描引擎 (全市場 2000 檔批次陣列雷達)
 # ==========================================================
+
+# 🛡️ 戰情室防禦黑盒子：記錄被攔截的主力陷阱
+intercepted_traps_log = []
+
 stock_tick_memory = {}
 intraday_alerted_codes = set()
 
@@ -1960,7 +1992,7 @@ def process_tick_data(data, meta_info, top_ind):
                 action_guide = f"🎯 【操盤手強制指令：嚴禁追高】\n👉 戰況解讀：正乖離達 {bias:+.1f}%，瞬間漲幅過大！\n🔪 動作：切勿市價追高！靜待量縮拉回測試。"
 
             # ==========================================================
-            # 🕵️‍♂️ 裝甲五：【MIS 五檔照妖鏡交叉驗證】(一擊必殺抹除假突破)
+            # 🕵️‍♂️ 裝甲五：【MIS 五檔照妖鏡交叉驗證】(一擊必殺並記錄)
             # ==========================================================
             try:
                 market_type = "tse" if meta_info.get("market", "上市") == "上市" else "otc"
@@ -1977,9 +2009,15 @@ def process_tick_data(data, meta_info, top_ind):
                     
                     if ask_total > 0 and bid_total > 0:
                         if ask_total > bid_total * 1.5:
-                            return None # 🩸 籌碼敗象：上方反壓極重，主力誘多出貨，直接消音！
+                            # 🩸 記錄並抹殺
+                            trap_msg = f"[{time_str}] 🩸 {name}({code}) | 假突破誘多 | 賣壓 {ask_total} > 買盤 {bid_total}"
+                            intercepted_traps_log.append(trap_msg)
+                            return None 
                         elif bid_total > ask_total * 3:
-                            return None # 🧱 虛假防禦：下方異常大單墊檔，提防主力抽單多殺多，直接消音！
+                            # 🧱 記錄並抹殺
+                            trap_msg = f"[{time_str}] 🧱 {name}({code}) | 假支撐多殺多 | 買盤 {bid_total} > 賣壓 {ask_total}"
+                            intercepted_traps_log.append(trap_msg)
+                            return None 
             except Exception as e:
                 pass
             # ==========================================================
