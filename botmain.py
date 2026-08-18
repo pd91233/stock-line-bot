@@ -2109,6 +2109,8 @@ def continuous_radar_loop():
 
                 # 💥 終極兵器啟動：使用 20 個並行執行緒，單點突破 Yahoo 防線！
                 successful_count = 0
+                batch_alerts = [] # 🎯 新增：火力濃縮彈匣，用來收集這 1 輪掃描抓到的所有飆股
+                
                 with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
                     futures = [executor.submit(fetch_single_stock, t[0], t[1], t[2]) for t in valid_tasks]
                     for future in concurrent.futures.as_completed(futures):
@@ -2125,18 +2127,24 @@ def continuous_radar_loop():
                                 new_cache["intraday_alerts"] = intraday_breakout_cache
                                 update_cache(new_cache)
                                 
+                                # 🎯 將高純度警報塞進彈匣，先不開槍！
+                                batch_alerts.append(alert_msg) 
+                                
                                 try:
                                     trigger_air_raid_alarm(f"🔥 {stock_data.get('name', formatted_data['c'])} 爆量點火！", alert_msg)
                                 except: pass
                                 
-                                TARGET_GROUP_IDS = [
-                                    "C0481b44935888bb1dc20dfd52a675e8a", 
-                                    "C47bfa8e16a7216bd54dceb3b5e90cfa0"  
-                                ]
-                                for group_id in TARGET_GROUP_IDS:
-                                    smart_push_with_menu(group_id, f"🚨 【全市場同步跟單急報】\n{alert_msg}")
-                                
-                                print(f"🚀 [全市場雷達] 成功捕獲 {formatted_data['c']} 爆量！", flush=True)
+                                print(f"🚀 [全市場雷達] 成功捕獲 {formatted_data['c']} 爆量，已裝填入齊射彈匣！", flush=True)
+
+                # 🎯 統一發射：如果有收集到任何警報，將它們全部串接在一起，一次性射出！(只扣 1 發子彈)
+                if batch_alerts:
+                    combined_msg = "🚨 【全市場同步跟單急報】\n\n" + "\n\n======================\n\n".join(batch_alerts)
+                    TARGET_GROUP_IDS = [
+                        "C0481b44935888bb1dc20dfd52a675e8a", 
+                        "C47bfa8e16a7216bd54dceb3b5e90cfa0"  
+                    ]
+                    for group_id in TARGET_GROUP_IDS:
+                        smart_push_with_menu(group_id, combined_msg[:4500]) # 加上安全長度截斷，防範字數極限
 
                 now_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
                 print(f"👁️ [{now_str}] 線程池單點突破掃描完畢... 記憶體已追蹤 {len(stock_tick_memory)} 檔標的 (本輪精準抓取 {successful_count} 檔真實報價)。", flush=True)
