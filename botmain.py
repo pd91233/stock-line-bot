@@ -1991,36 +1991,9 @@ def process_tick_data(data, meta_info, top_ind):
                 alert_type = "⚠️ 【高檔爆量・極端過熱】"
                 action_guide = f"🎯 【操盤手強制指令：嚴禁追高】\n👉 戰況解讀：正乖離達 {bias:+.1f}%，瞬間漲幅過大！\n🔪 動作：切勿市價追高！靜待量縮拉回測試。"
 
-            # ==========================================================
-            # 🕵️‍♂️ 裝甲五：【MIS 五檔照妖鏡交叉驗證】(一擊必殺並記錄)
-            # ==========================================================
-            try:
-                market_type = "tse" if meta_info.get("market", "上市") == "上市" else "otc"
-                mis_url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={market_type}_{code}.tw&_={int(time.time()*1000)}"
-                mis_res = requests.get(mis_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=2).json()
-                
-                if 'msgArray' in mis_res and len(mis_res['msgArray']) > 0:
-                    info = mis_res['msgArray'][0]
-                    ask_vols = [int(v) for v in info.get('f', '').split('_') if v.isdigit()]
-                    bid_vols = [int(g) for g in info.get('g', '').split('_') if g.isdigit()]
-                    
-                    ask_total = sum(ask_vols)
-                    bid_total = sum(bid_vols)
-                    
-                    if ask_total > 0 and bid_total > 0:
-                        if ask_total > bid_total * 1.5:
-                            # 🩸 記錄並抹殺
-                            trap_msg = f"[{time_str}] 🩸 {name}({code}) | 假突破誘多 | 賣壓 {ask_total} > 買盤 {bid_total}"
-                            intercepted_traps_log.append(trap_msg)
-                            return None 
-                        elif bid_total > ask_total * 3:
-                            # 🧱 記錄並抹殺
-                            trap_msg = f"[{time_str}] 🧱 {name}({code}) | 假支撐多殺多 | 買盤 {bid_total} > 賣壓 {ask_total}"
-                            intercepted_traps_log.append(trap_msg)
-                            return None 
-            except Exception as e:
-                pass
-            # ==========================================================
+
+
+
 
             is_resonance = (top_ind != "" and top_ind in ind)
             hot_tag = f"🌟 [主流資金共振：{ind}]" if is_resonance else f"🏷️ [{ind}]"
