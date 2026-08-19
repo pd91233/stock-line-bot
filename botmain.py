@@ -2013,47 +2013,45 @@ def process_tick_data(data, meta_info, top_ind):
     return None
 
 
+# 🎯 獨立異步擊發彈匣
+instant_fire_queue = []
+
+def instant_dispatcher_loop():
+    """背景擊發手：每 1.5 秒巡視一次彈匣，有飆股立刻打包擊發！"""
+    import time
+    while True:
+        time.sleep(1.5)
+        if len(instant_fire_queue) > 0:
+            # 瞬間抽出彈匣裡所有的飆股情報
+            bullets = instant_fire_queue[:]
+            instant_fire_queue.clear()
+            
+            # 打包發射
+            combined_msg = "🚨 【全市場同步跟單急報】\n\n" + "\n\n======================\n\n".join(bullets)
+            TARGET_GROUP_IDS = [
+                "C0481b44935888bb1dc20dfd52a675e8a", 
+                "C47bfa8e16a7216bd54dceb3b5e90cfa0"  
+            ]
+            for group_id in TARGET_GROUP_IDS:
+                try:
+                    smart_push_with_menu(group_id, combined_msg[:4500])
+                except: pass
+            print(f"🚀 [異步擊發手] 已將 {len(bullets)} 檔飆股零時差空投至前線！", flush=True)
+
+
+
+
+# 啟動背景擊發手
+import threading
+threading.Thread(target=instant_dispatcher_loop, daemon=True).start()
+
+
 def continuous_radar_loop():
-    print("📡 [當沖雷達] 啟動統帥認證版【終極線程池 V8 單點突破引擎】(抗401/429/無延遲)...", flush=True)
+    print("📡 [當沖雷達] 啟動統帥認證版【極速批次掃描 + 異步秒發引擎】...", flush=True)
     import time, datetime, requests
-    import concurrent.futures
     
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"}
     
-    # 💥 單兵狙擊函數：放在執行緒池中跑，100% 拿取最真實的總成交量，絕不瞎猜！
-    def fetch_single_stock(code, suffix, stock_data):
-        try:
-            # 這是您 LINE 查詢單檔股票時使用的 API，100% 絕對不會被擋！
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}{suffix}?range=1d&interval=1d"
-            res = requests.get(url, headers=headers, timeout=5)
-            if res.status_code == 200:
-                res_json = res.json()
-                result = res_json.get('chart', {}).get('result')
-                if result:
-                    meta = result[0].get('meta', {})
-                    if 'regularMarketPrice' not in meta: return None
-                    
-                    z = meta.get('regularMarketPrice', 0)
-                    y = meta.get('chartPreviousClose', meta.get('previousClose', z))
-                    # 💥 精準提煉：直接拿取官方結算的「累積總量」，這跟您看盤軟體上的一模一樣！
-                    v = meta.get('regularMarketVolume', 0) / 1000.0 
-                    
-                    if z == 0 or v == 0: return None
-                    
-                    formatted_data = {
-                        'c': code,
-                        'z': z,
-                        'y': y,
-                        'o': meta.get('regularMarketPrice', z), # 容錯處理
-                        'h': meta.get('regularMarketDayHigh', z),
-                        'l': meta.get('regularMarketDayLow', z),
-                        'v': v
-                    }
-                    return (formatted_data, stock_data)
-        except:
-            pass
-        return None
-
     # --- 雷達主迴圈 ---
     while True:
         try:
@@ -2070,60 +2068,82 @@ def continuous_radar_loop():
                     time.sleep(10)
                     continue
 
-                valid_tasks = []
+                # 整理全市場 2000 檔的代號清單
+                valid_symbols = []
+                stock_data_map = {} 
+                
                 for s in full_stocks:
                     code = str(s.get('code', '')).strip()
                     market = s.get('market', '上市')
                     suffix = ".TW" if market == "上市" else ".TWO"
-                    
-                    # 嚴格過濾 4 碼純種股票
                     if code and len(code) == 4 and code.isdigit():
-                        valid_tasks.append((code, suffix, s))
+                        symbol = f"{code}{suffix}"
+                        valid_symbols.append(symbol)
+                        stock_data_map[code] = s
 
-                # 💥 終極兵器啟動：使用 20 個並行執行緒，單點突破 Yahoo 防線！
+                # 💥 終極兵器：把 2000 檔切成 10 個大包，每包 200 檔！
+                chunk_size = 200 
                 successful_count = 0
-                batch_alerts = [] # 🎯 新增：火力濃縮彈匣，用來收集這 1 輪掃描抓到的所有飆股
                 
-                with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-                    futures = [executor.submit(fetch_single_stock, t[0], t[1], t[2]) for t in valid_tasks]
-                    for future in concurrent.futures.as_completed(futures):
-                        result = future.result()
-                        if result:
-                            formatted_data, stock_data = result
-                            alert_msg = process_tick_data(formatted_data, stock_data, global_true_market_top_ind)
-                            successful_count += 1
+                for i in range(0, len(valid_symbols), chunk_size):
+                    chunk_symbols = valid_symbols[i : i + chunk_size]
+                    symbols_str = ",".join(chunk_symbols) 
+                    
+                    try:
+                        # 呼叫 Yahoo 隱藏的大範圍報價 API！一次抓 200 檔！
+                        url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols_str}"
+                        res = requests.get(url, headers=headers, timeout=5)
+                        
+                        if res.status_code == 200:
+                            quotes = res.json().get('quoteResponse', {}).get('result', [])
                             
-                            if alert_msg and alert_msg not in intraday_breakout_cache:
-                                intraday_breakout_cache.insert(0, alert_msg)
-                                new_cache = read_cache()
-                                # 💥 拔除 [:10] 封印，保留全天候完整發報紀錄！
-                                new_cache["intraday_alerts"] = intraday_breakout_cache
-                                update_cache(new_cache)
+                            for quote in quotes:
+                                code = quote.get('symbol', '').split('.')[0] 
                                 
-                                # 🎯 將高純度警報塞進彈匣，先不開槍！
-                                batch_alerts.append(alert_msg) 
+                                # 萃取官方結算價量
+                                z = quote.get('regularMarketPrice', 0)
+                                y = quote.get('regularMarketPreviousClose', z)
+                                v = quote.get('regularMarketVolume', 0) / 1000.0 
                                 
-                                try:
-                                    trigger_air_raid_alarm(f"🔥 {stock_data.get('name', formatted_data['c'])} 爆量點火！", alert_msg)
-                                except: pass
+                                if z == 0 or v == 0 or code not in stock_data_map: continue
                                 
-                                print(f"🚀 [全市場雷達] 成功捕獲 {formatted_data['c']} 爆量，已裝填入齊射彈匣！", flush=True)
+                                formatted_data = {
+                                    'c': code,
+                                    'z': z,
+                                    'y': y,
+                                    'o': quote.get('regularMarketOpen', z),
+                                    'h': quote.get('regularMarketDayHigh', z),
+                                    'l': quote.get('regularMarketDayLow', z),
+                                    'v': v
+                                }
+                                
+                                stock_data = stock_data_map[code]
+                                alert_msg = process_tick_data(formatted_data, stock_data, global_true_market_top_ind)
+                                successful_count += 1
+                                
+                                if alert_msg and alert_msg not in intraday_breakout_cache:
+                                    intraday_breakout_cache.insert(0, alert_msg)
+                                    
+                                    # 💥 關鍵核心：丟進異步彈匣，由上方的擊發手立刻開槍，達成 0 秒延遲！
+                                    instant_fire_queue.append(alert_msg)
+                                    
+                                    # 順便把快取寫入硬碟
+                                    new_cache = read_cache()
+                                    new_cache["intraday_alerts"] = intraday_breakout_cache
+                                    update_cache(new_cache)
+                                    
+                                    try:
+                                        trigger_air_raid_alarm(f"🔥 {stock_data.get('name', code)} 爆量點火！", alert_msg)
+                                    except: pass
 
-                # 🎯 統一發射：如果有收集到任何警報，將它們全部串接在一起，一次性射出！(只扣 1 發子彈)
-                if batch_alerts:
-                    combined_msg = "🚨 【全市場同步跟單急報】\n\n" + "\n\n======================\n\n".join(batch_alerts)
-                    TARGET_GROUP_IDS = [
-                        "C0481b44935888bb1dc20dfd52a675e8a", 
-                        "C47bfa8e16a7216bd54dceb3b5e90cfa0"  
-                    ]
-                    for group_id in TARGET_GROUP_IDS:
-                        smart_push_with_menu(group_id, combined_msg[:4500]) # 加上安全長度截斷，防範字數極限
+                    except Exception as e:
+                        print(f"⚠️ Yahoo 批次 API 呼叫失敗: {e}", flush=True)
 
                 now_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
-                print(f"👁️ [{now_str}] 線程池單點突破掃描完畢... 記憶體已追蹤 {len(stock_tick_memory)} 檔標的 (本輪精準抓取 {successful_count} 檔真實報價)。", flush=True)
+                print(f"👁️ [{now_str}] 全市場 2000 檔批量掃描完畢 (本輪精準抓取 {successful_count} 檔報價)。", flush=True)
                 
-                # 掃完一輪休息 4 秒，確保雷達引擎穩定續航
-                time.sleep(4)
+                # 掃完一圈全市場後，休息 3 秒再戰
+                time.sleep(3)
             else:
                 time.sleep(60) 
         except Exception as e:
