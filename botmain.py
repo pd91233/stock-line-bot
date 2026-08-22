@@ -2017,10 +2017,10 @@ def process_tick_data(data, meta_info, top_ind):
 instant_fire_queue = []
 
 def instant_dispatcher_loop():
-    """背景擊發手：每 1.5 秒巡視一次彈匣，有飆股立刻打包擊發！"""
+    """背景擊發手：每 3.5 秒巡視一次彈匣，確保雷達掃完一輪後完美打包擊發！"""
     import time
     while True:
-        time.sleep(1.5)
+        time.sleep(3.5)  # 💥 這裡改為 3.5 秒
         if len(instant_fire_queue) > 0:
             # 瞬間抽出彈匣裡所有的飆股情報
             bullets = instant_fire_queue[:]
@@ -2047,6 +2047,7 @@ threading.Thread(target=instant_dispatcher_loop, daemon=True).start()
 
 
 def continuous_radar_loop():
+    global instant_fire_queue  # 💥 務必加上這行宣告！確保雷達能摸到全域彈匣！
     print("📡 [當沖雷達] 啟動統帥認證版【極速批次掃描 + 異步秒發引擎】...", flush=True)
     import time, datetime, requests
     
