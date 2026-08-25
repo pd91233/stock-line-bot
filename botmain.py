@@ -130,6 +130,149 @@ def update_vips(data):
     except: pass
 
 
+
+# ==========================================================
+# 🌐 全球跨國動態資金矩陣：24小時全景完全體爬蟲引擎
+# ==========================================================
+MATRIX_CACHE_FILE = "global_matrix_cache.json"
+
+def fetch_global_matrix_data():
+    """ 24小時全天候抓取美股四大指數、ADR與十大戰區龍頭即時數據 """
+    tickers = {
+        # ==========================================
+        # 🌐 頂級天候儀表板 (四大指數與關鍵宏觀指標)
+        # ==========================================
+        "SOX": "^SOX",       # 費城半導體指數
+        "IXIC": "^IXIC",     # 那斯達克綜合指數
+        "DJI": "^DJI",       # 道瓊工業指數
+        "TSM": "TSM",        # 台積電 ADR
+        "VIX": "^VIX",       # 恐慌指數
+
+        # ==========================================
+        # ⚙️ 戰區一：半導體與先進晶片核心
+        # ==========================================
+        "NVDA": "NVDA",      # 輝達
+        "ASML": "ASML",      # 艾司摩爾
+        "AMD": "AMD",        # 超微
+        "MU": "MU",          # 美光
+        "ARM": "ARM",        # 安謀
+
+        # ==========================================
+        # 🖥️ 戰區二：AI 伺服器與基礎建設
+        # ==========================================
+        "SMCI": "SMCI",      # 美超微
+        "DELL": "DELL",      # 戴爾
+        "VRT": "VRT",        # 維諦技術
+        "MRVL": "MRVL",      # 邁威爾
+
+        # ==========================================
+        # 🤖 戰區三：智慧工廠、機器人與自動化
+        # ==========================================
+        "SERV": "SERV",      # 服務機器人相關
+        "ISRG": "ISRG",      # 直覺外科
+        "ROK": "ROK",        # 洛克威爾自動化
+
+        # ==========================================
+        # 📱 戰區四：消費性電子與通訊
+        # ==========================================
+        "AAPL": "AAPL",      # 蘋果公司
+        "QCOM": "QCOM",      # 高通
+        "AVGO": "AVGO",      # 博通
+
+        # ==========================================
+        # ☁️ 戰區五：軟體、雲端服務與資安 (CSP 巨頭陣營)
+        # ==========================================
+        "MSFT": "MSFT",      # 微軟
+        "AMZN": "AMZN",      # 亞馬遜
+        "GOOGL": "GOOGL",    # 谷歌
+        "ORCL": "ORCL",      # 甲骨文
+        "CRWD": "CRWD",      # CrowdStrike
+        "PANW": "PANW",      # Palo Alto Networks
+        "PLTR": "PLTR",      # 帕蘭泰爾
+
+        # ==========================================
+        # ⚡ 戰區六：重電、綠能與電網基礎建設
+        # ==========================================
+        "GE": "GE",          # 奇異
+        "PAVE": "PAVE",      # 美國基礎建設 ETF
+        "ICLN": "ICLN",      # 全球乾淨能源 ETF
+        "FSLR": "FSLR",      # 第一太陽能
+
+        # ==========================================
+        # 🔋 戰區七：電動車與電池材料
+        # ==========================================
+        "TSLA": "TSLA",      # 特斯拉
+        "RIVN": "RIVN",      # 里維安
+
+        # ==========================================
+        # 🚢 戰區八：全球航運與供應鏈
+        # ==========================================
+        "ZIM": "ZIM",        # 以星航運
+        "FDX": "FDX",        # 聯邦快遞
+
+        # ==========================================
+        # 🏭 戰區九：傳統景氣與原物料
+        # ==========================================
+        "X": "X",            # 美國鋼鐵
+        "NUE": "NUE",        # 紐柯鋼鐵
+        "XOM": "XOM",        # 艾克森美孚
+        "FCX": "FCX",        # 自由港麥克莫蘭
+
+        # ==========================================
+        # 🏦 戰區十：金融、資本市場與生技
+        # ==========================================
+        "XLF": "XLF",        # 美國金融 ETF
+        "JPM": "JPM",        # 摩根大通
+        "NBI": "^NBI"        # 那斯達克生技指數
+    }
+    
+    matrix_results = {}
+    headers = {"User-Agent": "Mozilla/5.0"}
+    
+    for key, symbol in tickers.items():
+        try:
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=2d&includePrePost=true"
+            res = requests.get(url, headers=headers, timeout=5).json()
+            meta = res['chart']['result'][0]['meta']
+            
+            curr_p = meta.get('postMarketPrice', meta.get('regularMarketPrice', 0))
+            prev_p = meta.get('chartPreviousClose', 0)
+            
+            if prev_p > 0:
+                chg_pct = round(((curr_p - prev_p) / prev_p) * 100, 2)
+            else:
+                chg_pct = 0.0
+                
+            matrix_results[key] = {
+                "price": round(curr_p, 2),
+                "chg": chg_pct
+            }
+        except Exception as e:
+            matrix_results[key] = {"price": 0.0, "chg": 0.0}
+            
+    # 同步寫入獨立的 JSON 快取，供前端網頁隨時讀取
+    try:
+        with open(MATRIX_CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(matrix_results, f, ensure_ascii=False, indent=4)
+        print("✅ [跨國矩陣] 全景 30 檔美股與期貨即時數據已成功更新至快取！", flush=True)
+    except Exception as e:
+        print(f"⚠️ [跨國矩陣] 快取寫入失敗: {e}", flush=True)
+
+@app.route("/global_matrix.json", methods=['GET'])
+def get_global_matrix():
+    """ 提供前端跨國資金矩陣的即時數據 API """
+    if os.path.exists(MATRIX_CACHE_FILE):
+        try:
+            with open(MATRIX_CACHE_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            response = make_response(jsonify(data))
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            return response
+        except:
+            pass
+    return jsonify({}), 404
+
 # ==========================================================
 # 👇 請將這段「pCloud 雲端讀取當沖歷史」貼在這裡 👇
 # ==========================================================
@@ -1874,6 +2017,9 @@ def market_patrol_loop():
     print("📡 [總部軍令] 靜默偵蒐引擎啟動，專心支援前端快取 (定時廣播已拔除)...", flush=True)
     # 開機時強制刷新一次大盤與資金流向
     threading.Thread(target=lambda: execute_force_refresh()).start()
+    
+    # 🌐 跨國矩陣開機首次立即抓取
+    threading.Thread(target=lambda: fetch_global_matrix_data()).start()
 
     while True:
         try:
@@ -1882,6 +2028,9 @@ def market_patrol_loop():
             # 讓網頁版戰情室的報價與資金流向保持最新狀態。
             time.sleep(300) 
             execute_force_refresh()
+            
+            # 🌐 同步在背景循環中更新全球跨國資金矩陣數據
+            fetch_global_matrix_data()
             
         except Exception as e:
             print(f"⚠️ 靜默巡邏異常: {e}", flush=True)
