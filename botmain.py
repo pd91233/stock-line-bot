@@ -1940,14 +1940,28 @@ def process_tick_data(data, meta_info, top_ind):
 
         if code not in stock_tick_memory: stock_tick_memory[code] = []
         stock_tick_memory[code].append((now_ts, z, v, h, l))
-        if len(stock_tick_memory[code]) > 10: stock_tick_memory[code].pop(0)
+        
+        # 💥 擴大彈匣：因為雷達約 3 秒掃一次，擴充到 30 筆才能存滿超過 1 分鐘的歷史！
+        if len(stock_tick_memory[code]) > 30: stock_tick_memory[code].pop(0)
 
         ticks = stock_tick_memory[code]
         if len(ticks) >= 6:
-            current_z, current_v = ticks[-1][1], ticks[-1][2]
-            z_1m_ago, v_1m_ago = ticks[-2][1], ticks[-2][2]
-            z_5m_ago, v_5m_ago = ticks[-6][1], ticks[-6][2]
+            current_ts, current_z, current_v = ticks[-1][0], ticks[-1][1], ticks[-1][2]
+            
+            # 💥 動態時間回溯：精準尋找「大約 50~60 秒前」的那一筆資料
+            past_tick = ticks[0] 
+            for t in reversed(ticks):
+                if current_ts - t[0] >= 50: 
+                    past_tick = t
+                    break
+            
+            # 💥 防護罩：如果系統剛開機，該股票記憶體資料還沒搜集滿 40 秒，先靜默
+            if current_ts - ticks[0][0] < 40:
+                return None
 
+            z_1m_ago, v_1m_ago = past_tick[1], past_tick[2]
+
+            # 這樣算出來的才是貨真價實的「1 分鐘爆量」！
             vol_1m = current_v - v_1m_ago
             ignite_value = vol_1m * current_z * 1000
 
@@ -2047,11 +2061,23 @@ threading.Thread(target=instant_dispatcher_loop, daemon=True).start()
 
 
 def continuous_radar_loop():
-    global instant_fire_queue  # 💥 務必加上這行宣告！確保雷達能摸到全域彈匣！
+    global instant_fire_queue
     print("📡 [當沖雷達] 啟動統帥認證版【極速批次掃描 + 異步秒發引擎】...", flush=True)
     import time, datetime, requests
     
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"}
+    # 💥 破解 Yahoo 防火牆：建立長效 Session 並取得 Crumb 憑證
+    yahoo_session = requests.Session()
+    yahoo_session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+    yahoo_crumb = ""
+    try:
+        # 先去首頁拿 Cookie
+        yahoo_session.get("https://fc.yahoo.com", timeout=5)
+        # 再用 Cookie 去換 Crumb 護照
+        c_res = yahoo_session.get("https://query1.finance.yahoo.com/v1/test/getcrumb", timeout=5)
+        yahoo_crumb = c_res.text.strip()
+        print(f"✅ [破甲成功] 已取得 Yahoo 核心憑證: {yahoo_crumb}", flush=True)
+    except Exception as e:
+        print(f"⚠️ [憑證警告] 無法取得 Crumb，嘗試降級連線...", flush=True)
     
     # --- 雷達主迴圈 ---
     while True:
@@ -2082,8 +2108,8 @@ def continuous_radar_loop():
                         valid_symbols.append(symbol)
                         stock_data_map[code] = s
 
-                # 💥 終極兵器：把 2000 檔切成 10 個大包，每包 200 檔！
-                chunk_size = 200 
+                # 💥 降載護城河：改為每次抓 100 檔，避免 URL 太長被直接踢掉
+                chunk_size = 100 
                 successful_count = 0
                 
                 for i in range(0, len(valid_symbols), chunk_size):
@@ -2091,9 +2117,9 @@ def continuous_radar_loop():
                     symbols_str = ",".join(chunk_symbols) 
                     
                     try:
-                        # 呼叫 Yahoo 隱藏的大範圍報價 API！一次抓 200 檔！
-                        url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols_str}"
-                        res = requests.get(url, headers=headers, timeout=5)
+                        # 💥 加入 crumb 憑證解鎖，並使用 session 連線！
+                        url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols_str}&crumb={yahoo_crumb}"
+                        res = yahoo_session.get(url, timeout=5)
                         
                         if res.status_code == 200:
                             quotes = res.json().get('quoteResponse', {}).get('result', [])
@@ -2128,7 +2154,6 @@ def continuous_radar_loop():
                                     # 💥 關鍵核心：丟進異步彈匣，由上方的擊發手立刻開槍，達成 0 秒延遲！
                                     instant_fire_queue.append(alert_msg)
                                     
-                                    # 順便把快取寫入硬碟
                                     new_cache = read_cache()
                                     new_cache["intraday_alerts"] = intraday_breakout_cache
                                     update_cache(new_cache)
@@ -2136,19 +2161,24 @@ def continuous_radar_loop():
                                     try:
                                         trigger_air_raid_alarm(f"🔥 {stock_data.get('name', code)} 爆量點火！", alert_msg)
                                     except: pass
-
+                                    
+                        elif res.status_code == 401:
+                            # 萬一憑證過期，系統自動重新索取護照！
+                            yahoo_session.get("https://fc.yahoo.com", timeout=5)
+                            c_res = yahoo_session.get("https://query1.finance.yahoo.com/v1/test/getcrumb", timeout=5)
+                            yahoo_crumb = c_res.text.strip()
+                            
                     except Exception as e:
-                        print(f"⚠️ Yahoo 批次 API 呼叫失敗: {e}", flush=True)
+                        pass # 保持安靜，不印出擾人的錯誤訊息
 
                 now_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
-                print(f"👁️ [{now_str}] 全市場 2000 檔批量掃描完畢 (本輪精準抓取 {successful_count} 檔報價)。", flush=True)
+                print(f"👁️ [{now_str}] 全市場批量掃描完畢 (本輪精準抓取 {successful_count} 檔報價)。", flush=True)
                 
                 # 掃完一圈全市場後，休息 3 秒再戰
                 time.sleep(3)
             else:
                 time.sleep(60) 
         except Exception as e:
-            print(f"⚠️ 雷達主迴圈錯誤: {e}", flush=True)
             time.sleep(60)
 
 
