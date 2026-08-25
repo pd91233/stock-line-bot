@@ -278,38 +278,13 @@ def fetch_global_matrix_data():
         except Exception as e:
             matrix_results[key] = {"price": 0.0, "chg": 0.0}
             
-    # 讀取當日戰報入選名單 (monitor_list.json) 以便前端進行點燈高亮
-    monitor_tags_map = {}
-    try:
-        if os.path.exists("monitor_list.json"):
-            with open("monitor_list.json", "r", encoding="utf-8") as f:
-                m_data = json.load(f)
-                if isinstance(m_data, list):
-                    for item in m_data:
-                        code = str(item.get("代碼", item.get("code", ""))).strip()
-                        stype = str(item.get("type", "general")).lower()
-                        if code:
-                            monitor_tags_map[code] = stype
-                elif isinstance(m_data, dict):
-                    for code, item in m_data.items():
-                        stype = str(item.get("type", "general")).lower()
-                        monitor_tags_map[str(code)] = stype
-    except:
-        pass
-
-    # 將市場數據、頂部指數、戰區結構與戰報標籤完整打包
-    payload = {
-        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-        "quotes": matrix_results,
-        "monitor_tags": monitor_tags_map
-    }
-    
+    # 同步寫入獨立的 JSON 快取，供前端網頁隨時讀取
     try:
         with open(MATRIX_CACHE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(payload, f, ensure_ascii=False, indent=4)
-        print("✅ [美股夜盤風向] 完全體戰情數據與戰報標籤已成功同步至快取！", flush=True)
+            json.dump(matrix_results, f, ensure_ascii=False, indent=4)
+        print("✅ [跨國矩陣] 全景 30 檔美股與期貨即時數據已成功更新至快取！", flush=True)
     except Exception as e:
-        print(f"⚠️ [美股夜盤風向] 快取寫入失敗: {e}", flush=True)
+        print(f"⚠️ [跨國矩陣] 快取寫入失敗: {e}", flush=True)
 
 @app.route("/global_matrix.json", methods=['GET'])
 def get_global_matrix():
@@ -325,10 +300,6 @@ def get_global_matrix():
         except:
             pass
     return jsonify({}), 404
-	
-	
-	
-	
 
 # ==========================================================
 # 👇 請將這段「pCloud 雲端讀取當沖歷史」貼在這裡 👇
@@ -2065,32 +2036,38 @@ def smart_reply_with_menu(event, message_text):
         print(f"⚠️ 回覆發送受阻: {e}", flush=True)
 
 # ==========================================================
-# 🌟 7. 🚀 雲端全時相決策中心 (靜默快取版 - 已廢除定時廣播)
+# 🌟 7. 🚀 雲端全時相決策中心 (全自動 5 分鐘循環更新)
 # ==========================================================
 def market_patrol_loop():
     import time
     import threading
 
-    print("📡 [總部軍令] 靜默偵蒐引擎啟動，專心支援前端快取 (定時廣播已拔除)...", flush=True)
-    # 開機時強制刷新一次大盤與資金流向
-    threading.Thread(target=lambda: execute_force_refresh()).start()
+    print("📡 [總部軍令] 全自動資金矩陣與大盤偵蒐迴圈已啟動...", flush=True)
     
-    # 🌐 跨國矩陣開機首次立即抓取
-    threading.Thread(target=lambda: fetch_global_matrix_data()).start()
+    # 開機時強制立即執行一次
+    try:
+        execute_force_refresh()
+    except Exception as e:
+        print(f"⚠️ 開機大盤偵蒐初次執行異常: {e}", flush=True)
+        
+    try:
+        fetch_global_matrix_data()
+    except Exception as e:
+        print(f"⚠️ 開機全球矩陣初次執行異常: {e}", flush=True)
 
     while True:
         try:
-            # 💥 戰術變更：廢除所有定時的 LINE 廣播！
-            # 僅保留每 300 秒 (5 分鐘) 在背景執行一次 execute_force_refresh() 
-            # 讓網頁版戰情室的報價與資金流向保持最新狀態。
-            time.sleep(300) 
+            # 每 300 秒 (5 分鐘) 自動在背景執行一次，更新資料與最新時間戳記
+            time.sleep(300)  
+            
+            print("🔄 [自動化排程] 正在背景自動更新大盤資金流向...", flush=True)
             execute_force_refresh()
             
-            # 🌐 同步在背景循環中更新全球跨國資金矩陣數據
+            print("🔄 [自動化排程] 正在背景自動更新全球跨國資金矩陣與即時時間...", flush=True)
             fetch_global_matrix_data()
             
         except Exception as e:
-            print(f"⚠️ 靜默巡邏異常: {e}", flush=True)
+            print(f"⚠️ 自動化巡邏循環異常: {e}", flush=True)
             time.sleep(30)
 
 
