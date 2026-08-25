@@ -132,7 +132,7 @@ def update_vips(data):
 
 
 # ==========================================================
-# 🌐 全球跨國動態資金矩陣：24小時全景完全體爬蟲引擎
+# 🌐 全球跨國動態資金矩陣：24小時全景完全體爬蟲引擎 (含時間與戰報標籤)
 # ==========================================================
 MATRIX_CACHE_FILE = "global_matrix_cache.json"
 
@@ -278,13 +278,38 @@ def fetch_global_matrix_data():
         except Exception as e:
             matrix_results[key] = {"price": 0.0, "chg": 0.0}
             
-    # 同步寫入獨立的 JSON 快取，供前端網頁隨時讀取
+    # 讀取當日戰報入選名單 (monitor_list.json) 以便前端進行點燈高亮
+    monitor_tags_map = {}
+    try:
+        if os.path.exists("monitor_list.json"):
+            with open("monitor_list.json", "r", encoding="utf-8") as f:
+                m_data = json.load(f)
+                if isinstance(m_data, list):
+                    for item in m_data:
+                        code = str(item.get("代碼", item.get("code", ""))).strip()
+                        stype = str(item.get("type", "general")).lower()
+                        if code:
+                            monitor_tags_map[code] = stype
+                elif isinstance(m_data, dict):
+                    for code, item in m_data.items():
+                        stype = str(item.get("type", "general")).lower()
+                        monitor_tags_map[str(code)] = stype
+    except:
+        pass
+
+    # 將市場數據、時間戳記與戰報標籤完整打包
+    payload = {
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+        "quotes": matrix_results,
+        "monitor_tags": monitor_tags_map
+    }
+    
     try:
         with open(MATRIX_CACHE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(matrix_results, f, ensure_ascii=False, indent=4)
-        print("✅ [跨國矩陣] 全景 30 檔美股與期貨即時數據已成功更新至快取！", flush=True)
+            json.dump(payload, f, ensure_ascii=False, indent=4)
+        print("✅ [美股夜盤風向] 完全體戰情數據與時間戳記已成功同步至快取！", flush=True)
     except Exception as e:
-        print(f"⚠️ [跨國矩陣] 快取寫入失敗: {e}", flush=True)
+        print(f"⚠️ [美股夜盤風向] 快取寫入失敗: {e}", flush=True)
 
 @app.route("/global_matrix.json", methods=['GET'])
 def get_global_matrix():
