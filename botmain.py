@@ -300,7 +300,7 @@ def fetch_global_matrix_data():
     # 將市場數據、頂部指數、戰區結構與戰報標籤完整打包
     payload = {
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-        "quotes": market_data,
+        "quotes": matrix_results,
         "monitor_tags": monitor_tags_map
     }
     
