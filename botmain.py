@@ -165,13 +165,31 @@ def fetch_global_matrix_data():
     
     for key, symbol in tickers.items():
         try:
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=2d&includePrePost=true"
+            # 確保使用 v8 標準結算通道
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=2d"
             res = requests.get(url, headers=headers, timeout=5).json()
-            meta = res['chart']['result'][0]['meta']
             
-            curr_p = meta.get('postMarketPrice', meta.get('regularMarketPrice', 0))
-            prev_p = meta.get('chartPreviousClose', 0)
+            result_node = res['chart']['result'][0]
+            meta = result_node['meta']
             
+            # 🎯 嚴格精準抓取：優先抓正規現價，若無則抓盤後價，最後才抓收盤
+            curr_p = meta.get('regularMarketPrice', 0)
+            if not curr_p or curr_p == 0:
+                curr_p = meta.get('postMarketPrice', meta.get('previousClose', 0))
+                
+            prev_p = meta.get('chartPreviousClose', meta.get('previousClose', 0))
+            
+            # 如果 meta 裡面找不到，直接從歷史 K 線的最後一筆抓取確保萬無一失
+            if curr_p == 0 or prev_p == 0:
+                quotes = result_node['indicators']['quote'][0]
+                closes = [c for c in quotes.get('close', []) if c is not None]
+                if len(closes) >= 1:
+                    curr_p = closes[-1]
+                if len(closes) >= 2:
+                    prev_p = closes[-2]
+                elif prev_p == 0:
+                    prev_p = curr_p
+
             if prev_p > 0:
                 chg_pct = round(((curr_p - prev_p) / prev_p) * 100, 2)
             else:
