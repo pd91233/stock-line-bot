@@ -216,24 +216,28 @@ def fetch_global_matrix_data():
         except Exception as e:
             matrix_results[key] = {"price": 0.0, "chg": 0.0}
             
-    # 讀取當日戰報入選名單 (monitor_list.json) 以便前端進行點燈高亮
+    # 💥 修改點：直接從 pCloud 抓取最新戰報名單，捨棄無效的本機讀取！
     monitor_tags_map = {}
     try:
-        if os.path.exists("monitor_list.json"):
-            with open("monitor_list.json", "r", encoding="utf-8") as f:
-                m_data = json.load(f)
-                if isinstance(m_data, list):
-                    for item in m_data:
-                        code = str(item.get("代碼", item.get("code", ""))).strip()
-                        stype = str(item.get("type", "general")).lower()
-                        if code:
-                            monitor_tags_map[code] = stype
-                elif isinstance(m_data, dict):
-                    for code, item in m_data.items():
-                        stype = str(item.get("type", "general")).lower()
-                        monitor_tags_map[str(code)] = stype
-    except:
-        pass
+        json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?t={int(time.time())}"
+        res_m = requests.get(json_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+        if res_m.status_code == 200:
+            m_data = res_m.json()
+            if isinstance(m_data, list):
+                for item in m_data:
+                    code = str(item.get("代碼", item.get("code", ""))).strip()
+                    # 相容不同的欄位命名 (type 或是 cat)
+                    stype = str(item.get("type", item.get("cat", "general"))).lower()
+                    if code:
+                        monitor_tags_map[code] = stype
+            elif isinstance(m_data, dict):
+                for code, item in m_data.items():
+                    stype = str(item.get("type", item.get("cat", "general"))).lower()
+                    monitor_tags_map[str(code)] = stype
+    except Exception as e:
+        print(f"⚠️ [美股夜盤風向] 讀取戰報標籤失敗: {e}", flush=True)
+		
+		
 
     # 💥 強制將 Render 的 UTC 時間加上 8 小時，轉換為精準的台灣時間
     import datetime
