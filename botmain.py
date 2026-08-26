@@ -2029,8 +2029,8 @@ def market_patrol_loop():
 
     while True:
         try:
-            # 每 300 秒 (5 分鐘) 自動在背景執行一次，更新資料與最新時間戳記
-            time.sleep(300)  
+            # 🚀 戰術升級：每 120 秒 (2 分鐘) 自動在背景執行一次，確保美股與大盤即時更新
+            time.sleep(120) 
             
             print("🔄 [自動化排程] 正在背景自動更新大盤資金流向...", flush=True)
             execute_force_refresh()
