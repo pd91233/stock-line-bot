@@ -143,21 +143,49 @@ def fetch_global_matrix_data():
         "SOX": "^SOX", "IXIC": "^IXIC", "DJI": "^DJI", "INX": "^GSPC",
         "TSM": "TSM", "VIX": "^VIX", "DXY": "DX-Y.NYB", "US10Y": "^TNX",
 
-        # ⚙️ 核心半導體與設備
-        "NVDA": "NVDA", "AMD": "AMD", "ASML": "ASML", "AMAT": "AMAT",
-        "INTC": "INTC", "QCOM": "QCOM", "AVGO": "AVGO",
+        # ⚙️ 戰區一：半導體與晶片
+        "NVDA": "NVDA", "AMD": "AMD", "INTC": "INTC", "QCOM": "QCOM", "AVGO": "AVGO",
 
-        # 🖥️ AI 伺服器與散熱
+        # 🖥️ 戰區二：AI 伺服器
         "SMCI": "SMCI", "DELL": "DELL", "VRT": "VRT",
 
-        # 📡 光通訊與衛星 (新加入)
-        "MRVL": "MRVL", "LITE": "LITE", "ASTS": "ASTS", "IRDM": "IRDM",
+        # 📦 戰區三：先進封裝與設備
+        "ASML": "ASML", "AMAT": "AMAT",
 
-        # 💾 記憶體與其他
-        "MU": "MU", "ROK": "ROK", "AAPL": "AAPL", "AMZN": "AMZN",
-        "MSFT": "MSFT", "GE": "GE", "TSLA": "TSLA", "ZIM": "ZIM",
-        "XLF": "XLF", "NBI": "^NBI", "NQ": "NQ=F", "YM": "YM=F",
-        "GC": "MGC=F", "CL": "MCL=F", "BTC": "BTC-USD", "ETH": "ETH-USD"
+        # 📡 戰區四：光通訊與網通
+        "MRVL": "MRVL", "LITE": "LITE", "CSCO": "CSCO",
+
+        # 🛰️ 戰區五：低軌衛星
+        "ASTS": "ASTS", "IRDM": "IRDM",
+
+        # 💾 戰區六：記憶體
+        "MU": "MU",
+
+        # ☁️ 戰區七：雲端巨頭與軟體
+        "AAPL": "AAPL", "GOOG": "GOOG", "META": "META", "AMZN": "AMZN",
+        "MSFT": "MSFT", "NFLX": "NFLX", "ORCL": "ORCL",
+
+        # ⚡ 戰區八：重電與能源
+        "GE": "GE", "CAT": "CAT", "NEE": "NEE", "DOW": "DOW",
+
+        # 🚗 戰區九：汽車與消費
+        "TSLA": "TSLA", "GM": "GM", "F": "F", "NIKE": "NKE",
+
+        # 🚢 戰區十：航運與原物料
+        "ZIM": "ZIM", "XOM": "XOM", "CVX": "CVX", "BA": "BA",
+
+        # 🏦 戰區十一：金融與支付
+        "BRK-B": "BRK-B", "GS": "GS", "JPM": "JPM", "BAC": "BAC",
+        "C": "C", "AXP": "AXP", "WFC": "WFC", "V": "V", "MA": "MA", "XLF": "XLF",
+
+        # 🏥 戰區十二：生技與民生防禦
+        "NBI": "^NBI", "JNJ": "JNJ", "MRK": "MRK", "PFE": "PFE",
+        "UNH": "UNH", "PG": "PG", "WMT": "WMT", "HD": "HD",
+        "KO": "KO", "MCD": "MCD", "DIS": "DIS", "MMM": "MMM",
+
+        # 📈 期貨與加密貨幣
+        "NQ": "NQ=F", "YM": "YM=F", "GC": "MGC=F", "CL": "MCL=F",
+        "BTC": "BTC-USD", "ETH": "ETH-USD"
     }
     
     matrix_results = {}
