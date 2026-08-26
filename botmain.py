@@ -217,6 +217,7 @@ def fetch_global_matrix_data():
             matrix_results[key] = {"price": 0.0, "chg": 0.0}
             
     # 💥 修改點：直接從 pCloud 抓取最新戰報名單，捨棄無效的本機讀取！
+    # 💥 直接從 pCloud 抓取最新戰報名單，並加入萬能解析裝甲
     monitor_tags_map = {}
     try:
         json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?t={int(time.time())}"
@@ -226,13 +227,17 @@ def fetch_global_matrix_data():
             if isinstance(m_data, list):
                 for item in m_data:
                     code = str(item.get("代碼", item.get("code", ""))).strip()
-                    # 相容不同的欄位命名 (type 或是 cat)
-                    stype = str(item.get("type", item.get("cat", "general"))).lower()
+                    # 相容所有的欄位命名
+                    stype = str(item.get("cat_rank", item.get("type", item.get("cat", "general")))).lower()
                     if code:
                         monitor_tags_map[code] = stype
             elif isinstance(m_data, dict):
                 for code, item in m_data.items():
-                    stype = str(item.get("type", item.get("cat", "general"))).lower()
+                    # 💥 終極防呆：判斷 item 是一層字串還是包著字典
+                    if isinstance(item, dict):
+                        stype = str(item.get("cat_rank", item.get("type", item.get("cat", "general")))).lower()
+                    else:
+                        stype = str(item).lower()
                     monitor_tags_map[str(code)] = stype
     except Exception as e:
         print(f"⚠️ [美股夜盤風向] 讀取戰報標籤失敗: {e}", flush=True)
