@@ -2127,14 +2127,18 @@ def process_tick_data(data, meta_info, top_ind):
             ignite_value = vol_1m * current_z * 1000
 
             is_real_attack = current_z >= z_1m_ago
+            # 💥 戰略升級：重裝甲過濾，只抓真實主力大單 (過濾掉散戶當沖雜音)
             is_volume_surge = False
             
             if time_status == "golden":
-                if vol_1m >= 50 and ignite_value >= 3000000: is_volume_surge = True
+                # 09:00 - 09:59 (黃金開盤)：1分鐘內至少 150張 且 1500萬 資金點火才算數
+                if vol_1m >= 150 and ignite_value >= 15000000: is_volume_surge = True
             elif time_status == "cooling":
-                if vol_1m >= 100 and ignite_value >= 5000000: is_volume_surge = True
+                # 10:00 - 10:59 (盤中冷卻)：1分鐘內至少 200張 且 2000萬 資金點火才算數
+                if vol_1m >= 200 and ignite_value >= 20000000: is_volume_surge = True
             elif time_status == "dead_water":
-                if vol_1m >= 150 and ignite_value >= 8000000: is_volume_surge = True
+                # 11:00 之後 (死水期)：1分鐘內至少 300張 且 3000萬 資金點火才算數
+                if vol_1m >= 300 and ignite_value >= 30000000: is_volume_surge = True
 
             if not (is_volume_surge and is_real_attack): return None
 
@@ -2192,17 +2196,18 @@ def process_tick_data(data, meta_info, top_ind):
 instant_fire_queue = []
 
 def instant_dispatcher_loop():
-    """背景擊發手：每 3.5 秒巡視一次彈匣，確保雷達掃完一輪後完美打包擊發！"""
+    """背景擊發手：每 15 秒巡視一次彈匣，將雷達一圈內抓到的飆股極速打包，兼顧即時性與彈藥節約！"""
     import time
     while True:
-        time.sleep(3.5)  # 💥 這裡改為 3.5 秒
+        # 💥 完美平衡：15 秒剛好是雷達掃完一圈全市場的時間！
+        time.sleep(15)  
         if len(instant_fire_queue) > 0:
             # 瞬間抽出彈匣裡所有的飆股情報
             bullets = instant_fire_queue[:]
             instant_fire_queue.clear()
             
             # 打包發射
-            combined_msg = "🚨 【全市場同步跟單急報】\n\n" + "\n\n======================\n\n".join(bullets)
+            combined_msg = f"🚨 【全市場極速跟單急報】(本波共截獲 {len(bullets)} 檔)\n\n" + "\n\n======================\n\n".join(bullets)
             TARGET_GROUP_IDS = [
                 "C0481b44935888bb1dc20dfd52a675e8a", 
                 "C47bfa8e16a7216bd54dceb3b5e90cfa0"  
@@ -2211,7 +2216,7 @@ def instant_dispatcher_loop():
                 try:
                     smart_push_with_menu(group_id, combined_msg[:4500])
                 except: pass
-            print(f"🚀 [異步擊發手] 已將 {len(bullets)} 檔飆股零時差空投至前線！", flush=True)
+            print(f"🚀 [異步擊發手] 已將 {len(bullets)} 檔飆股於 15 秒內極速打包，消耗 1 發子彈空投至前線！", flush=True)
 
 
 
