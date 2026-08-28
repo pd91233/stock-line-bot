@@ -411,80 +411,7 @@ def smart_push_with_menu(group_id, message_text):
                 continue
                 
     if not success_sent:
-        print(f"❌ [發射崩潰] 群組 {group_id} 查無可用的機器人，或所有駐紮機器人彈藥皆已耗盡！", flush=True)
-# ==========================================================
-# 💎 升級版：雙排高質感戰情快捷面板 (通用的 Flex 產生器)
-# ==========================================================
-def create_flex_menu_message(message_text):
-    flex_content = BubbleContainer(
-        body=BoxComponent(
-            layout='vertical',
-            contents=[
-                # 訊息本文
-                BoxComponent(
-                    layout='vertical',
-                    contents=[{
-                        "type": "text",
-                        "text": str(message_text)[:3000],
-                        "wrap": True,
-                        "size": "sm",
-                        "color": "#f8fafc"
-                    }],
-                    padding_bottom="12px"
-                ),
-                # 第一排按鈕 (國際夜盤、尋找買點)
-                BoxComponent(
-                    layout='horizontal',
-                    spacing='sm',
-                    contents=[
-                        ButtonComponent(
-                            action=MessageAction(label="🌍 國際夜盤", text="夜盤"),
-                            style="secondary",
-                            height="sm"
-                        ),
-                        ButtonComponent(
-                            action=MessageAction(label="🎯 尋找買點", text="尋找買點"),
-                            style="secondary",
-                            height="sm"
-                        )
-                    ]
-                ),
-                # 第二排按鈕 (AI盤勢講評、盤後選股)
-                BoxComponent(
-                    layout='horizontal',
-                    spacing='sm',
-                    margin="sm",
-                    contents=[
-                        ButtonComponent(
-                            action=MessageAction(label="🧠 AI 盤勢講評", text="今日盤勢"),
-                            style="secondary",
-                            height="sm"
-                        ),
-                        ButtonComponent(
-                            action=MessageAction(label="📊 盤後選股", text="盤後選股"),
-                            style="secondary",
-                            height="sm"
-                        )
-                    ]
-                )
-            ],
-            background_color="#0f172a",
-            padding_all="15px"
-        )
-    )
-    return FlexSendMessage(alt_text="📊 股海觀浪戰情選單", contents=flex_content)
-
-# 🛡️ 統一回覆中繼站 (任何文字回覆透過此函數送出，都會自動夾帶雙排面板)
-def smart_reply_with_menu(event, message_text):
-    if isinstance(message_text, str):
-        flex_msg = create_flex_menu_message(message_text)
-    else:
-        flex_msg = message_text 
-    try:
-        line_bot_api.reply_message(event.reply_token, flex_msg)
-    except Exception as e:
-        print(f"⚠️ 回覆發送受阻: {e}", flush=True)
-        
+        print(f"❌ [發射崩潰] 群組 {group_id} 查無可用的機器人，或所有駐紮機器人彈藥皆已耗盡！", flush=True)       
         
 
 
@@ -1984,10 +1911,14 @@ def handle_message(event):
         return
 
 
-    # ==========================================================
+# ==========================================================
 # 💎 升級版：雙排高質感戰情快捷面板 (通用的 Flex 產生器)
 # ==========================================================
 def create_flex_menu_message(message_text):
+    import datetime
+    # 💥 動態抓取台灣時區當下的精準時間
+    now_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y-%m-%d %H:%M")
+    
     flex_content = BubbleContainer(
         body=BoxComponent(
             layout='vertical',
@@ -2038,6 +1969,18 @@ def create_flex_menu_message(message_text):
                             height="sm"
                         )
                     ]
+                ),
+                # 💥 新增：數據日期標籤 (顯示於面板最底部)
+                BoxComponent(
+                    layout='vertical',
+                    margin="md",
+                    contents=[{
+                        "type": "text",
+                        "text": f"📡 數據更新時間：{now_str}",
+                        "size": "xxs",
+                        "color": "#64748b",
+                        "align": "center"
+                    }]
                 )
             ],
             background_color="#0f172a",
@@ -2045,6 +1988,8 @@ def create_flex_menu_message(message_text):
         )
     )
     return FlexSendMessage(alt_text="📊 股海觀浪戰情選單", contents=flex_content)
+	
+	
 
 # 🛡️ 統一回覆中繼站 (任何文字回覆透過此函數送出，都會自動夾帶雙排面板)
 def smart_reply_with_menu(event, message_text):
