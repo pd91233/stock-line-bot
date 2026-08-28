@@ -2127,18 +2127,18 @@ def process_tick_data(data, meta_info, top_ind):
             ignite_value = vol_1m * current_z * 1000
 
             is_real_attack = current_z >= z_1m_ago
-            # 💥 戰略升級：重裝甲過濾，只抓真實主力大單 (過濾掉散戶當沖雜音)
+            # 💥 戰略升級：重裝甲過濾，只抓真實航母級主力大單 (防堵 API 爆掉)
             is_volume_surge = False
             
             if time_status == "golden":
-                # 09:00 - 09:59 (黃金開盤)：1分鐘內至少 150張 且 1500萬 資金點火才算數
-                if vol_1m >= 150 and ignite_value >= 15000000: is_volume_surge = True
+                # 09:00 - 09:59：提高至至少 400張 且 4000萬 資金瞬間點火才算數！
+                if vol_1m >= 400 and ignite_value >= 40000000: is_volume_surge = True
             elif time_status == "cooling":
-                # 10:00 - 10:59 (盤中冷卻)：1分鐘內至少 200張 且 2000萬 資金點火才算數
-                if vol_1m >= 200 and ignite_value >= 20000000: is_volume_surge = True
+                # 10:00 - 10:59：提高至至少 600張 且 6000萬 資金瞬間點火
+                if vol_1m >= 600 and ignite_value >= 60000000: is_volume_surge = True
             elif time_status == "dead_water":
-                # 11:00 之後 (死水期)：1分鐘內至少 300張 且 3000萬 資金點火才算數
-                if vol_1m >= 300 and ignite_value >= 30000000: is_volume_surge = True
+                # 11:00 之後：提高至至少 800張 且 8000萬 資金瞬間點火
+                if vol_1m >= 800 and ignite_value >= 80000000: is_volume_surge = True
 
             if not (is_volume_surge and is_real_attack): return None
 
