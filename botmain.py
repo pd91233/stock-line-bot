@@ -1296,10 +1296,55 @@ def home():
 
 @app.route("/callback", methods=['POST'])
 def callback():
-    signature = request.headers['X-Line-Signature']
+    signature = request.headers.get('X-Line-Signature', '')
     body = request.get_data(as_text=True)
+    
+    # 1. 瞬間調閱統帥上傳到 pCloud 的最新彈藥庫
+    tokens_data = fetch_cloud_tokens()
+    
+    # 加入 Render 環境變數當作最後備胎
+    env_secret = os.environ.get('LINE_CHANNEL_SECRET', '')
+    env_token = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN', '')
+    if env_secret and env_token:
+        tokens_data.append({"token": env_token, "secret": env_secret})
+        
+    matched_secret = None
+    matched_token = None
+    
+    import base64, hashlib, hmac
+    
+    # 2. 萬能解碼：輪詢彈藥庫裡的所有機器人，看是哪一台被觸發了！
+    for item in tokens_data:
+        s = item.get("secret", "").strip()
+        t = item.get("token", "").strip()
+        if not s or not t: continue
+        
+        try:
+            # 使用該機器人的短金鑰進行密碼學解碼比對
+            hash_val = hmac.new(s.encode('utf-8'), body.encode('utf-8'), hashlib.sha256).digest()
+            expected_sig = base64.b64encode(hash_val).decode('utf-8')
+            
+            if expected_sig == signature:
+                matched_secret = s
+                matched_token = t
+                break # 💥 破解成功！抓到發送對象，跳出迴圈
+        except: pass
+        
+    if not matched_secret:
+        print("⚠️ 攔截到未知的 Webhook 簽章，沒有任何一台機器人匹配！", flush=True)
+        abort(400)
+        
+    # 3. 瞬間切換主砲管：將全域 API 鎖定為這台被觸發的機器人
+    global line_bot_api
+    line_bot_api = LineBotApi(matched_token)
+    
+    # 4. 動態裝載指令接收器 (無縫接軌您寫好的 handle_join 與 handle_message)
+    temp_handler = WebhookHandler(matched_secret)
+    temp_handler.add(JoinEvent)(handle_join)
+    temp_handler.add(MessageEvent, message=TextMessage)(handle_message)
+    
     try: 
-        handler.handle(body, signature)
+        temp_handler.handle(body, signature)
     except InvalidSignatureError: 
         abort(400)
     return 'OK'
@@ -1358,7 +1403,6 @@ def manage_vips():
 # ==========================================================
 # 🛡️ 專屬群組進駐雷達：自動捕捉並綁定 Group ID
 # ==========================================================
-@handler.add(JoinEvent)
 def handle_join(event):
     if isinstance(event.source, SourceGroup):
         group_id = event.source.group_id
