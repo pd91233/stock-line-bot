@@ -1350,23 +1350,15 @@ def handle_join(event):
 
 
 # ==========================================================
-# LINE群組查詢股票 💡 最完美的智慧過濾邏輯
+# 🧠 【共用戰情大腦】(情報兵工廠 - 核心邏輯區)
+# 不管是 LINE 還是 TG，所有的文字指令都會送到這裡統一運算！
 # ==========================================================
-
-@handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
-    user_msg = event.message.text.strip()
-    user_id = event.source.user_id  
+def central_brain_process(user_msg, user_name="戰友"):
+    global intraday_breakout_cache, intercepted_traps_log, self_assessed_cache
     
-    # 💥 新增：讓使用者隨時點名查詢當日已被系統鎖定的標的清單
+    # 💥 1. 今日飆股與雷達查詢
     if user_msg in ["今日雷達", "今日飆股", "雷達清單"]:
         try:
-            try:
-                profile = line_bot_api.get_profile(user_id)
-                user_name = profile.display_name
-            except:
-                user_name = "戰友"
-
             if intraday_breakout_cache and len(intraday_breakout_cache) > 0:
                 recent_alerts = intraday_breakout_cache[:5]
                 reply_lines = [
@@ -1378,349 +1370,136 @@ def handle_message(event):
                     clean_alert = alert.replace("群組同步跟單急報", "實戰發報通知").replace("小白當沖實戰指令", "操作指引")
                     reply_lines.append(clean_alert)
                     reply_lines.append("----------------------")
-                
                 reply_lines.append("💡 提示：以上為今日發報之歷史軌跡，實際進出場請依當下盤勢與風險控制為準！")
-                reply_msg = "\n".join(reply_lines)
+                return "\n".join(reply_lines)
             else:
-                reply_msg = f"🔍 報告 {user_name}，今日盤中目前尚無符合條件的標的。系統正嚴格過濾盤勢、避開假突破中，請耐心等候主流資金表態！"
+                return f"🔍 報告 {user_name}，今日盤中目前尚無符合條件的標的。系統正嚴格過濾盤勢、避開假突破中，請耐心等候主流資金表態！"
         except Exception as e:
-            reply_msg = f"⚠️ 查詢今日雷達清單異常：{e}"
+            return f"⚠️ 查詢今日雷達清單異常：{e}"
 
-        smart_reply_with_menu(event, reply_msg[:4000])
-        return
-
-    # 支援大盤、雷達或戰報的即時行情查詢
+    # 💥 2. 大盤與戰報狀態
     if user_msg in ["大盤", "雷達", "戰報"]:
         cache_data = read_cache()
-        reply_text = f"{cache_data.get('fundsText', '')}\n\n精選標的流向：\n{cache_data.get('stocksText', '')}"
-        smart_reply_with_menu(event, reply_text[:4000])
-        return
+        return f"{cache_data.get('fundsText', '')}\n\n精選標的流向：\n{cache_data.get('stocksText', '')}"
 
-
-# 💥 新增模組：AI 總結今日盤勢與收盤講評
+    # 💥 3. AI 盤勢講評
     if user_msg in ["今日盤勢", "AI講評", "盤勢分析", "收盤講評"]:
         try:
-            try:
-                profile = line_bot_api.get_profile(user_id)
-                user_name = profile.display_name
-            except Exception:
-                user_name = "戰友"
-
             cache_data = read_cache()
             funds_summary = cache_data.get('fundsText', '目前無大盤數據')
             stocks_summary = cache_data.get('stocksText', '目前無主流數據')
-
-            # 呼叫 Gemini 進行專業盤勢總結編排
             prompt = f"""
             你是一位頂尖的台股操盤手與總體經濟分析師。請根據以下今日的盤勢數據與資金流向，為戰友寫一篇精簡有力、專業且具備前瞻性的「今日盤勢總結與明日觀盤重點」（大約150-200字，分段清晰，帶有股市實戰風格）：
             - 大盤與資金流向摘要：{funds_summary}
             - 盤面主流族群/精選標的：{stocks_summary}
             """
-            
             response = ai_model.generate_content(prompt)
             ai_commentary = response.text.strip() if response and response.text else "目前 AI 大腦正在冷卻中，請稍後再試。"
-
-            reply_msg = (
-                f"🧠 【股海觀浪・AI 每日盤勢總結】\n"
-                f"報告 {user_name}，今日戰情剖析如下：\n"
-                f"----------------------\n"
-                f"{ai_commentary}\n"
-                f"----------------------\n"
+            return (
+                f"🧠 【股海觀浪・AI 每日盤勢總結】\n報告 {user_name}，今日戰情剖析如下：\n"
+                f"----------------------\n{ai_commentary}\n----------------------\n"
                 f"💡 提醒：盤勢瞬息萬變，操作請嚴格執行資金控管與停損紀律！"
             )
         except Exception as e:
-            reply_msg = f"⚠️ AI 盤勢講評生成異常：{e}"
+            return f"⚠️ AI 盤勢講評生成異常：{e}"
 
-        smart_reply_with_menu(event, reply_msg[:4000])
-        return
-
-
-    # 💥 新增：讓用戶隨時透過 LINE 調閱完整盤後選股網址
+    # 💥 4. 盤後選股網址
     if user_msg in ["盤後選股", "選股策略", "最新選股"]:
-        report_url = "https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/latest_report.html"
-        reply_msg = f"📊 【股海觀浪】最新盤後選股策略：\n請點擊以下連結前往觀看：\n{report_url}"
-        smart_reply_with_menu(event, reply_msg)
-        return
+        return "📊 【股海觀浪】最新盤後選股策略：\n請點擊以下連結前往觀看：\nhttps://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/latest_report.html"
 
-
-    # ==========================================
-    # 🛡️ 新增模組：戰情室盤後結算與防禦覆盤
-    # ==========================================
+    # 💥 5. 防禦覆盤報告
     if user_msg in ["防禦報告", "盤後覆盤", "攔截清單"]:
         try:
             if not intercepted_traps_log:
-                reply_msg = "🛡️ 【戰情室盤後結算】\n今日雷達未偵測到符合爆量門檻的主力陷阱，或皆為有效真實突破。"
-            else:
-                reply_lines = [
-                    "🛡️ 【戰情室盤後覆盤：今日攔截假突破清單】",
-                    "----------------------"
-                ]
-                for trap in intercepted_traps_log:
-                    reply_lines.append(trap)
-                
-                reply_lines.append("----------------------")
-                reply_lines.append(f"🎯 總計為統帥擋下 {len(intercepted_traps_log)} 次主力割韭菜陷阱！子彈防護率 100%！")
-                
-                reply_msg = "\n".join(reply_lines)
-                
-        except Exception as e:
-            reply_msg = f"⚠️ 查詢防禦報告異常：{e}"
-
-        smart_reply_with_menu(event, reply_msg[:4000])
-        return
-
-
-
-# ==========================================================
-    # 👇 手調收盤戰報指令
-    # ==========================================================
-    if user_msg in ["收盤戰報", "收盤結算", "今日結算"]:
-        try:
-            try:
-                profile = line_bot_api.get_profile(user_id)
-                user_name = profile.display_name
-            except Exception:
-                user_name = "戰友"
-
-            review_lines = [f"📊 【股海觀浪・全方位戰場鑑識與分頁驗證】\n報告 {user_name}，為您即時調閱今日結算戰報：\n----------------------"]
-            
-            # ==========================================
-            # 🛠️ 區塊一：盤中 1分/5分爆量雷達標的驗證結算
-            # ==========================================
-            if intraday_breakout_cache:
-                stock_records = {}
-                for alert in intraday_breakout_cache:
-                    try:
-                        time_match = re.search(r'\[(\d{2}:\d{2}:\d{2})\]', alert)
-                        code_match = re.search(r'\((\d{4})\)', alert)
-                        name_match = re.search(r'⚡\s*([^(]+)\(', alert)
-                        price_match = re.search(r'現價\s*[:：]\s*([\d\.]+)', alert)
-                        
-                        if code_match:
-                            alert_time = time_match.group(1) if time_match else "09:00"
-                            code = code_match.group(1)
-                            name = name_match.group(1).strip() if name_match else code
-                            alert_price = float(price_match.group(1)) if price_match else 0.0
-                            
-                            if code not in stock_records:
-                                stock_records[code] = {
-                                    "name": name,
-                                    "alert_time": alert_time,
-                                    "alert_price": alert_price
-                                }
-                    except:
-                        pass
-                
-                settle_count = 0
-                win_count = 0
-                
-                for code, data in stock_records.items():
-                    try:
-                        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=1d"
-                        res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
-                        meta = res['chart']['result'][0]['meta']
-                        indicators = res['chart']['result'][0]['indicators']['quote'][0]
-                        
-                        close_p = meta.get('regularMarketPrice', 0)
-                        highs = [h for h in indicators.get('high', []) if h is not None]
-                        lows = [l for l in indicators.get('low', []) if l is not None]
-                        
-                        day_high = max(highs) if highs else close_p
-                        day_low = min(lows) if lows else close_p
-                        
-                        ap = data["alert_price"]
-                        if ap > 0 and close_p > 0:
-                            max_surge = round(((day_high - ap) / ap) * 100, 2)
-                            after_chg = round(((close_p - ap) / ap) * 100, 2)
-                            
-                            if after_chg > 0: win_count += 1
-                            settle_count += 1
-                            
-                            status_tag = "🔥 主升續強" if after_chg > 1.0 else ("⚠️ 沖高壓回" if max_surge > 2.0 and after_chg <= 0 else "💤 區間震盪")
-                            
-                            review_lines.append(
-                                f"• {data['name']}({code}) ｜ 發報@{ap} [{data['alert_time']}]\n"
-                                f"  ╰ 收盤:{close_p} ({after_chg:+.2f}%) ｜ 盤中最高衝刺: +{max_surge}%\n"
-                                f"  ╰ 戰術判定：{status_tag}"
-                            )
-                    except:
-                        pass
-                
-                if settle_count > 0:
-                    win_rate = round((win_count / settle_count) * 100, 1)
-                    review_lines.append(f"🎯 【盤中爆量雷達】鑑識標的：{settle_count} 檔 ｜ 收盤收紅：{win_count} 檔 (勝率 {win_rate}%)")
-                else:
-                    review_lines.append("🎯 【盤中爆量雷達】今日無有效發報標的。")
-            else:
-                review_lines.append("🎯 【盤中爆量雷達】今日無發報紀錄。")
-            
-            review_lines.append("----------------------")
-
-            # ==========================================
-            # 🛠️ 區塊二：各策略分頁選股戰報績效與明細驗證
-            # ==========================================
-            try:
-                res_json = requests.get("https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json", timeout=5).json()
-            except:
-                res_json = {}
-
-            strat_groups = {
-                "🎯 MTS 完美共振區": [],
-                "🎖️ S級肥羊特戰區": [],
-                "👑 S級核心波段區": [],
-                "⚡ 當沖/隔日游擊區": []
-            }
-            
-            items_to_process = []
-            if isinstance(res_json, dict):
-                for k, v in res_json.items():
-                    if isinstance(v, dict):
-                        v["code"] = k
-                        items_to_process.append(v)
-            elif isinstance(res_json, list):
-                items_to_process = res_json
-
-            for info in items_to_process:
-                try:
-                    code = str(info.get("代碼", info.get("code", ""))).strip()
-                    name = info.get("name", info.get("商品", code))
-                    stype = str(info.get("type", "general"))
-                    
-                    if not code: continue
-
-                    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=1d"
-                    res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
-                    if not res.get('chart', {}).get('result'):
-                        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TWO?range=1d&interval=1d"
-                        res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
-
-                    meta = res['chart']['result'][0]['meta']
-                    close_p = meta.get('regularMarketPrice', 0)
-                    prev_close = meta.get('chartPreviousClose', close_p)
-                    
-                    if close_p > 0 and prev_close > 0:
-                        chg_pct = round(((close_p - prev_close) / prev_close) * 100, 2)
-                        item_data = {"name": name, "code": code, "close": close_p, "chg": chg_pct, "is_win": chg_pct > 0}
-                        
-                        if stype == "mts":
-                            strat_groups["🎯 MTS 完美共振區"].append(item_data)
-                        elif stype == "b":
-                            strat_groups["🎖️ S級肥羊特戰區"].append(item_data)
-                        elif stype == "s":
-                            strat_groups["👑 S級核心波段區"].append(item_data)
-                        else:
-                            strat_groups["⚡ 當沖/隔日游擊區"].append(item_data)
-                except:
-                    pass
-            
-            review_lines.append("📊 【選股策略各分頁獨立績效與明細驗證】")
-            for group_name, stocks in strat_groups.items():
-                if not stocks:
-                    continue
-                count = len(stocks)
-                wins = sum(1 for s in stocks if s["is_win"])
-                win_rate = round((wins / count) * 100, 1)
-                avg_chg = round(sum(s["chg"] for s in stocks) / count, 2)
-                
-                review_lines.append(f"• {group_name} (追蹤 {count} 檔 ｜ 勝率 {win_rate}% ｜ 平均 {avg_chg:+.2f}%)")
-                
-                for s in stocks:
-                    sign = "📈 +" if s["chg"] > 0 else ("📉 " if s["chg"] < 0 else "➖ ")
-                    review_lines.append(f"   - {s['name']}({s['code']}) ｜ 收盤:{s['close']} ({sign}{s['chg']:+.2f}%)")
-                
-                review_lines.append("----------------------")
-            
-            review_lines.append("💡 參謀總結：完整記錄盤中爆量衝刺與各策略分頁表現，作為優化次日選股模型的黃金依據。")
-            
-            reply_msg = "\n".join(review_lines)
-        except Exception as e:
-            reply_msg = f"⚠️ 手調收盤戰報異常：{e}"
-
-        smart_reply_with_menu(event, reply_msg[:4000])
-        return
-
-
-    # ==========================================================
-    # 🧮 💥 升級模組：LINE 當月發射次數動態查詢 (支援無限彈藥庫)
-    # ==========================================================
-    if user_msg in ["次數", "額度", "剩餘發數", "子彈"]:
-        try:
-            # 🎯 直接向 pCloud 呼叫最新擴編的機器人清單
-            tokens_data = fetch_cloud_tokens()
-            
-            reply_lines = ["📊 【股海觀浪・彈藥庫實時庫存】", "----------------------"]
-            active_gun = "無 (彈藥全部耗盡)"
-            
-            # 動態巡航：有幾隻就查幾隻！
-            for idx, item in enumerate(tokens_data, start=1):
-                name = item.get("name", f"第 {idx} 號機")
-                token = item.get("token", "").strip()
-                if not token: continue
-                
-                try:
-                    temp_api = LineBotApi(token)
-                    used = temp_api.get_message_quota_consumption().total_usage
-                    remain = 200 - used
-                    reply_lines.append(f"🔫 {name}：已用 {used}/200 則 (剩 {remain} 則)")
-                    
-                    # 抓出第一隻還有子彈的機器人當作主力火線
-                    if remain > 0 and active_gun == "無 (彈藥全部耗盡)":
-                        active_gun = f"{name} (發射中)"
-                except Exception as api_err:
-                    reply_lines.append(f"🔫 {name}：連線讀取失敗")
-                    
+                return "🛡️ 【戰情室盤後結算】\n今日雷達未偵測到符合爆量門檻的主力陷阱，或皆為有效真實突破。"
+            reply_lines = ["🛡️ 【戰情室盤後覆盤：今日攔截假突破清單】\n----------------------"]
+            for trap in intercepted_traps_log:
+                reply_lines.append(trap)
             reply_lines.append("----------------------")
-            reply_lines.append(f"🎯 目前主力火線：{active_gun}")
-            reply_lines.append("💡 備註：每月 1 號系統將自動重置免費發射額度。")
-            
-            reply_msg = "\n".join(reply_lines)
-            
+            reply_lines.append(f"🎯 總計為統帥擋下 {len(intercepted_traps_log)} 次主力割韭菜陷阱！子彈防護率 100%！")
+            return "\n".join(reply_lines)
         except Exception as e:
-            reply_msg = f"⚠️ 彈藥庫數據連線受阻: {e}"
+            return f"⚠️ 查詢防禦報告異常：{e}"
+
+    # 💥 6. 國際夜盤期貨速報
+    if user_msg in ["夜盤", "國際局勢", "期貨", "虛擬貨幣"]:
+        try:
+            tickers = {
+                "那斯達克期": "NQ=F", "小道瓊期": "YM=F", "日經 225": "^N225", "台積電 ADR": "TSM",
+                "輝達 (NVDA)": "NVDA", "微型黃金": "MGC=F", "比特幣 (BTC)": "BTC-USD"
+            } # 精簡版，若需全列可自行加回原本清單
+            reply_lines = ["🌍 【股海觀浪・全球資金與科技領頭羊速報】\n"]
+            summary_data_for_ai = []
+            for name, ticker in tickers.items():
+                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=20d&includePrePost=true"
+                res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
+                if not res.get('chart', {}).get('result'):
+                    reply_lines.append(f"⚠️ {name}：訊號中斷")
+                    continue
+                meta = res['chart']['result'][0]['meta']
+                curr_p = round(meta.get('postMarketPrice', meta.get('regularMarketPrice', 0)), 2)
+                prev_p = meta.get('chartPreviousClose', 0.0)
+                chg_pct = round(((curr_p - prev_p) / prev_p) * 100, 2) if prev_p > 0 else 0.0
+                sign = "📈 +" if chg_pct > 0 else "📉 "
+                reply_lines.append(f"• {name} ｜ {sign}{chg_pct}%\n    現價: {curr_p}")
+                summary_data_for_ai.append(f"{name}: {chg_pct:+.2f}%")
             
-        smart_reply_with_menu(event, reply_msg)
-        return
+            ai_insight = "市場多空拔河，操作宜嚴守停損紀律。"
+            try:
+                prompt = f"你是一位頂尖台股期貨操盤手。根據以下數據寫40-60字實戰操盤點評：{', '.join(summary_data_for_ai)}"
+                response = ai_model.generate_content(prompt)
+                if response and response.text: ai_insight = response.text.strip()
+            except: pass
+            reply_lines.append(f"\n🎯 操盤手點評：{ai_insight}")
+            return "\n".join(reply_lines)
+        except Exception as e:
+            return f"⚠️ 全球雷達連線異常：{e}"
 
+    # 💥 7. 盤中買點即時篩選
+    if any(keyword in user_msg for keyword in ["轉折", "起漲", "發動", "轉強", "找買點", "尋找買點", "扣抵"]):
+        try:
+            json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={int(time.time())}"
+            res_json = requests.get(json_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
+            qualified_picks = []
+            target_dict = res_json if isinstance(res_json, dict) else {str(i.get("代碼", "")): i for i in res_json}
+            for code, info in target_dict.items():
+                name = info.get('name', info.get('商品', '未知'))
+                ind = info.get('ind', info.get('產業', ''))
+                y_close, ma5 = float(info.get("y_close", 0)), float(info.get("ma5", 0))
+                if y_close > 0 and ma5 > 0 and y_close >= ma5:
+                    qualified_picks.append({"id": code, "name": name, "ind": ind, "price": y_close, "ma5": ma5, "reason": "均線之上穩健排列"})
+            
+            if qualified_picks:
+                reply_lines = [f"📊 【盤中技術面即時篩選・買點雷達】\n報告 {user_name}，符合條件如下：\n======================"]
+                for p in qualified_picks[:5]:
+                    reply_lines.append(f"🔹 {p['name']}({p['id']}) ｜ {p['ind']}\n現價：{p['price']} (5MA: {p['ma5']})\n💡 狀態：{p['reason']}\n----------------------")
+                return "\n".join(reply_lines)
+            else:
+                return f"🔍 報告 {user_name}，系統暫未篩選出符合嚴格條件的標的，建議觀望。"
+        except Exception as e:
+            return f"⚠️ 盤中技術篩選異常：{e}"
 
-
-    # 1. 取得股票資料庫
+    # 💥 8. 個股/代號深度查詢 (多維度計分與操盤手分析)
     res_data = get_stock_dict()
-    if isinstance(res_data, tuple):
-        stock_dict, full_list = res_data
-    else:
-        stock_dict = res_data
-        full_list = [{"code": c, "name": n} for n, c in stock_dict.items()]
-
+    stock_dict, full_list = res_data if isinstance(res_data, tuple) else (res_data, [{"code": c, "name": n} for n, c in res_data.items()])
     target_code = ""
-    target_name = user_msg  # 預設名稱
-
+    target_name = user_msg
     if user_msg.isdigit() and len(user_msg) <= 6:
         target_code = user_msg
-        # 如果輸入的是代號，自動反查對應的中文名稱
         for item in full_list:
             if str(item.get("code", "")).strip() == target_code:
-                target_name = str(item.get("name", "")).strip()
-                break
+                target_name = str(item.get("name", "")).strip(); break
     elif user_msg in stock_dict:
         target_code = stock_dict[user_msg]
-        target_name = user_msg  # 輸入的就是中文名稱
+        target_name = user_msg
 
-    # 2. 如果直接命中代號或精確名稱，直接回傳專業操盤手級別的立體戰情
     if target_code:
         realtime_info = fetch_realtime_data(target_code)
-        
-        # 🛡️ 智慧解析即時數據以供操盤手評分函數使用
-        current_price = 0.0
-        ma5 = 0.0
-        ma20 = 0.0
-        volume = 0
+        current_price, ma5, ma20, volume = 0.0, 0.0, 0.0, 0
         chip_status = "平穩"
-        
         try:
-            # 從 realtime_info 字串中把關鍵數值解析出來
             for line in realtime_info.split('\n'):
                 if "雲端即時成交價" in line:
-                    # 擷取成交價與總量
                     p_match = re.search(r'成交價:\s*([0-9.]+)', line)
                     if p_match: current_price = float(p_match.group(1))
                     v_match = re.search(r'總量:\s*([0-9,]+)張', line)
@@ -1728,38 +1507,124 @@ def handle_message(event):
                 elif "均線數值" in line:
                     m_match = re.findall(r'([0-9.]+)', line)
                     if len(m_match) >= 3:
-                        ma5 = float(m_match[0])
-                        ma20 = float(m_match[2])
+                        ma5, ma20 = float(m_match[0]), float(m_match[2])
                 elif "籌碼動向" in line:
                     chip_status = line
-        except:
-            pass
+        except: pass
+        return generate_professional_analysis(target_name, target_code, realtime_info, current_price, ma5, ma20, volume, chip_status)
 
-        # 呼叫專業操盤手動態分析引擎
-        reply_msg = generate_professional_analysis(
-            target_name, target_code, realtime_info, current_price, ma5, ma20, volume, chip_status
-        )
-        
-        smart_reply_with_menu(event, reply_msg[:4000])
-        return
-
-    # 3. 模糊比對：檢查這段文字是不是在股票名稱中出現過
+    # 💥 9. 模糊比對搜索
     matched_stocks = []
     for item in full_list:
-        c = str(item.get("code", "")).strip()
-        n = str(item.get("name", "")).strip()
+        c, n = str(item.get("code", "")).strip(), str(item.get("name", "")).strip()
         if user_msg in n or user_msg in c:
             matched_stocks.append(f"{n}({c})")
-
-    # 4. 關鍵防護罩：如果有找到相關股票，才回傳清單；如果是日常對話（找不到任何股票），直接靜默 pass！
+            
     if matched_stocks:
         display_list = matched_stocks[:30]
         more_text = f"\n...(還有 {len(matched_stocks) - 30} 筆)" if len(matched_stocks) > 30 else ""
-        reply_msg = f"🔍 找到包含「{user_msg}」的股票共 {len(matched_stocks)} 筆：\n" + " | ".join(display_list) + more_text
-        smart_reply_with_menu(event, reply_msg[:4000])
-    else:
-        # 找不到股票（代表這是一般聊天對話，如「謝謝」、「好」、「該吃飯囉」），直接安靜不回應！
-        pass
+        return f"🔍 找到包含「{user_msg}」的股票共 {len(matched_stocks)} 筆：\n" + " | ".join(display_list) + more_text
+
+    # 💥 完全沒有匹配 (一般聊天對話)，回傳 None 讓哨兵靜默
+    return None
+
+# ==========================================================
+# 🟦 【LINE 專屬哨兵】(獨立防禦網)
+# 攔截 LINE 的文字訊息，丟給共用大腦計算後，套用 LINE 的雙排按鈕發射！
+# ==========================================================
+def handle_message(event):
+    user_msg = event.message.text.strip()
+    user_id = event.source.user_id  
+    try:
+        profile = line_bot_api.get_profile(user_id)
+        user_name = profile.display_name
+    except:
+        user_name = "戰友"
+        
+    # 呼叫共用戰情大腦
+    reply_text = central_brain_process(user_msg, user_name)
+    
+    # 如果大腦有回覆 (不是閒聊)，就套用 LINE 專屬的 Flex 按鈕面板發射
+    if reply_text:
+        smart_reply_with_menu(event, reply_text[:4000])
+
+# ==========================================================
+# ✈️ 【Telegram 專屬哨兵】(獨立防禦網 & TG 武裝排版)
+# 接收 TG Webhook，支援普通打字與透明按鈕點擊，獨立排版發射！
+# ==========================================================
+TG_BOT_TOKEN = os.environ.get('TG_BOT_TOKEN', '') # 請在 Render 後台新增這個環境變數
+
+def send_tg_message(chat_id, text):
+    if not TG_BOT_TOKEN: 
+        print("⚠️ 尚未設定 TG_BOT_TOKEN，無法空投 Telegram！", flush=True)
+        return
+        
+    url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
+    
+    # TG 專屬武裝：透明行內按鈕 (Inline Keyboard)
+    reply_markup = {
+        "inline_keyboard": [
+            [
+                {"text": "🌍 國際夜盤", "callback_data": "夜盤"},
+                {"text": "🎯 尋找買點", "callback_data": "尋找買點"}
+            ],
+            [
+                {"text": "🧠 AI 盤勢講評", "callback_data": "今日盤勢"},
+                {"text": "📊 盤後選股", "callback_data": "盤後選股"}
+            ]
+        ]
+    }
+    
+    payload = {
+        "chat_id": chat_id,
+        "text": str(text)[:4000],
+        "reply_markup": json.dumps(reply_markup)
+    }
+    try:
+        requests.post(url, json=payload, timeout=5)
+    except Exception as e:
+        print(f"⚠️ TG 訊息發射失敗: {e}", flush=True)
+
+@app.route("/tg_callback", methods=['POST'])
+def tg_callback():
+    """ TG 專屬的隱形通道 """
+    data = request.json
+    if not data: return 'OK'
+    
+    user_msg = ""
+    user_name = "戰友"
+    chat_id = None
+    
+    try:
+        # 狀態 A: 戰友點擊透明按鈕 (Callback Query)
+        if "callback_query" in data:
+            cb = data["callback_query"]
+            user_msg = cb.get("data", "").strip()
+            user_name = cb.get("from", {}).get("first_name", "戰友")
+            chat_id = cb.get("message", {}).get("chat", {}).get("id")
+            
+        # 狀態 B: 戰友直接打字查詢 (Normal Message)
+        elif "message" in data and "text" in data["message"]:
+            msg = data["message"]
+            user_msg = msg.get("text", "").strip()
+            user_name = msg.get("from", {}).get("first_name", "戰友")
+            chat_id = msg.get("chat", {}).get("id")
+            
+        if chat_id and user_msg:
+            # 呼叫共用戰情大腦
+            reply_text = central_brain_process(user_msg, user_name)
+            
+            # 如果大腦有結論，就呼叫 TG 專屬槍管發射
+            if reply_text:
+                import datetime
+                now_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y-%m-%d %H:%M")
+                tg_final_text = f"{reply_text}\n\n📡 數據更新時間：{now_str}"
+                send_tg_message(chat_id, tg_final_text)
+                
+    except Exception as e:
+        print(f"⚠️ TG 哨兵解析異常: {e}", flush=True)
+        
+    return 'OK'
 
 
     # ==========================================================
