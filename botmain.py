@@ -2070,6 +2070,10 @@ def instant_dispatcher_loop():
                 try:
                     smart_push_with_menu(group_id, combined_msg[:4500])
                 except: pass
+				
+			# 💥 補上這行！讓盤中雷達同步空投給 TG 群組
+            send_tg_message("-5436896475", combined_msg[:4000])	
+				
             print(f"🚀 [異步擊發手] 已將 {len(bullets)} 檔飆股於 15 秒內極速打包，消耗 1 發子彈空投至前線！", flush=True)
 
 
@@ -2406,6 +2410,9 @@ def afternoon_review_loop():
                         group_id,
                         final_report
                     )
+					
+				# 💥 補上這行！讓盤後結算戰報同步空投給 TG 群組
+                send_tg_message("-5436896475", final_report[:4000])	
 
                 print("🚀 全方位爆量雷達與分頁驗證戰報已嘗試空投！", flush=True)
 
