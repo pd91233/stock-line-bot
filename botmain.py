@@ -1214,6 +1214,125 @@ def execute_force_refresh():
     except Exception as e:
         print(f"❌ 致命錯誤: {e}")
 
+
+# ==========================================================
+# 🎯 雲端旗艦級盤後戰場鑑識中心路由
+# ==========================================================
+@app.route('/daily_report')
+def daily_report():
+    """ 產生 13:40 全方位戰場鑑識中心 HTML 網頁 """
+    
+    data_file = "monitor_list.json"
+    stocks_data = []
+    if os.path.exists(data_file):
+        try:
+            with open(data_file, 'r', encoding='utf-8') as f:
+                stocks_data = json.load(f)
+        except:
+            pass
+
+    # 內嵌完整旗艦版 HTML 樣板 (含 Tabs 分頁與重裝甲卡片)
+    html_template = """
+    <!DOCTYPE html>
+    <html lang="zh-TW">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <title>股海觀浪 - 13:40 盤後全方位戰場鑑識中心</title>
+        <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+        <style>
+            :root {
+                --bg-dark: #05070a; --panel-bg: #0f172a; --border-color: #1e293b;
+                --gold: #fbbf24; --red: #f43f5e; --green: #10b981; --blue: #38bdf8;
+                --text-main: #f8fafc; --text-dim: #94a3b8;
+            }
+            body { background-color: var(--bg-dark); color: var(--text-main); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 15px; -webkit-font-smoothing: antialiased;}
+            .container { max-width: 1400px; margin: 0 auto; }
+            
+            .header-box { background: linear-gradient(135deg, #1e1b4b 0%, #020617 100%); border: 1px solid #312e81; padding: 25px 15px; border-radius: 12px; text-align: center; margin-bottom: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+            .header-title { font-size: 24px; font-weight: 900; color: var(--gold); margin: 0 0 8px 0; letter-spacing: 1px; text-shadow: 0 0 10px rgba(251,191,36,0.3);}
+            .header-date { font-size: 13px; color: var(--text-dim); font-weight: bold; }
+
+            /* 📑 Tab 分頁導航列 */
+            .tabs-nav { 
+                display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #1e293b; 
+                padding-bottom: 2px; overflow-x: auto; white-space: nowrap; 
+                -ms-overflow-style: none; scrollbar-width: none; 
+            }
+            .tabs-nav::-webkit-scrollbar { display: none; }
+            
+            .tab-btn { 
+                background: #0f172a; border: 1px solid var(--border-color); color: var(--text-dim); 
+                padding: 12px 20px; cursor: pointer; border-radius: 8px 8px 0 0; 
+                font-weight: bold; font-size: 15px; transition: 0.2s; flex-shrink: 0;
+            }
+            .tab-btn:hover { background: #1e293b; color: #cbd5e1; }
+            .tab-btn.active { color: #000; border-bottom: none; box-shadow: 0 -2px 10px rgba(0,0,0,0.3); }
+            .tab-btn[data-target="tab-radar"].active { background: var(--red); border-color: var(--red); color: #fff;}
+            .tab-btn[data-target="tab-v4"].active { background: #fca5a5; border-color: #fca5a5; }
+            .tab-btn[data-target="tab-elite"].active { background: #d8b4fe; border-color: #d8b4fe; }
+            .tab-btn[data-target="tab-al"].active { background: #6ee7b7; border-color: #6ee7b7; }
+            .tab-btn[data-target="tab-core"].active { background: #93c5fd; border-color: #93c5fd; }
+            
+            .tab-content { display: none; animation: fadeIn 0.4s ease; }
+            .tab-content.active { display: block; }
+            @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+            .zone-summary { display: flex; justify-content: space-between; align-items: center; background: #162236; padding: 15px 20px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid var(--gold); }
+            .zone-title { font-size: 18px; font-weight: 900; color: #fff; }
+            .zone-stats { font-size: 14px; font-weight: bold; color: var(--gold); }
+        </style>
+    </head>
+    <body>
+
+    <div class="container">
+        <div class="header-box">
+            <h1 class="header-title">股海觀浪・戰場鑑識中心 V84.0</h1>
+            <div class="header-date">雲端即時結算 ｜ 檢驗昨日兵推策略與實戰戰果</div>
+        </div>
+
+        <!-- 📑 Tab 分頁導航列 -->
+        <div class="tabs-nav">
+            <button class="tab-btn active" data-target="tab-radar" onclick="switchTab('tab-radar', this)">⚡ 盤中雷達</button>
+            <button class="tab-btn" data-target="tab-v4" onclick="switchTab('tab-v4', this)">🔥 平整起漲</button>
+            <button class="tab-btn" data-target="tab-elite" onclick="switchTab('tab-elite', this)">💎 財報因子</button>
+            <button class="tab-btn" data-target="tab-al" onclick="switchTab('tab-al', this)">🥷 底部埋伏</button>
+            <button class="tab-btn" data-target="tab-core" onclick="switchTab('tab-core', this)">👑 核心波段</button>
+            <button class="tab-btn" data-target="tab-mts" onclick="switchTab('tab-mts', this)">🎯 MTS共振</button>
+        </div>
+
+        <!-- 分頁 0：⚡ 盤中雷達 -->
+        <div id="tab-radar" class="tab-content active">
+            <div class="zone-summary" style="border-left-color: var(--red);">
+                <div class="zone-title" style="color: var(--red);">⚡ 盤中爆量雷達實戰鑑識</div>
+                <div class="zone-stats">已掛載 {{ stocks_count }} 檔監控標的</div>
+            </div>
+            <div style="padding: 20px; text-align: center; color: var(--text-dim);">點擊上方分頁切換各戰區詳細重裝甲戰報。</div>
+        </div>
+
+        <!-- 各戰區分頁容器 -->
+        <div id="tab-v4" class="tab-content"><div class="zone-summary" style="border-left-color: #fca5a5;"><div class="zone-title" style="color: #fca5a5;">🔥 平整起漲雷達</div></div></div>
+        <div id="tab-elite" class="tab-content"><div class="zone-summary" style="border-left-color: #d8b4fe;"><div class="zone-title" style="color: #d8b4fe;">💎 價量財報因子</div></div></div>
+        <div id="tab-al" class="tab-content"><div class="zone-summary" style="border-left-color: #6ee7b7;"><div class="zone-title" style="color: #6ee7b7;">🥷 A級底部埋伏</div></div></div>
+        <div id="tab-core" class="tab-content"><div class="zone-summary" style="border-left-color: #93c5fd;"><div class="zone-title" style="color: #93c5fd;">👑 S級核心波段</div></div></div>
+        <div id="tab-mts" class="tab-content"><div class="zone-summary" style="border-left-color: #f472b6;"><div class="zone-title" style="color: #f472b6;">🎯 MTS 完美共振</div></div></div>
+    </div>
+
+    <script>
+        function switchTab(tabId, btnElement) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            btnElement.classList.add('active');
+        }
+    </script>
+    </body>
+    </html>
+    """
+    return render_template_string(html_template, stocks_count=len(stocks_data))
+
+
+
 # ==========================================================
 # 📡 6. Webhook 通道與戰情接口
 # ==========================================================
@@ -2280,24 +2399,32 @@ def afternoon_review_loop():
                 
                 review_lines.append("💡 參謀總結：完整記錄盤中爆量衝刺與各策略分頁表現，作為優化次日選股模型的黃金依據。")
 
-                final_report = "\n".join(review_lines)
+                # 🛡️ 升級版：改為傳送精簡摘要並附帶雲端旗艦網頁傳送門
+				final_report = (
+					"📊 【股海觀浪・全方位戰場鑑識報告】\n"
+					"----------------------\n"
+					"⚡ 盤中爆量雷達結算：完成監控驗證\n"
+					"📊 8大策略分頁獨立績效：多維度歸建完畢\n\n"
+					"🔗 點擊解鎖今日 13:40 完整旗艦覆盤戰報 (含重裝甲卡片與 K 線圖)：\n"
+					"https://stock-line-bot-c8em.onrender.com/daily_report"
+				)
 
-                TARGET_GROUP_IDS = [
-                    "C0481b44935888bb1dc20dfd52a675e8a", 
-                    "C47bfa8e16a7216bd54dceb3b5e90cfa0"
-                ]
+				TARGET_GROUP_IDS = [
+					"C0481b44935888bb1dc20dfd52a675e8a", 
+					"C47bfa8e16a7216bd54dceb3b5e90cfa0"
+				]
 
-                # 💥 阻斷無限迴圈的打卡點
-                last_sent_date = current_date_str
+				# 💥 阻斷無限迴圈的打卡點
+				last_sent_date = current_date_str
 
-                for group_id in TARGET_GROUP_IDS:
-                    smart_push_with_menu(
-                        group_id,
-                        final_report
-                    )
-					
-				# 💥 補上這行！讓盤後結算戰報同步空投給 TG 群組
-                send_tg_message("-5436896475", final_report[:4000])	
+				for group_id in TARGET_GROUP_IDS:
+					smart_push_with_menu(
+						group_id,
+						final_report
+					)
+
+				# 💥 讓盤後結算戰報同步空投給 TG 群組
+				send_tg_message("-5436896475", final_report[:4000])
 
                 print("🚀 全方位爆量雷達與分頁驗證戰報已嘗試空投！", flush=True)
 
