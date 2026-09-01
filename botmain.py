@@ -1455,29 +1455,60 @@ def central_brain_process(user_msg, user_name="戰友"):
         except Exception as e:
             return f"⚠️ 全球雷達連線異常：{e}"
 
-    # 💥 7. 盤中買點即時篩選
+    # 💥 7. 盤中買點即時篩選 (升級版：Live 雲端報價快搜)
     if any(keyword in user_msg for keyword in ["轉折", "起漲", "發動", "轉強", "找買點", "尋找買點", "扣抵"]):
         try:
             json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={int(time.time())}"
             res_json = requests.get(json_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
-            qualified_picks = []
+            
             target_dict = res_json if isinstance(res_json, dict) else {str(i.get("代碼", "")): i for i in res_json}
-            for code, info in target_dict.items():
-                name = info.get('name', info.get('商品', '未知'))
-                ind = info.get('ind', info.get('產業', ''))
-                y_close, ma5 = float(info.get("y_close", 0)), float(info.get("ma5", 0))
-                if y_close > 0 and ma5 > 0 and y_close >= ma5:
-                    qualified_picks.append({"id": code, "name": name, "ind": ind, "price": y_close, "ma5": ma5, "reason": "均線之上穩健排列"})
+            codes = list(target_dict.keys())[:30] # 抓取前 30 檔核心名單
+            
+            if not codes:
+                return f"🔍 報告 {user_name}，目前無法取得雲端觀測名單。"
+                
+            # 🚀 雙市場盲測神技：同時塞入 .TW 與 .TWO，讓 Yahoo 自己挑對的吐回來！
+            symbols_str = ",".join([f"{c}.TW,{c}.TWO" for c in codes])
+            yh_url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols_str}"
+            yh_res = requests.get(yh_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
+            quotes = yh_res.get('quoteResponse', {}).get('result', [])
+            
+            qualified_picks = []
+            for q in quotes:
+                c = q.get('symbol', '').split('.')[0]
+                z = q.get('regularMarketPrice', 0)       # 即時現價
+                y = q.get('regularMarketPreviousClose', z) # 昨收
+                o = q.get('regularMarketOpen', z)        # 今開
+                
+                if z <= 0 or y <= 0: continue
+                
+                chg_pct = ((z - y) / y) * 100
+                info = target_dict.get(c, {})
+                name = info.get('name', info.get('商品', c))
+                ind = info.get('ind', info.get('產業', '未知產業'))
+                
+                # 🎯 【實戰買點邏輯】：現價大於開盤價(實體紅K)，且漲幅在 1% ~ 4.5% 之間 (剛點火，追高風險低)
+                if 1.0 <= chg_pct <= 4.5 and z > o:
+                    qualified_picks.append({
+                        "id": c, "name": name, "ind": ind, "price": z, 
+                        "chg": round(chg_pct, 2), "reason": "盤中強勢翻紅，剛發動點火"
+                    })
+                    
+            # 依照漲幅由大到小排序
+            qualified_picks.sort(key=lambda x: x['chg'], reverse=True)
             
             if qualified_picks:
-                reply_lines = [f"📊 【盤中技術面即時篩選・買點雷達】\n報告 {user_name}，符合條件如下：\n======================"]
+                reply_lines = [f"📊 【盤中實戰即時篩選・起漲雷達】\n報告 {user_name}，為您從核心名單中找出目前「剛點火起漲」的標的如下：\n======================"]
                 for p in qualified_picks[:5]:
-                    reply_lines.append(f"🔹 {p['name']}({p['id']}) ｜ {p['ind']}\n現價：{p['price']} (5MA: {p['ma5']})\n💡 狀態：{p['reason']}\n----------------------")
+                    reply_lines.append(f"🔹 {p['name']}({p['id']}) ｜ {p['ind']}\n現價：{p['price']} (+{p['chg']}%)\n💡 狀態：{p['reason']}\n----------------------")
+                reply_lines.append("📌 提示：此為雲端即時報價，精準捕捉 1%~4.5% 剛表態的安全區間標的！")
                 return "\n".join(reply_lines)
             else:
-                return f"🔍 報告 {user_name}，系統暫未篩選出符合嚴格條件的標的，建議觀望。"
+                return f"🔍 報告 {user_name}，雲端已即時掃描監控名單，但目前暫無符合「剛起漲發動 (1%~4.5%)」且收紅K的安全標的，建議耐心觀望。"
         except Exception as e:
-            return f"⚠️ 盤中技術篩選異常：{e}"
+            return f"⚠️ 盤中技術篩選異常：{e}"			
+			
+			
 
     # 💥 8. 個股/代號深度查詢 (多維度計分與操盤手分析)
     res_data = get_stock_dict()
@@ -1627,153 +1658,7 @@ def tg_callback():
     return 'OK'
 
 
-    # ==========================================================
-    # 💥 新增模組 1：國際夜盤與期貨速報
-    # 💥 新增模組 2：均線扣抵轉折預告
-    # ==========================================================
-    if user_msg in ["夜盤", "國際局勢", "期貨", "虛擬貨幣"]:
-        try:
-            tickers = {
-                "那斯達克期": "NQ=F",
-                "小道瓊期": "YM=F",
-                "日經 225": "^N225",
-                "南韓綜合": "^KS11",
-                "恐慌指數 VIX": "^VIX",
-                "美元兌台幣": "TWD=X",
-                "微型黃金": "MGC=F", 
-                "微型輕原油": "MCL=F",
-                "比特幣 (BTC)": "BTC-USD",
-                "以太幣 (ETH)": "ETH-USD",
-                "台積電 ADR": "TSM",
-                "輝達 (NVDA)": "NVDA",
-                "甲骨文 (ORCL)": "ORCL",
-                "博通 (AVGO)": "AVGO",
-                "美光 (MU)": "MU",
-                "微軟 (MSFT)": "MSFT",
-                "亞馬遜 (AMZN)": "AMZN",
-                "谷歌 (GOOGL)": "GOOGL",
-                "帕蘭泰爾 (PLTR)": "PLTR",
-                "蘋果 (AAPL)": "AAPL",
-                "特斯拉 (TSLA)": "TSLA"
-            }
-            reply_lines = ["🌍 【股海觀浪・全球資金與科技領頭羊速報】\n"]
-            summary_data_for_ai = []
-            
-            for name, ticker in tickers.items():
-                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=20d&includePrePost=true"
-                res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
-                
-                if not res.get('chart', {}).get('result'):
-                    reply_lines.append(f"⚠️ {name}：訊號中斷")
-                    continue
-                    
-                meta = res['chart']['result'][0]['meta']
-                indicators = res['chart']['result'][0]['indicators']['quote'][0]
-                closes = indicators.get('close', [])
-                valid_closes = [c for c in closes if c is not None]
-                
-                curr_p = meta.get('postMarketPrice', meta.get('regularMarketPrice'))
-                curr_p = round(curr_p, 2) if curr_p else 0.0
-                
-                prev_p = meta.get('chartPreviousClose', 0.0)
-                
-                if prev_p > 0:
-                    chg_pct = round(((curr_p - prev_p) / prev_p) * 100, 2)
-                else:
-                    chg_pct = 0.0
-                
-                ema5 = round(sum(valid_closes[-5:]) / 5, 2) if len(valid_closes) >= 5 else curr_p
-                
-                sign = "📈 +" if chg_pct > 0 else "📉 "
-                reply_lines.append(f"• {name} ｜ {sign}{chg_pct}%")
-                reply_lines.append(f"    現價: {curr_p} (短線支撐/壓力: {ema5})")
-                
-                summary_data_for_ai.append(f"{name}: {chg_pct:+.2f}%")
-
-            # 🧠 AI 動態生成：採用專業台股期貨操盤用語
-            ai_insight = "市場多空拔河，操作宜嚴守停損紀律。"
-            try:
-                prompt = f"""
-                你是一位頂尖台股與期貨實戰操盤手。以下是今日全球主要期貨指數、日韓股市、加密貨幣與美股 AI 巨頭的最新漲跌幅數據：
-                {", ".join(summary_data_for_ai)}
-                
-                請根據以上數據，寫一段道地的「實戰操盤點評」（大約 40-60 字），必須使用如：提款、撐盤力道、拔河格局、追高搶短、低基期、資金控管等股市期貨用語，直接給出結論與對次日台股的啟示，絕對不要有任何廢話或稱呼。
-                """
-                response = ai_model.generate_content(prompt)
-                if response and response.text:
-                    ai_insight = response.text.strip()
-            except:
-                pass
-
-            reply_lines.append(f"\n🎯 操盤手點評：{ai_insight}")
-            reply_msg = "\n".join(reply_lines)
-            
-        except Exception as e:
-            reply_msg = f"⚠️ 全球雷達連線異常：{e}"
-            
-        smart_reply_with_menu(event, reply_msg)
-        return
-
-
-
-    # 💥 優化版：盤中技術面轉折與買點即時篩選（與爆量通知互補）
-    if any(keyword in user_msg for keyword in ["轉折", "起漲", "發動", "轉強", "找買點", "尋找買點", "扣抵"]):
-        try:
-            try:
-                profile = line_bot_api.get_profile(user_id)
-                user_name = profile.display_name
-            except Exception:
-                user_name = "戰友"
-
-            json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={int(time.time())}"
-            res_json = requests.get(json_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
-
-            qualified_picks = []
-            target_dict = {}
-            if isinstance(res_json, list):
-                for item in res_json:
-                    code = str(item.get("代碼", item.get("code", "")))
-                    if code:
-                        target_dict[code] = item
-            else:
-                target_dict = res_json
-
-            for code, info in target_dict.items():
-                name = info.get('name', info.get('商品', '未知'))
-                ind = info.get('ind', info.get('產業', ''))
-                y_close = float(info.get("y_close", 0))
-                ma5 = float(info.get("ma5", 0))
-
-                if y_close > 0 and ma5 > 0 and y_close >= ma5:
-                    qualified_picks.append({
-                        "id": code,
-                        "name": name,
-                        "ind": ind,
-                        "price": y_close,
-                        "ma5": ma5,
-                        "reason": "均線之上穩健排列，多方主導中"
-                    })
-
-            if qualified_picks and len(qualified_picks) > 0:
-                top_picks = qualified_picks[:5]
-                reply_lines = [
-                    "📊 【盤中技術面即時篩選・買點雷達】",
-                    f"報告 {user_name}，系統已完成盤中多維度技術篩選，目前符合轉折與穩健排列的標的如下：\n",
-                    "======================"
-                ]
-                for p in top_picks:
-                    reply_lines.append(f"🔹 {p['name']}({p['id']}) ｜ {p['ind']}\n現價：{p['price']} (5MA: {p['ma5']})\n💡 狀態：{p['reason']}")
-                    reply_lines.append("----------------------")
-                
-                reply_lines.append("📌 提示：此清單為技術面即時篩選結果，請搭配當下大盤走勢與個人風險承受度評估進出！")
-                reply_msg = "\n".join(reply_lines)
-            else:
-                reply_msg = f"🔍 報告 {user_name}，目前盤中多空拉鋸，系統暫未篩選出符合嚴格均線轉折條件的標的。建議先觀望、等待主流資金明確表態！"
-        except Exception as e:
-            reply_msg = f"⚠️ 盤中技術篩選異常：{e}"
-
-        smart_reply_with_menu(event, reply_msg[:4000])
-        return
+    
 
 
 # ==========================================================
