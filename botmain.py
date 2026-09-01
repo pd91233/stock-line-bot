@@ -2399,32 +2399,32 @@ def afternoon_review_loop():
                 
                 review_lines.append("💡 參謀總結：完整記錄盤中爆量衝刺與各策略分頁表現，作為優化次日選股模型的黃金依據。")
 
-                # 🛡️ 升級版：改為傳送精簡摘要並附帶雲端旗艦網頁傳送門
-				final_report = (
-					"📊 【股海觀浪・全方位戰場鑑識報告】\n"
-					"----------------------\n"
-					"⚡ 盤中爆量雷達結算：完成監控驗證\n"
-					"📊 8大策略分頁獨立績效：多維度歸建完畢\n\n"
-					"🔗 點擊解鎖今日 13:40 完整旗艦覆盤戰報 (含重裝甲卡片與 K 線圖)：\n"
-					"https://stock-line-bot-c8em.onrender.com/daily_report"
-				)
+				# 🛡️ 升級版：改為傳送精簡摘要並附帶雲端旗艦網頁傳送門
+                final_report = (
+                    "📊 【股海觀浪・全方位戰場鑑識報告】\n"
+                    "----------------------\n"
+                    "⚡ 盤中爆量雷達結算：完成監控驗證\n"
+                    "📊 8大策略分頁獨立績效：多維度歸建完畢\n\n"
+                    "🔗 點擊解鎖今日 13:40 完整旗艦覆盤戰報 (含重裝甲卡片與 K 線圖)：\n"
+                    "https://stock-line-bot-c8em.onrender.com/daily_report"
+                )
 
-				TARGET_GROUP_IDS = [
-					"C0481b44935888bb1dc20dfd52a675e8a", 
-					"C47bfa8e16a7216bd54dceb3b5e90cfa0"
-				]
+                TARGET_GROUP_IDS = [
+                    "C0481b44935888bb1dc20dfd52a675e8a", 
+                    "C47bfa8e16a7216bd54dceb3b5e90cfa0"
+                ]
 
-				# 💥 阻斷無限迴圈的打卡點
-				last_sent_date = current_date_str
+                # 💥 阻斷無限迴圈的打卡點
+                last_sent_date = current_date_str
 
-				for group_id in TARGET_GROUP_IDS:
-					smart_push_with_menu(
-						group_id,
-						final_report
-					)
-
-				# 💥 讓盤後結算戰報同步空投給 TG 群組
-				send_tg_message("-5436896475", final_report[:4000])
+                for group_id in TARGET_GROUP_IDS:
+                    smart_push_with_menu(
+                        group_id,
+                        final_report
+                    )
+					
+                # 讓盤後結算戰報同步空投給 TG 群組
+                send_tg_message("-5436896475", final_report[:4000])
 
                 print("🚀 全方位爆量雷達與分頁驗證戰報已嘗試空投！", flush=True)
 
