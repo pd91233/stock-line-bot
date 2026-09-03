@@ -269,8 +269,7 @@ def update_vips(data):
 # ==========================================================
 MATRIX_CACHE_FILE = "global_matrix_cache.json"
 
-def fetch_global_matrix_data():
-    """ 24小時全天候抓取美股四大指數、ADR與十二大戰區龍頭即時數據 """
+""" 24小時全天候抓取美股四大指數、ADR與十二大戰區龍頭即時數據 """
     tickers = {
         # 🌐 頂級天候儀表板
         "SOX": "^SOX", "IXIC": "^IXIC", "DJI": "^DJI", "INX": "^GSPC",
