@@ -63,160 +63,27 @@ import mplfinance as mpf
 
 
 
-# ==========================================================
-# 🌐 全球跨國動態資金矩陣：24小時全景完全體爬蟲引擎
-# ==========================================================
-MATRIX_CACHE_FILE = "global_matrix_cache.json"
-
-def fetch_global_matrix_data():
-    """ 24小時全天候抓取美股四大指數、ADR與十大戰區龍頭即時數據 """
-    tickers = {
-        # ==========================================
-        # 🌐 頂級天候儀表板 (四大指數與關鍵宏觀指標)
-        # ==========================================
-        "SOX": "^SOX",       # 費城半導體指數
-        "IXIC": "^IXIC",     # 那斯達克綜合指數
-        "DJI": "^DJI",       # 道瓊工業指數
-        "TSM": "TSM",        # 台積電 ADR
-        "VIX": "^VIX",       # 恐慌指數
-
-        # ==========================================
-        # ⚙️ 戰區一：半導體與先進晶片核心
-        # ==========================================
-        "NVDA": "NVDA",      # 輝達
-        "ASML": "ASML",      # 艾司摩爾
-        "AMD": "AMD",        # 超微
-        "MU": "MU",          # 美光
-        "ARM": "ARM",        # 安謀
-
-        # ==========================================
-        # 🖥️ 戰區二：AI 伺服器與基礎建設
-        # ==========================================
-        "SMCI": "SMCI",      # 美超微
-        "DELL": "DELL",      # 戴爾
-        "VRT": "VRT",        # 維諦技術
-        "MRVL": "MRVL",      # 邁威爾
-
-        # ==========================================
-        # 🤖 戰區三：智慧工廠、機器人與自動化
-        # ==========================================
-        "SERV": "SERV",      # 服務機器人相關
-        "ISRG": "ISRG",      # 直覺外科
-        "ROK": "ROK",        # 洛克威爾自動化
-
-        # ==========================================
-        # 📱 戰區四：消費性電子與通訊
-        # ==========================================
-        "AAPL": "AAPL",      # 蘋果公司
-        "QCOM": "QCOM",      # 高通
-        "AVGO": "AVGO",      # 博通
-
-        # ==========================================
-        # ☁️ 戰區五：軟體、雲端服務與資安 (CSP 巨頭陣營)
-        # ==========================================
-        "MSFT": "MSFT",      # 微軟
-        "AMZN": "AMZN",      # 亞馬遜
-        "GOOGL": "GOOGL",    # 谷歌
-        "ORCL": "ORCL",      # 甲骨文
-        "CRWD": "CRWD",      # CrowdStrike
-        "PANW": "PANW",      # Palo Alto Networks
-        "PLTR": "PLTR",      # 帕蘭泰爾
-
-        # ==========================================
-        # ⚡ 戰區六：重電、綠能與電網基礎建設
-        # ==========================================
-        "GE": "GE",          # 奇異
-        "PAVE": "PAVE",      # 美國基礎建設 ETF
-        "ICLN": "ICLN",      # 全球乾淨能源 ETF
-        "FSLR": "FSLR",      # 第一太陽能
-
-        # ==========================================
-        # 🔋 戰區七：電動車與電池材料
-        # ==========================================
-        "TSLA": "TSLA",      # 特斯拉
-        "RIVN": "RIVN",      # 里維安
-
-        # ==========================================
-        # 🚢 戰區八：全球航運與供應鏈
-        # ==========================================
-        "ZIM": "ZIM",        # 以星航運
-        "FDX": "FDX",        # 聯邦快遞
-
-        # ==========================================
-        # 🏭 戰區九：傳統景氣與原物料
-        # ==========================================
-        "X": "X",            # 美國鋼鐵
-        "NUE": "NUE",        # 紐柯鋼鐵
-        "XOM": "XOM",        # 艾克森美孚
-        "FCX": "FCX",        # 自由港麥克莫蘭
-
-        # ==========================================
-        # 🏦 戰區十：金融、資本市場與生技
-        # ==========================================
-        "XLF": "XLF",        # 美國金融 ETF
-        "JPM": "JPM",        # 摩根大通
-        "NBI": "^NBI"        # 那斯達克生技指數
-    }
-    
-    matrix_results = {}
-    headers = {"User-Agent": "Mozilla/5.0"}
-    
-    for key, symbol in tickers.items():
-        try:
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=2d&includePrePost=true"
-            res = requests.get(url, headers=headers, timeout=5).json()
-            meta = res['chart']['result'][0]['meta']
-            
-            curr_p = meta.get('postMarketPrice', meta.get('regularMarketPrice', 0))
-            prev_p = meta.get('chartPreviousClose', 0)
-            
-            if prev_p > 0:
-                chg_pct = round(((curr_p - prev_p) / prev_p) * 100, 2)
-            else:
-                chg_pct = 0.0
-                
-            matrix_results[key] = {
-                "price": round(curr_p, 2),
-                "chg": chg_pct
-            }
-        except Exception as e:
-            matrix_results[key] = {"price": 0.0, "chg": 0.0}
-            
-    # 同步寫入獨立的 JSON 快取，供前端網頁隨時讀取
-    try:
-        with open(MATRIX_CACHE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(matrix_results, f, ensure_ascii=False, indent=4)
-        print("✅ [跨國矩陣] 全景 30 檔美股與期貨即時數據已成功更新至快取！", flush=True)
-    except Exception as e:
-        print(f"⚠️ [跨國矩陣] 快取寫入失敗: {e}", flush=True)
-
-@app.route("/global_matrix.json", methods=['GET'])
-def get_global_matrix():
-    """ 提供前端跨國資金矩陣的即時數據 API """
-    if os.path.exists(MATRIX_CACHE_FILE):
-        try:
-            with open(MATRIX_CACHE_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            response = make_response(jsonify(data))
-            response.headers['Access-Control-Allow-Origin'] = '*'
-            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-            return response
-        except:
-            pass
-    return jsonify({}), 404
-
 
 # ==========================================================
+
 # 📰 情報偵蒐引擎：新聞與市場流向 
+
 # ==========================================================
 
 def fetch_cnyes_news():
+
     headers = {"User-Agent": "Mozilla/5.0"}
+
     try:
+
         url = "https://api.cnyes.com/media/api/v1/newslist/category/tw_stock?limit=3"
+
         res = requests.get(url, headers=headers, timeout=4).json()
+
         items = res.get("items", {}).get("data", [])
+
         news_list = []
+
         for item in items:
 
             title = item.get("title", "").strip()
@@ -392,6 +259,312 @@ def update_vips(data):
     except: pass
 
 
+
+
+
+
+
+# ==========================================================
+
+# 🌐 全球跨國動態資金矩陣：24小時全景完全體爬蟲引擎
+
+# ==========================================================
+
+MATRIX_CACHE_FILE = "global_matrix_cache.json"
+
+
+
+def fetch_global_matrix_data():
+
+    """ 24小時全天候抓取美股四大指數、ADR與十大戰區龍頭即時數據 """
+
+    tickers = {
+
+        # ==========================================
+
+        # 🌐 頂級天候儀表板 (四大指數與關鍵宏觀指標)
+
+        # ==========================================
+
+        "SOX": "^SOX",       # 費城半導體指數
+
+        "IXIC": "^IXIC",     # 那斯達克綜合指數
+
+        "DJI": "^DJI",       # 道瓊工業指數
+
+        "TSM": "TSM",        # 台積電 ADR
+
+        "VIX": "^VIX",       # 恐慌指數
+
+
+
+        # ==========================================
+
+        # ⚙️ 戰區一：半導體與先進晶片核心
+
+        # ==========================================
+
+        "NVDA": "NVDA",      # 輝達
+
+        "ASML": "ASML",      # 艾司摩爾
+
+        "AMD": "AMD",        # 超微
+
+        "MU": "MU",          # 美光
+
+        "ARM": "ARM",        # 安謀
+
+
+
+        # ==========================================
+
+        # 🖥️ 戰區二：AI 伺服器與基礎建設
+
+        # ==========================================
+
+        "SMCI": "SMCI",      # 美超微
+
+        "DELL": "DELL",      # 戴爾
+
+        "VRT": "VRT",        # 維諦技術
+
+        "MRVL": "MRVL",      # 邁威爾
+
+
+
+        # ==========================================
+
+        # 🤖 戰區三：智慧工廠、機器人與自動化
+
+        # ==========================================
+
+        "SERV": "SERV",      # 服務機器人相關
+
+        "ISRG": "ISRG",      # 直覺外科
+
+        "ROK": "ROK",        # 洛克威爾自動化
+
+
+
+        # ==========================================
+
+        # 📱 戰區四：消費性電子與通訊
+
+        # ==========================================
+
+        "AAPL": "AAPL",      # 蘋果公司
+
+        "QCOM": "QCOM",      # 高通
+
+        "AVGO": "AVGO",      # 博通
+
+
+
+        # ==========================================
+
+        # ☁️ 戰區五：軟體、雲端服務與資安 (CSP 巨頭陣營)
+
+        # ==========================================
+
+        "MSFT": "MSFT",      # 微軟
+
+        "AMZN": "AMZN",      # 亞馬遜
+
+        "GOOGL": "GOOGL",    # 谷歌
+
+        "ORCL": "ORCL",      # 甲骨文
+
+        "CRWD": "CRWD",      # CrowdStrike
+
+        "PANW": "PANW",      # Palo Alto Networks
+
+        "PLTR": "PLTR",      # 帕蘭泰爾
+
+
+
+        # ==========================================
+
+        # ⚡ 戰區六：重電、綠能與電網基礎建設
+
+        # ==========================================
+
+        "GE": "GE",          # 奇異
+
+        "PAVE": "PAVE",      # 美國基礎建設 ETF
+
+        "ICLN": "ICLN",      # 全球乾淨能源 ETF
+
+        "FSLR": "FSLR",      # 第一太陽能
+
+
+
+        # ==========================================
+
+        # 🔋 戰區七：電動車與電池材料
+
+        # ==========================================
+
+        "TSLA": "TSLA",      # 特斯拉
+
+        "RIVN": "RIVN",      # 里維安
+
+
+
+        # ==========================================
+
+        # 🚢 戰區八：全球航運與供應鏈
+
+        # ==========================================
+
+        "ZIM": "ZIM",        # 以星航運
+
+        "FDX": "FDX",        # 聯邦快遞
+
+
+
+        # ==========================================
+
+        # 🏭 戰區九：傳統景氣與原物料
+
+        # ==========================================
+
+        "X": "X",            # 美國鋼鐵
+
+        "NUE": "NUE",        # 紐柯鋼鐵
+
+        "XOM": "XOM",        # 艾克森美孚
+
+        "FCX": "FCX",        # 自由港麥克莫蘭
+
+
+
+        # ==========================================
+
+        # 🏦 戰區十：金融、資本市場與生技
+
+        # ==========================================
+
+        "XLF": "XLF",        # 美國金融 ETF
+
+        "JPM": "JPM",        # 摩根大通
+
+        "NBI": "^NBI"        # 那斯達克生技指數
+
+    }
+
+    
+
+    matrix_results = {}
+
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    
+
+    for key, symbol in tickers.items():
+
+        try:
+
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=2d&includePrePost=true"
+
+            res = requests.get(url, headers=headers, timeout=5).json()
+
+            meta = res['chart']['result'][0]['meta']
+
+            
+
+            curr_p = meta.get('postMarketPrice', meta.get('regularMarketPrice', 0))
+
+            prev_p = meta.get('chartPreviousClose', 0)
+
+            
+
+            if prev_p > 0:
+
+                chg_pct = round(((curr_p - prev_p) / prev_p) * 100, 2)
+
+            else:
+
+                chg_pct = 0.0
+
+                
+
+            matrix_results[key] = {
+
+                "price": round(curr_p, 2),
+
+                "chg": chg_pct
+
+            }
+
+        except Exception as e:
+
+            matrix_results[key] = {"price": 0.0, "chg": 0.0}
+
+            
+
+    # 讀取當日戰報入選名單 (monitor_list.json) 以便前端進行點燈高亮
+    monitor_tags_map = {}
+    try:
+        if os.path.exists("monitor_list.json"):
+            with open("monitor_list.json", "r", encoding="utf-8") as f:
+                m_data = json.load(f)
+                if isinstance(m_data, list):
+                    for item in m_data:
+                        code = str(item.get("代碼", item.get("code", ""))).strip()
+                        stype = str(item.get("type", "general")).lower()
+                        if code:
+                            monitor_tags_map[code] = stype
+                elif isinstance(m_data, dict):
+                    for code, item in m_data.items():
+                        stype = str(item.get("type", "general")).lower()
+                        monitor_tags_map[str(code)] = stype
+    except:
+        pass
+
+    # 將市場即時數據與戰報入選標籤完整打包雙層結構
+    payload = {
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+        "quotes": matrix_results,
+        "monitor_tags": monitor_tags_map
+    }
+
+    # 同步寫入獨立的 JSON 快取，供前端網頁隨時讀取
+    try:
+        with open(MATRIX_CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(payload, f, ensure_ascii=False, indent=4)
+        print("✅ [美股夜盤風向] 60多檔全景數據與戰報點燈標籤已成功同步至快取！", flush=True)
+    except Exception as e:
+        print(f"⚠️ [美股夜盤風向] 快取寫入失敗: {e}", flush=True)
+
+
+
+@app.route("/global_matrix.json", methods=['GET'])
+
+def get_global_matrix():
+
+    """ 提供前端跨國資金矩陣的即時數據 API """
+
+    if os.path.exists(MATRIX_CACHE_FILE):
+
+        try:
+
+            with open(MATRIX_CACHE_FILE, 'r', encoding='utf-8') as f:
+
+                data = json.load(f)
+
+            response = make_response(jsonify(data))
+
+            response.headers['Access-Control-Allow-Origin'] = '*'
+
+            response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+
+            return response
+
+        except:
+
+            pass
+
+    return jsonify({}), 404
 
 
 
@@ -3432,50 +3605,120 @@ def handle_message(event):
         try:
 
             tickers = {
+        # ==========================================
+        # 🌐 頂級天候儀表板 (全球四大指數與關鍵宏觀指標)
+        # ==========================================
+        "SOX": "^SOX",       # 費城半導體指數
+        "IXIC": "^IXIC",     # 那斯達克綜合指數
+        "DJI": "^DJI",       # 道瓊工業指數
+        "INX": "^GSPC",      # 標普 500 指數
+        "TSM": "TSM",        # 台積電 ADR
+        "VIX": "^VIX",       # 恐慌指數
+        "DXY": "DX-Y.NYB",   # 美元指數 (國際資金流向風向球)
+        "US10Y": "^TNX",     # 美國 10 年期公債殖利率 (資金成本指標)
 
-                "那斯達克期": "NQ=F",
+        # ==========================================
+        # ⚙️ 戰區一：半導體與先進晶片核心
+        # ==========================================
+        "NVDA": "NVDA",      # 輝達
+        "ASML": "ASML",      # 艾司摩爾
+        "AMD": "AMD",        # 超微
+        "MU": "MU",          # 美光科技
+        "ARM": "ARM",        # 安謀
+        "INTC": "INTC",      # 英特爾
+        "QCOM": "QCOM",      # 高通
+        "AVGO": "AVGO",      # 博通
+        "TSM": "TSM",        # 台積電 ADR
 
-                "小道瓊期": "YM=F",
+        # ==========================================
+        # 🖥️ 戰區二：AI 伺服器、網通與基礎建設
+        # ==========================================
+        "SMCI": "SMCI",      # 美超微
+        "DELL": "DELL",      # 戴爾
+        "VRT": "VRT",        # 維諦技術 (散熱與電源)
+        "MRVL": "MRVL",      # 邁威爾 (矽光子 CPO)
+        "ANET": "ANET",      # Arista Networks (高速交換器)
 
-                "日經 225": "^N225",
+        # ==========================================
+        # 🤖 戰區三：智慧工廠、機器人與自動化
+        # ==========================================
+        "ROK": "ROK",        # 洛克威爾自動化
+        "ISRG": "ISRG",      # 直覺外科 (醫療機器人)
+        "PATH": "PATH",      # UiPath (軟體自動化 RPA)
 
-                "南韓綜合": "^KS11",
+        # ==========================================
+        # 📱 戰區四：消費性電子與通訊大廠
+        # ==========================================
+        "AAPL": "AAPL",      # 蘋果公司
+        "MSFT": "MSFT",      # 微軟
+        "GOOGL": "GOOGL",    # 谷歌
+        "AMZN": "AMZN",      # 亞馬遜
+        "META": "META",      # Meta (社群與 AI 算力)
+        "NFLX": "NFLX",      # 網飛
 
-                "恐慌指數 VIX": "^VIX",
+        # ==========================================
+        # ☁️ 戰區五：企業軟體、雲端服務與資安
+        # ==========================================
+        "ORCL": "ORCL",      # 甲骨文 (AI 雲端與資料庫)
+        "IBM": "IBM",        # IBM
+        "NOW": "NOW",        # 賽服雲 (ServiceNow)
+        "CRWD": "CRWD",      # CrowdStrike (網路資安)
+        "PANW": "PANW",      # Palo Alto Networks (資安防禦)
+        "PLTR": "PLTR",      # 帕蘭泰爾 (大數據與國防 AI)
 
-                "美元兌台幣": "TWD=X",
+        # ==========================================
+        # ⚡ 戰區六：重電、綠能與電網基礎建設
+        # ==========================================
+        "GE": "GE",          # 奇異 (重電/電網)
+        "PAVE": "PAVE",      # 美國基礎建設 ETF
+        "ICLN": "ICLN",      # 全球乾淨能源 ETF
+        "FSLR": "FSLR",      # 第一太陽能
 
-                "微型黃金": "MGC=F", 
+        # ==========================================
+        # 🔋 戰區七：電動車、電池與未來運輸
+        # ==========================================
+        "TSLA": "TSLA",      # 特斯拉
+        "RIVN": "RIVN",      # 里維安
+        "UBER": "UBER",      # 優步
 
-                "微型輕原油": "MCL=F",
+        # ==========================================
+        # 🚢 戰區八：全球航運、物流與供應鏈
+        # ==========================================
+        "ZIM": "ZIM",        # 以星航運 (貨櫃運價指標)
+        "FDX": "FDX",        # 聯邦快遞
+        "UPS": "UPS",        # 優比速物流
 
-                "比特幣 (BTC)": "BTC-USD",
+        # ==========================================
+        # 🏭 戰區九：傳統景氣、鋼鐵與基礎原物料
+        # ==========================================
+        "X": "X",            # 美國鋼鐵
+        "NUE": "NUE",        # 紐柯鋼鐵
+        "XOM": "XOM",        # 艾克森美孚 (石油能源)
+        "CVX": "CVX",        # 雪佛龍
+        "FCX": "FCX",        # 自由港麥克莫蘭 (銅礦與金屬)
+        "GOLD": "GOLD",      # 巴理克黃金 (黃金指標)
 
-                "以太幣 (ETH)": "ETH-USD",
+        # ==========================================
+        # 🏦 戰區十：金融、資本市場與生技醫療
+        # ==========================================
+        "XLF": "XLF",        # 美國金融 ETF
+        "JPM": "JPM",        # 摩根大通
+        "BAC": "BAC",        # 美國銀行
+        "GS": "GS",          # 高盛集團
+        "NBI": "^NBI",       # 那斯達克生技指數
+        "LLY": "LLY",        # 禮來公司 (減肥藥與生技巨頭)
+        "PFE": "PFE",        # 輝瑞製藥
 
-                "台積電 ADR": "TSM",
-
-                "輝達 (NVDA)": "NVDA",
-
-                "甲骨文 (ORCL)": "ORCL",
-
-                "博通 (AVGO)": "AVGO",
-
-                "美光 (MU)": "MU",
-
-                "微軟 (MSFT)": "MSFT",
-
-                "亞馬遜 (AMZN)": "AMZN",
-
-                "谷歌 (GOOGL)": "GOOGL",
-
-                "帕蘭泰爾 (PLTR)": "PLTR",
-
-                "蘋果 (AAPL)": "AAPL",
-
-                "特斯拉 (TSLA)": "TSLA"
-
-            }
+        # ==========================================
+        # 🪙 戰區十一：全球期貨與加密貨幣風向球
+        # ==========================================
+        "NQ": "NQ=F",        # 那斯達克期貨 (夜盤指標)
+        "YM": "YM=F",        # 小道瓊期貨
+        "GC": "MGC=F",       # 微型黃金期貨
+        "CL": "MCL=F",       # 微型輕原油期貨
+        "BTC": "BTC-USD",    # 比特幣 (風險偏好極端指標)
+        "ETH": "ETH-USD"     # 以太幣
+    }
 
             reply_lines = ["🌍 【股海觀浪・全球資金與科技領頭羊速報】\n"]
 
@@ -3864,33 +4107,68 @@ def smart_reply_with_menu(event, message_text):
 
 
 # ==========================================================
+
 # 🌟 7. 🚀 雲端全時相決策中心 (靜默快取版 - 已廢除定時廣播)
+
 # ==========================================================
+
 def market_patrol_loop():
+
     import time
+
     import threading
 
+
+
     print("📡 [總部軍令] 靜默偵蒐引擎啟動，專心支援前端快取 (定時廣播已拔除)...", flush=True)
+
     # 開機時強制刷新一次大盤與資金流向
+
     threading.Thread(target=lambda: execute_force_refresh()).start()
+
     
+
     # 🌐 跨國矩陣開機首次立即抓取
+
     threading.Thread(target=lambda: fetch_global_matrix_data()).start()
 
+
+
     while True:
+
         try:
+
             # 💥 戰術變更：廢除所有定時的 LINE 廣播！
+
             # 僅保留每 300 秒 (5 分鐘) 在背景執行一次 execute_force_refresh() 
+
             # 讓網頁版戰情室的報價與資金流向保持最新狀態。
+
             time.sleep(300) 
+
             execute_force_refresh()
+
             
+
             # 🌐 同步在背景循環中更新全球跨國資金矩陣數據
+
             fetch_global_matrix_data()
+
             
+
         except Exception as e:
+
             print(f"⚠️ 靜默巡邏異常: {e}", flush=True)
+
             time.sleep(30)
+
+
+
+
+
+
+
+
 
 # ==========================================================
 
