@@ -377,9 +377,13 @@ def fetch_global_matrix_data():
     except:
         pass
 
+    # 💥 強制使用台灣台北時間 (UTC+8)，徹底校正伺服器時差
+    tz_tw = datetime.timezone(datetime.timedelta(hours=8))
+    tw_now_str = datetime.datetime.now(tz_tw).strftime("%Y-%m-%d %H:%M:%S")
+
     # 將市場數據、時間戳記與戰報標籤完整打包
     payload = {
-        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+        "timestamp": tw_now_str,
         "quotes": matrix_results,
         "monitor_tags": monitor_tags_map
     }
