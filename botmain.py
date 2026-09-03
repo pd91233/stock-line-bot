@@ -270,7 +270,7 @@ def update_vips(data):
 MATRIX_CACHE_FILE = "global_matrix_cache.json"
 
 def fetch_global_matrix_data():
-    """ 24小時全天候抓取美股四大指數、ADR與十大戰區龍頭即時數據 """
+    """ 24小時全天候抓取美股四大指數、ADR與十二大戰區龍頭即時數據 """
     tickers = {
         # 🌐 頂級天候儀表板
         "SOX": "^SOX", "IXIC": "^IXIC", "DJI": "^DJI", "INX": "^GSPC",
@@ -278,43 +278,44 @@ def fetch_global_matrix_data():
 
         # ⚙️ 戰區一：半導體與晶片
         "NVDA": "NVDA", "AMD": "AMD", "INTC": "INTC", "QCOM": "QCOM", "AVGO": "AVGO",
+        "ARM": "ARM", "TXN": "TXN", "NXPI": "NXPI",
 
         # 🖥️ 戰區二：AI 伺服器
-        "SMCI": "SMCI", "DELL": "DELL", "VRT": "VRT",
+        "SMCI": "SMCI", "DELL": "DELL", "VRT": "VRT", "HPE": "HPE", "ANET": "ANET",
 
         # 📦 戰區三：先進封裝與設備
-        "ASML": "ASML", "AMAT": "AMAT",
+        "ASML": "ASML", "AMAT": "AMAT", "LRCX": "LRCX", "KLAC": "KLAC", "TER": "TER",
 
         # 📡 戰區四：光通訊與網通
-        "MRVL": "MRVL", "LITE": "LITE", "CSCO": "CSCO",
+        "MRVL": "MRVL", "LITE": "LITE", "CSCO": "CSCO", "COHR": "COHR",
 
         # 🛰️ 戰區五：低軌衛星
-        "ASTS": "ASTS", "IRDM": "IRDM",
+        "ASTS": "ASTS", "IRDM": "IRDM", "LMT": "LMT", "RKLB": "RKLB",
 
         # 💾 戰區六：記憶體
-        "MU": "MU",
+        "MU": "MU", "WDC": "WDC", "STX": "STX",
 
         # ☁️ 戰區七：雲端巨頭與軟體
         "AAPL": "AAPL", "GOOG": "GOOG", "META": "META", "AMZN": "AMZN",
-        "MSFT": "MSFT", "NFLX": "NFLX", "ORCL": "ORCL",
+        "MSFT": "MSFT", "NFLX": "NFLX", "ORCL": "ORCL", "CRM": "CRM", "PLTR": "PLTR",
 
         # ⚡ 戰區八：重電與能源
-        "GE": "GE", "CAT": "CAT", "NEE": "NEE", "DOW": "DOW",
+        "GE": "GE", "CAT": "CAT", "NEE": "NEE", "DOW": "DOW", "ETN": "ETN", "PWR": "PWR",
 
         # 🚗 戰區九：汽車與消費
-        "TSLA": "TSLA", "GM": "GM", "F": "F", "NIKE": "NKE",
+        "TSLA": "TSLA", "GM": "GM", "F": "F", "NIKE": "NKE", "RIVN": "RIVN", "TM": "TM",
 
         # 🚢 戰區十：航運與原物料
-        "ZIM": "ZIM", "XOM": "XOM", "CVX": "CVX", "BA": "BA",
+        "ZIM": "ZIM", "XOM": "XOM", "CVX": "CVX", "BA": "BA", "UPS": "UPS", "FDX": "FDX",
 
         # 🏦 戰區十一：金融與支付
         "BRK-B": "BRK-B", "GS": "GS", "JPM": "JPM", "BAC": "BAC",
-        "C": "C", "AXP": "AXP", "WFC": "WFC", "V": "V", "MA": "MA", "XLF": "XLF",
+        "C": "C", "AXP": "AXP", "WFC": "WFC", "V": "V", "MA": "MA", "MS": "MS", "XLF": "XLF",
 
         # 🏥 戰區十二：生技與民生防禦
         "NBI": "^NBI", "JNJ": "JNJ", "MRK": "MRK", "PFE": "PFE",
         "UNH": "UNH", "PG": "PG", "WMT": "WMT", "HD": "HD",
-        "KO": "KO", "MCD": "MCD", "DIS": "DIS", "MMM": "MMM",
+        "KO": "KO", "MCD": "MCD", "DIS": "DIS", "MMM": "MMM", "LLY": "LLY", "COST": "COST",
 
         # 📈 期貨與加密貨幣
         "NQ": "NQ=F", "YM": "YM=F", "GC": "MGC=F", "CL": "MCL=F",
