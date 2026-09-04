@@ -3475,8 +3475,8 @@ def handle_message(event):
         "MSFT": "MSFT", "NFLX": "NFLX", "ORCL": "ORCL",
 
 		# 🔮 戰區八：次世代封裝與玻璃基板 (新增 GLW 與 ONTO)
-        "GLW": "GLW",
-        "ONTO": "ONTO",
+        "GLW": "GLW", "ONTO": "ONTO",
+        # (註：INTC, AMAT, LRCX, KLAC, COHR 等巨頭已在前方戰區，系統會自動共用報價)
 
         # ⚡ 戰區九：重電與能源
         "GE": "GE", "CAT": "CAT", "NEE": "NEE", "DOW": "DOW",
@@ -3494,7 +3494,7 @@ def handle_message(event):
         # 🏥 戰區十三：生技與民生防禦
         "NBI": "^NBI", "JNJ": "JNJ", "MRK": "MRK", "PFE": "PFE",
         "UNH": "UNH", "PG": "PG", "WMT": "WMT", "HD": "HD",
-        "KO": "KO", "MCD": "MCD", "DIS": "DIS", "MMM": "MMM",
+        "KO": "KO", "MCD": "MCD", "DIS": "DIS", "MMM": "MMM", "LLY": "LLY", "COST": "COST",
 
         # 📈 期貨與加密貨幣
         "NQ": "NQ=F", "YM": "YM=F", "GC": "MGC=F", "CL": "MCL=F",
