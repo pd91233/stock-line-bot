@@ -4635,7 +4635,7 @@ def afternoon_review_loop():
             current_time_num = now.hour * 100 + now.minute
             current_date_str = now.strftime("%Y-%m-%d")
 
-            if not is_weekend and current_time_num >= 1340 and last_sent_date != current_date_str:
+            if last_sent_date != current_date_str:
                 print("🔍 [戰場鑑識] 時間已達 13:40，開始自動結算與生成 HTML 戰情網頁...", flush=True)
                 
                 today_str = now.strftime('%Y%m%d')
