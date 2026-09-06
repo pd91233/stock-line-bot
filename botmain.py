@@ -4254,25 +4254,25 @@ def process_tick_data(data, meta_info, top_ind):
 
 
 
-            intraday_alerted_codes.add(code)
+			intraday_alerted_codes.add(code)
                 
-			# 🎯 [統帥加裝] 計算無腦進場價 (+2檔) 並寫入 CSV 資料庫
-			tick_size = 0.05 if current_z < 50 else (0.1 if current_z < 100 else (0.5 if current_z < 500 else 1.0))
-			suggested_entry = round(current_z + (tick_size * 2), 2)
-			
-			csv_payload = {
-				"time": time_str,
-				"id": code,
-				"name": name,
-				"zone": "早盤" if time_status == "golden" else ("盤中" if time_status == "cooling" else "尾盤"),
-				"funds": int(ignite_value / 10000), # 萬元
-				"change_pct": f"{chg_pct:+.2f}%",
-				"deviation": f"{bias:+.1f}%",
-				"decision": "強勢達標_發送 🔔",
-				"entry": suggested_entry,
-				"stop_loss": vwap_est
-			}
-			log_event(csv_payload)
+                # 🎯 [統帥加裝] 計算無腦進場價 (+2檔) 並寫入 CSV 資料庫
+                tick_size = 0.05 if current_z < 50 else (0.1 if current_z < 100 else (0.5 if current_z < 500 else 1.0))
+                suggested_entry = round(current_z + (tick_size * 2), 2)
+                
+                csv_payload = {
+                    "time": time_str,
+                    "id": code,
+                    "name": name,
+                    "zone": "早盤" if time_status == "golden" else ("盤中" if time_status == "cooling" else "尾盤"),
+                    "funds": int(ignite_value / 10000), # 萬元
+                    "change_pct": f"{chg_pct:+.2f}%",
+                    "deviation": f"{bias:+.1f}%",
+                    "decision": "強勢達標_發送 🔔",
+                    "entry": suggested_entry,
+                    "stop_loss": vwap_est
+                }
+                log_event(csv_payload)
 
 			# 💡 請保留您原本這段完整、豐富的回傳字串，一絲一毫都不少！
 			return (
