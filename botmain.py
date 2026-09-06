@@ -106,7 +106,6 @@ def log_event(data):
     except Exception as e:
         print(f"⚠️ CSV 寫入失敗: {e}")
 
-# 啟動時初始化 CSV
 init_csv()
 
 
@@ -4256,33 +4255,34 @@ def process_tick_data(data, meta_info, top_ind):
 
 
             intraday_alerted_codes.add(code)
+                
+			# 🎯 [統帥加裝] 計算無腦進場價 (+2檔) 並寫入 CSV 資料庫
+			tick_size = 0.05 if current_z < 50 else (0.1 if current_z < 100 else (0.5 if current_z < 500 else 1.0))
+			suggested_entry = round(current_z + (tick_size * 2), 2)
+			
+			csv_payload = {
+				"time": time_str,
+				"id": code,
+				"name": name,
+				"zone": "早盤" if time_status == "golden" else ("盤中" if time_status == "cooling" else "尾盤"),
+				"funds": int(ignite_value / 10000), # 萬元
+				"change_pct": f"{chg_pct:+.2f}%",
+				"deviation": f"{bias:+.1f}%",
+				"decision": "強勢達標_發送 🔔",
+				"entry": suggested_entry,
+				"stop_loss": vwap_est
+			}
+			log_event(csv_payload)
 
-            # 🎯 [統帥加裝] 計算無腦進場價 (+2檔) 並寫入 CSV 資料庫
-            tick_size = 0.05 if current_z < 50 else (0.1 if current_z < 100 else (0.5 if current_z < 500 else 1.0))
-            suggested_entry = round(current_z + (tick_size * 2), 2)
-            
-            csv_payload = {
-                "time": time_str,
-                "id": code,
-                "name": name,
-                "zone": "早盤" if time_status == "golden" else ("盤中" if time_status == "cooling" else "尾盤"),
-                "funds": int(ignite_value / 10000), # 萬元
-                "change_pct": f"{chg_pct:+.2f}%",
-                "deviation": f"{bias:+.1f}%",
-                "decision": "強勢達標_發送 🔔",
-                "entry": suggested_entry,
-                "stop_loss": vwap_est
-            }
-            log_event(csv_payload)
-
-            return (
-                f"[{time_str}] ⚡ {name}({code}) {alert_type}\n"
-                f"{hot_tag} | 現價：{current_z} (均價線:{vwap_est})\n"
-                f"漲幅：{chg_pct:+.2f}% | 均價乖離：{bias:+.1f}%\n"
-                f"🔥 絕對爆量：{int(vol_1m)} 張 (點火資金 {int(ignite_value/10000)}萬){resonance_text}\n"
-                f"----------------------\n"
-                f"{action_guide}"
-            )
+			# 💡 請保留您原本這段完整、豐富的回傳字串，一絲一毫都不少！
+			return (
+				f"[{time_str}] ⚡ {name}({code}) {alert_type}\n"
+				f"{hot_tag} | 現價：{current_z} (均價線:{vwap_est})\n"
+				f"漲幅：{chg_pct:+.2f}% | 均價乖離：{bias:+.1f}%\n"
+				f"🔥 絕對爆量：{int(vol_1m)} 張 (點火資金 {int(ignite_value/10000)}萬){resonance_text}\n"
+				f"----------------------\n"
+				f"{action_guide}"
+			)
     except Exception:
         pass
     return None
