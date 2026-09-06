@@ -4272,15 +4272,15 @@ def process_tick_data(data, meta_info, top_ind):
 			}
 			log_event(csv_payload)
 
-		# 💡 請保留您原本這段完整、豐富的回傳字串，一絲一毫都不少！
-		return (
-			f"[{time_str}] ⚡ {name}({code}) {alert_type}\n"
-			f"{hot_tag} | 現價：{current_z} (均價線:{vwap_est})\n"
-			f"漲幅：{chg_pct:+.2f}% | 均價乖離：{bias:+.1f}%\n"
-			f"🔥 絕對爆量：{int(vol_1m)} 張 (點火資金 {int(ignite_value/10000)}萬){resonance_text}\n"
-			f"----------------------\n"
-			f"{action_guide}"
-		)
+			# 💡 請保留您原本這段完整、豐富的回傳字串，一絲一毫都不少！
+			return (
+				f"[{time_str}] ⚡ {name}({code}) {alert_type}\n"
+				f"{hot_tag} | 現價：{current_z} (均價線:{vwap_est})\n"
+				f"漲幅：{chg_pct:+.2f}% | 均價乖離：{bias:+.1f}%\n"
+				f"🔥 絕對爆量：{int(vol_1m)} 張 (點火資金 {int(ignite_value/10000)}萬){resonance_text}\n"
+				f"----------------------\n"
+				f"{action_guide}"
+			)
     except Exception:
         pass
     return None
