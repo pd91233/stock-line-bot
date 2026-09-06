@@ -624,7 +624,9 @@ def smart_push_with_menu(group_id, message_text):
 
             QuickReplyButton(action=MessageAction(label="🧠 AI 盤勢講評", text="今日盤勢")),
 
-            QuickReplyButton(action=MessageAction(label="📊 盤後選股", text="盤後選股"))
+            QuickReplyButton(action=MessageAction(label="📊 盤後選股", text="盤後選股")),
+			
+			QuickReplyButton(action=MessageAction(label="🛡️ 盤後覆盤", text="盤後覆盤"))
 
         ]
 
@@ -824,6 +826,20 @@ def create_flex_menu_message(message_text):
 
                             style="secondary",
 
+                            height="sm"
+                        )
+                    ]
+                ),
+                # 💥 新增第三排按鈕 (專屬盤後覆盤通道)
+                BoxComponent(
+                    layout='horizontal',
+                    spacing='sm',
+                    margin="sm",
+                    contents=[
+                        ButtonComponent(
+                            action=MessageAction(label="🛡️ 盤後覆盤 (13:40)", text="盤後覆盤"),
+                            style="primary",
+                            color="#2ea043",
                             height="sm"
 
                         )
@@ -2506,6 +2522,19 @@ def callback():
 
 
 
+@app.route("/war_room_<date_str>.html", methods=['GET'])
+def serve_war_room(date_str):
+    import os
+    file_path = f"war_room_{date_str}.html"
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                return f.read()
+        except:
+            return "檔案讀取錯誤", 500
+    return "戰情室尚未生成或無此日期檔案", 404
+
+
 @app.route("/live_data.json", methods=['GET'])
 
 def get_live_data():
@@ -2849,53 +2878,31 @@ def handle_message(event):
     # ==========================================
 
     if user_msg in ["防禦報告", "盤後覆盤", "攔截清單"]:
-
         try:
-
+            today_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime('%Y%m%d')
+            render_url = f"https://stock-line-bot-c8em.onrender.com/war_room_{today_str}.html"
+            
             if not intercepted_traps_log:
-
-                reply_msg = "🛡️ 【戰情室盤後結算】\n今日雷達未偵測到符合爆量門檻的主力陷阱，或皆為有效真實突破。"
-
+                reply_msg = f"🛡️ 【戰情室盤後覆盤】\n今日雷達未偵測到符合爆量門檻的主力陷阱。\n\n📊 今日 13:40 戰情室網頁已結算，請點擊查看：\n{render_url}"
             else:
-
                 reply_lines = [
-
                     "🛡️ 【戰情室盤後覆盤：今日攔截假突破清單】",
-
                     "----------------------"
-
                 ]
-
                 for trap in intercepted_traps_log:
-
                     reply_lines.append(trap)
-
                 
-
                 reply_lines.append("----------------------")
-
-                reply_lines.append(f"🎯 總計為統帥擋下 {len(intercepted_traps_log)} 次主力割韭菜陷阱！子彈防護率 100%！")
-
+                reply_lines.append(f"🎯 總計為統帥擋下 {len(intercepted_traps_log)} 次主力割韭菜陷阱！")
+                reply_lines.append(f"\n📊 今日 13:40 戰情室網頁已結算，請點擊查看：\n{render_url}")
                 
-
                 reply_msg = "\n".join(reply_lines)
-
                 
-
         except Exception as e:
-
             reply_msg = f"⚠️ 查詢防禦報告異常：{e}"
 
-
-
         smart_reply_with_menu(event, reply_msg[:4000])
-
         return
-
-
-
-
-
 
 
 # ==========================================================
@@ -3888,6 +3895,20 @@ def create_flex_menu_message(message_text):
 
                             style="secondary",
 
+                            height="sm"
+                        )
+                    ]
+                ),
+                # 💥 新增第三排按鈕 (專屬盤後覆盤通道)
+                BoxComponent(
+                    layout='horizontal',
+                    spacing='sm',
+                    margin="sm",
+                    contents=[
+                        ButtonComponent(
+                            action=MessageAction(label="🛡️ 盤後覆盤 (13:40)", text="盤後覆盤"),
+                            style="primary",
+                            color="#2ea043",
                             height="sm"
 
                         )
