@@ -4727,6 +4727,28 @@ def afternoon_review_loop():
                 except: pass
                 
                 print(f"✅ [13:40 戰情室] 雲端母艦已成功生成盤後網頁：{output_html_name}", flush=True)
+                
+                # 💥 [統帥加裝] 在自動推播戰報底部加上連結，並執行 LINE 推播！
+                render_url = f"https://stock-line-bot-c8em.onrender.com/{output_html_name}"
+                review_lines.append("----------------------")
+                review_lines.append("🛡️ 今日暗黑風戰情室網頁已自動生成！")
+                review_lines.append(f"👉 請點擊下方連結觀看立體覆盤：\n{render_url}")
+                
+                final_report = "\n".join(review_lines)
+                
+                # 🚀 執行 LINE 群組空投
+                TARGET_GROUP_IDS = [
+                    "C0481b44935888bb1dc20dfd52a675e8a", 
+                    "C47bfa8e16a7216bd54dceb3b5e90cfa0"
+                ]
+                for group_id in TARGET_GROUP_IDS:
+                    try:
+                        smart_push_with_menu(group_id, final_report)
+                    except: 
+                        pass
+                
+                print("🚀 [13:40 戰情室] LINE 戰報推播與網頁空投成功！", flush=True)
+                
                 last_sent_date = current_date_str
 
         except Exception as e:
