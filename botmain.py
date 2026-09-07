@@ -4635,8 +4635,12 @@ def afternoon_review_loop():
             current_time_num = now.hour * 100 + now.minute
             current_date_str = now.strftime("%Y-%m-%d")
 
+            # 💥 測試用：無條件觸發 (測試完請記得改回原版加上 is_weekend 與時間判斷)
             if last_sent_date != current_date_str:
                 print("🔍 [戰場鑑識] 時間已達 13:40，開始自動結算與生成 HTML 戰情網頁...", flush=True)
+                
+                # ✅ 宣告文字戰報陣列 (解決 NameError)
+                review_lines = ["📊 【股海觀浪・全方位戰場鑑識與盤後覆盤】\n----------------------"]
                 
                 today_str = now.strftime('%Y%m%d')
                 csv_filename = f"trading_log_{today_str}.csv"
@@ -4656,18 +4660,28 @@ def afternoon_review_loop():
                             if "強勢達標_發送" in decision:
                                 sent_count += 1
                                 win_count += 1  # 預設勝出
+                                
+                                # ✅ 同步將戰報寫入 LINE 推播文字中
+                                stock_n = row.get("Stock_Name")
+                                stock_c = row.get("Stock_ID")
+                                price_in = row.get("Suggested_Entry")
+                                t_time = row.get("Trigger_Time")
+                                pct = row.get("Price_Change_Pct")
+                                review_lines.append(f"• {stock_n}({stock_c}) ｜ 發報@{price_in} [{t_time}]\n  ╰ 漲跌幅: {pct}\n")
+                                
+                                # 生成 HTML 卡片
                                 sniper_cards_html += f"""
                                 <div class="sniper-card">
                                     <div class="stock-header">
                                         <div>
-                                            <span class="stock-title">{row.get("Stock_Name")} ({row.get("Stock_ID")})</span>
-                                            <span style="font-size: 0.85rem; color: #d29922; margin-left: 8px; font-weight: 600;">⚡ {row.get("Trigger_Time")} 發報</span>
+                                            <span class="stock-title">{stock_n} ({stock_c})</span>
+                                            <span style="font-size: 0.85rem; color: #d29922; margin-left: 8px; font-weight: 600;">⚡ {t_time} 發報</span>
                                         </div>
                                         <span class="zone-tag">{row.get("Time_Zone")}</span>
                                     </div>
                                     <div class="data-row" style="background: rgba(46, 160, 67, 0.1); padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; border: 1px solid rgba(46, 160, 67, 0.2);">
                                         <span class="data-label" style="color: #f0f2f5;">⚡ 發報當下現價 / 漲幅：</span>
-                                        <span class="data-val" style="color: #2ea043; font-size: 1rem;">{row.get("Suggested_Entry")} 元 ｜ {row.get("Price_Change_Pct")}</span>
+                                        <span class="data-val" style="color: #2ea043; font-size: 1rem;">{price_in} 元 ｜ {pct}</span>
                                     </div>
                                     <div class="data-row">
                                         <span class="data-label">點火資金總額</span>
@@ -4677,6 +4691,8 @@ def afternoon_review_loop():
                                 """
 
                 win_rate_pct = f"({(win_count / sent_count * 100):.1f}%)" if sent_count > 0 else "(0.0%)"
+                if sent_count == 0:
+                    review_lines.append("🎯 今日盤中無觸發爆量發報標的。")
 
                 html_content = f"""<!DOCTYPE html>
 <html lang="zh-Hant"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>13:40 盤後戰情指揮室</title>
@@ -4728,7 +4744,7 @@ def afternoon_review_loop():
                 
                 print(f"✅ [13:40 戰情室] 雲端母艦已成功生成盤後網頁：{output_html_name}", flush=True)
                 
-                # 💥 [統帥加裝] 在自動推播戰報底部加上連結，並執行 LINE 推播！
+                # 💥 加上推播連結，並執行 LINE 推播！
                 render_url = f"https://stock-line-bot-c8em.onrender.com/{output_html_name}"
                 review_lines.append("----------------------")
                 review_lines.append("🛡️ 今日暗黑風戰情室網頁已自動生成！")
@@ -4749,6 +4765,7 @@ def afternoon_review_loop():
                 
                 print("🚀 [13:40 戰情室] LINE 戰報推播與網頁空投成功！", flush=True)
                 
+                # ✅ 結算完畢，成功標記為今天已發送，中斷無限迴圈！
                 last_sent_date = current_date_str
 
         except Exception as e:
