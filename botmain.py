@@ -2522,9 +2522,17 @@ def callback():
 
 
 
+# 🎯 建立全域記憶體快取，對抗 Render 洗檔機制
+war_room_memory_cache = {}
+
 @app.route("/war_room_<date_str>.html", methods=['GET'])
 def serve_war_room(date_str):
     import os
+    # 1. 優先從記憶體直接提取（最快，絕對不會被系統洗掉）
+    if date_str in war_room_memory_cache:
+        return war_room_memory_cache[date_str]
+    
+    # 2. 備用方案：如果記憶體沒有，再去硬碟找實體檔案
     file_path = f"war_room_{date_str}.html"
     if os.path.exists(file_path):
         try:
@@ -2532,7 +2540,8 @@ def serve_war_room(date_str):
                 return f.read()
         except:
             return "檔案讀取錯誤", 500
-    return "戰情室尚未生成或無此日期檔案", 404
+            
+    return "戰情室尚未生成，或已被雲端主機休眠重置洗除", 404
 
 
 @app.route("/live_data.json", methods=['GET'])
@@ -4849,11 +4858,15 @@ def afternoon_review_loop():
                 output_html_name = f"war_room_{today_str}.html"
                 with open(output_html_name, "w", encoding="utf-8") as out_f:
                     out_f.write(html_content)
+				# 💥 [統帥加裝] 將生成的網頁同步注入記憶體，對抗硬碟洗檔！
+                global war_room_memory_cache
+                war_room_memory_cache[today_str] = html_content	
                 
                 try:
                     with open("latest_report.html", "w", encoding="utf-8") as out_latest:
                         out_latest.write(html_content)
-                except: pass
+                except: pass					
+				
                 
                 print(f"✅ [13:40 戰情室] 雲端母艦已成功生成盤後網頁：{output_html_name}", flush=True)
                 
