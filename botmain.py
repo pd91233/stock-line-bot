@@ -4192,11 +4192,8 @@ def process_tick_data(data, meta_info, top_ind):
 
             is_volume_surge = False
 
-            
 
-            if time_status == "golden":
-
-                            # 💥 [統帥校準] 嚴格把關主力真實點火資金，徹底防堵假單騙線！
+            # 💥 [統帥校準] 嚴格把關主力真實點火資金，徹底防堵假單騙線！
             if time_status == "golden":
                 # 早盤 (09:00-10:00)：50張爆量 / 5000萬點火資金
                 if vol_1m >= 50 and ignite_value >= 50000000: is_volume_surge = True
