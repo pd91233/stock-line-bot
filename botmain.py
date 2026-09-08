@@ -4644,7 +4644,7 @@ def afternoon_review_loop():
             current_date_str = now.strftime("%Y-%m-%d")
 
             # 💥 測試用：無條件觸發 (測試完請記得改回原版加上 is_weekend 與時間判斷)
-            if not is_weekend and current_time_num >= 1340 and last_sent_date != current_date_str:
+            if not is_weekend and current_time_num >= 1355 and last_sent_date != current_date_str:
                 print("🔍 [戰場鑑識] 時間已達 13:40，開始自動結算與生成 HTML 戰情網頁...", flush=True)
                 
                 # ✅ 宣告文字戰報陣列 (解決 NameError)
