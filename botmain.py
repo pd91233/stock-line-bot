@@ -4868,12 +4868,53 @@ def afternoon_review_loop():
 				
                 
                 print(f"✅ [13:40 戰情室] 雲端母艦已成功生成盤後網頁：{output_html_name}", flush=True)
-                
-                # 💥 加上推播連結，並執行 LINE 推播！
-                render_url = f"https://stock-line-bot-c8em.onrender.com/{output_html_name}"
+
+                # ==========================================
+                # ☁️ [統帥加裝] 將戰情室永久封存至 pCloud (雙路徑分流版)
+                # ==========================================
+                try:
+                    import requests
+                    import os
+                    
+                    # 🛡️ 從雲端環境變數讀取帳密，並直接寫入雙資料夾的絕對座標
+                    PCLOUD_EMAIL = os.environ.get('PCLOUD_EMAIL', '')
+                    PCLOUD_PASSWORD = os.environ.get('PCLOUD_PASSWORD', '')
+                    PCLOUD_FOLDER_ID = os.environ.get('PCLOUD_FOLDER_ID', '31448526072') # money 主資料夾
+                    PCLOUD_HISTORY_FOLDER_ID = os.environ.get('PCLOUD_HISTORY_FOLDER_ID', '33133582905') # history_reports 專屬資料夾
+                    
+                    if PCLOUD_EMAIL and PCLOUD_PASSWORD:
+                        # 1. 取得 API 授權 Token
+                        auth_url = f"https://api.pcloud.com/userinfo?getauth=1&logout=1&username={PCLOUD_EMAIL}&password={PCLOUD_PASSWORD}"
+                        auth_res = requests.get(auth_url, timeout=10).json()
+                        
+                        if "auth" in auth_res:
+                            token = auth_res["auth"]
+                            
+                            # 2. 【每日建檔】上傳今日專屬戰報 到 history_reports 資料夾
+                            with open(output_html_name, 'rb') as f_daily:
+                                file_daily = {'file': (output_html_name, f_daily, 'text/html')}
+                                requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_daily, timeout=15)
+                            
+                            # 3. 【覆蓋最新】上傳 latest_report.html 到 money 主資料夾
+                            if os.path.exists('latest_report.html'):
+                                with open('latest_report.html', 'rb') as f_latest:
+                                    file_latest = {'file': ('latest_report.html', f_latest, 'text/html')}
+                                    requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_FOLDER_ID}", files=file_latest, timeout=15)
+                            
+                            print(f"☁️ [戰術回報] 戰情室雙路徑空投成功！檔案已分別封存至對應資料夾！", flush=True)
+                        else:
+                            print("⚠️ [警告] pCloud 授權失敗，請確認 Render 環境變數帳密是否正確。", flush=True)
+                    else:
+                        print("⚠️ [跳過上傳] 未偵測到 pCloud 環境變數。", flush=True)
+                        
+                except Exception as pcloud_err:
+                    print(f"⚠️ 雲端空投 pCloud 異常: {pcloud_err}", flush=True)
+
+                # 💥 將 LINE 推播連結，精準指向歷史戰報專屬的公開網址！
+                pcloud_public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{output_html_name}"
                 review_lines.append("----------------------")
-                review_lines.append("🛡️ 今日暗黑風戰情室網頁已自動生成！")
-                review_lines.append(f"👉 請點擊下方連結觀看立體覆盤：\n{render_url}")
+                review_lines.append("🛡️ 今日暗黑風戰情室網頁已永久封存！")
+                review_lines.append(f"👉 請點擊下方連結觀看立體覆盤：\n{pcloud_public_url}")
                 
                 final_report = "\n".join(review_lines)
                 
