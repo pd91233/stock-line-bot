@@ -64,9 +64,28 @@ import mplfinance as mpf
 import csv
 
 # ==========================================
-# 📊 盤後戰情 CSV 資料庫自動記錄晶片
+# 📊 盤後戰情 CSV 資料庫自動記錄晶片 (不死鳥重生版)
 # ==========================================
+import csv
+import threading
+
 CSV_FILENAME = f"trading_log_{datetime.datetime.now().strftime('%Y%m%d')}.csv"
+
+def restore_csv_on_boot():
+    """💥 浴火重生：開機時立刻去 pCloud 尋找今天遺失的紀錄檔並下載回本機"""
+    try:
+        # 直接瞄準歷史資料夾的公開網址
+        public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{CSV_FILENAME}?t={int(time.time())}"
+        res = requests.get(public_url, timeout=5)
+        if res.status_code == 200:
+            with open(CSV_FILENAME, 'wb') as f:
+                f.write(res.content)
+            print(f"✅ [浴火重生] 母艦重啟！已成功從 pCloud 救回今日斷點 CSV 戰績！", flush=True)
+    except:
+        pass
+
+# 開機第一件事：嘗試找回記憶
+restore_csv_on_boot()
 
 def init_csv():
     """初始化 CSV 檔案標頭"""
@@ -83,26 +102,44 @@ def init_csv():
         except Exception as e:
             print(f"⚠️ CSV 初始化失敗: {e}")
 
+def backup_csv_to_pcloud_async():
+    """💥 背景特種兵：無聲無息將最新的 CSV 覆蓋到 pCloud，不影響雷達速度"""
+    def task():
+        try:
+            PCLOUD_EMAIL = os.environ.get('PCLOUD_EMAIL', '')
+            PCLOUD_PASSWORD = os.environ.get('PCLOUD_PASSWORD', '')
+            PCLOUD_HISTORY_FOLDER_ID = os.environ.get('PCLOUD_HISTORY_FOLDER_ID', '33133582905')
+            
+            if PCLOUD_EMAIL and PCLOUD_PASSWORD and os.path.exists(CSV_FILENAME):
+                auth_url = f"https://api.pcloud.com/userinfo?getauth=1&logout=1&username={PCLOUD_EMAIL}&password={PCLOUD_PASSWORD}"
+                auth_res = requests.get(auth_url, timeout=5).json()
+                if "auth" in auth_res:
+                    token = auth_res["auth"]
+                    with open(CSV_FILENAME, 'rb') as f_csv:
+                        file_csv = {'file': (CSV_FILENAME, f_csv, 'text/csv')}
+                        requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_csv, timeout=10)
+        except:
+            pass
+    
+    # 派背景執行緒去處理上傳，主程式繼續掃描飆股
+    threading.Thread(target=task, daemon=True).start()
+
 def log_event(data):
-    """逐行追加寫入事件（確保斷線資料不遺失）"""
+    """逐行追加寫入事件，並即時啟動雲端備份"""
     try:
         init_csv()
         with open(CSV_FILENAME, mode='a', newline='', encoding='utf-8-sig') as f:
             writer = csv.writer(f)
             writer.writerow([
-                data.get("time"),
-                data.get("id"),
-                data.get("name"),
-                data.get("zone"),
-                data.get("funds"),
-                data.get("change_pct"),
-                data.get("deviation"),
-                data.get("decision"),
-                data.get("entry"),
-                data.get("stop_loss"),
-                data.get("close_price", ""),
-                data.get("result", "")
+                data.get("time"), data.get("id"), data.get("name"), data.get("zone"),
+                data.get("funds"), data.get("change_pct"), data.get("deviation"),
+                data.get("decision"), data.get("entry"), data.get("stop_loss"),
+                data.get("close_price", ""), data.get("result", "")
             ])
+        
+        # 💥 本機寫入完成後，瞬間呼叫背景特種兵上傳 pCloud
+        backup_csv_to_pcloud_async()
+        
     except Exception as e:
         print(f"⚠️ CSV 寫入失敗: {e}")
 
@@ -4900,6 +4937,14 @@ def afternoon_review_loop():
                                 with open('latest_report.html', 'rb') as f_latest:
                                     file_latest = {'file': ('latest_report.html', f_latest, 'text/html')}
                                     requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_FOLDER_ID}", files=file_latest, timeout=15)
+									
+							# 👇 請在這裡補上這段：4. 【原始數據封存】上傳今日 CSV 紀錄檔
+                            if os.path.exists(csv_filename):
+                                with open(csv_filename, 'rb') as f_csv:
+                                    file_csv = {'file': (csv_filename, f_csv, 'text/csv')}
+                                    requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_csv, timeout=15)
+                                print(f"☁️ [戰術回報] 盤中爆量 CSV 原始紀錄檔 {csv_filename} 已同步封存！", flush=True)
+                            # 👆 補上這段結束								
                             
                             print(f"☁️ [戰術回報] 戰情室雙路徑空投成功！檔案已分別封存至對應資料夾！", flush=True)
                         else:
