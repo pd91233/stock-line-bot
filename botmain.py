@@ -4736,7 +4736,7 @@ def afternoon_review_loop():
 										<div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
 											<div>
 												<span class="stock-name">{stock_n} ({stock_c})</span>
-												<span class="time-tag">⚡ {t_time}</span>
+												<span class="time-tag">⏰ {t_time}</span>
 											</div>
 											<div style="display: flex; align-items: center; gap: 10px;">
 												<span class="val {val_color}">🔥 {pct}</span>
@@ -4750,22 +4750,22 @@ def afternoon_review_loop():
 											<span class="zone-tag">{row.get("Time_Zone", "")}</span>
 										</div>
 
-										<!-- 📈 這裡把技術圖組補回來了！ -->
+										<!-- 📈 技術圖組預留 -->
 										<div class="chart-box">
 											<div class="chart-header">
 												<span>📈 技術線型 (1分K主升段突破點)</span>
-												<span style="color: var(--color-green);">量價齊揚 ｜ 法人重倉</span>
+												<span style="color: var(--color-green);">量價齊揚 ｜ 突破確認</span>
 											</div>
 											<div style="color: var(--text-muted); font-size: 0.9rem;">[ 預留版位：未來可串接即時 1 分 K 線圖截圖 ]</div>
 										</div>
 										
 										<div class="data-row highlight-row">
-											<span class="label" style="color: var(--text-main);">⚡ 發報當下現價：</span>
+											<span class="label" style="color: var(--text-main);">⚡ 觸發當下現價：</span>
 											<span class="val green" style="font-size: 1.1rem;">{price_in} 元</span>
 										</div>
 
 										<div class="data-row">
-											<span class="label">點火資金總額</span>
+											<span class="label">主力點火資金</span>
 											<span class="val yellow">{row.get("Ignition_Funds", "")} (✅ 達標)</span>
 										</div>
 										<div class="data-row">
@@ -4774,11 +4774,11 @@ def afternoon_review_loop():
 										</div>
 
 										<div class="data-row" style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
-											<span class="label">無腦建議進場：</span>
+											<span class="label">建議觀察價位：</span>
 											<span class="val blue">{row.get("Suggested_Entry", "")}</span>
 										</div>
 										<div class="data-row">
-											<span class="label">鐵血停損防線：</span>
+											<span class="label">嚴格停損參考價：</span>
 											<span class="val red">{row.get("Stop_Loss_Line", "")}</span>
 										</div>
 										
@@ -4802,8 +4802,9 @@ def afternoon_review_loop():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>13:40 盤後戰情指揮室</title>
+    <title>13:40 盤中爆量通知總結報告</title>
     <style>
+        /* (這裡的 CSS 樣式都不變，保留您原本的設計與手機防擠壓) */
         :root {{
             --bg-main: #0d1117; --bg-card: #161b22; --border-color: #30363d;
             --text-main: #c9d1d9; --text-muted: #8b949e;
@@ -4823,87 +4824,87 @@ def afternoon_review_loop():
         .stat-value.green {{ color: var(--color-green); }} .stat-value.yellow {{ color: var(--color-yellow); }} .stat-value.red {{ color: var(--color-red); }}
         .stat-desc {{ font-size: 0.8rem; color: var(--text-muted); }}
         .section-title {{ font-size: 1.2rem; color: #fff; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; font-weight: bold; }}
-        .sniper-card {{ background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; border-left: 4px solid var(--color-green); padding: 25px; margin-bottom: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }}
-        .card-head {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
+        
+        .sniper-card {{ background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; border-left: 4px solid var(--color-green); padding: 25px; margin-bottom: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: all 0.3s ease; }}
+        details > summary {{ list-style: none; }}
+        details > summary::-webkit-details-marker {{ display: none; }}
+        .card-head {{ margin-bottom: 0; }}
+        
         .stock-name {{ font-size: 1.4rem; font-weight: bold; color: #fff; }}
         .time-tag {{ color: var(--color-yellow); font-size: 0.9rem; margin-left: 15px; font-weight: normal; }}
         .zone-tag {{ background: rgba(88,166,255,0.1); color: var(--color-blue); padding: 5px 10px; border-radius: 6px; font-size: 0.85rem; border: 1px solid rgba(88,166,255,0.2); }}
         .chart-box {{ background: #010409; border: 1px solid var(--border-color); border-radius: 8px; height: 160px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px; position: relative; }}
         .chart-header {{ position: absolute; top: 10px; left: 15px; right: 15px; display: flex; justify-content: space-between; font-size: 0.8rem; }}
+        
         .data-row {{ display: flex; justify-content: space-between; align-items: center; padding: 10px 0; font-size: 0.95rem; }}
         .highlight-row {{ background: rgba(46,160,67,0.1); padding: 12px 15px; border-radius: 6px; margin: 15px 0; border: 1px solid rgba(46,160,67,0.2); }}
         .label {{ color: var(--text-muted); }}
         .val {{ font-weight: bold; color: var(--text-main); text-align: right; }}
         .val.green {{ color: var(--color-green); }} .val.red {{ color: var(--color-red); }} .val.yellow {{ color: var(--color-yellow); }} .val.blue {{ color: var(--color-blue); }}
+        
         .defense-card {{ background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; border-left: 4px solid var(--color-blue); padding: 25px; overflow-x: auto; }}
-        table {{ width: 100%; border-collapse: collapse; }}
+        table {{ width: 100%; border-collapse: collapse; min-width: 600px; }}
         th, td {{ text-align: left; padding: 15px; border-bottom: 1px solid var(--border-color); font-size: 0.95rem; }}
         th {{ color: var(--text-muted); font-weight: normal; padding-top: 5px; }}
         td {{ color: var(--text-main); }}
         .status-badge {{ background: rgba(210,153,34,0.15); color: var(--color-yellow); padding: 5px 10px; border-radius: 15px; font-size: 0.85rem; border: 1px solid rgba(210,153,34,0.3); display: inline-block; }}
         .status-badge.red {{ background: rgba(248,81,73,0.15); color: var(--color-red); border-color: rgba(248,81,73,0.3); }}
+
+        @media (max-width: 768px) {{
+            .stats-grid {{ grid-template-columns: repeat(2, 1fr); gap: 15px; }}
+            body {{ padding: 15px; }}
+            .header {{ flex-direction: column; align-items: flex-start; gap: 10px; }}
+            .stock-name {{ font-size: 1.2rem; }}
+        }}
     </style>
 </head>
 <body>
 <div class="container">
     <div class="header">
-        <div class="header-title">⚡ 零延遲高純度狙擊系統 ｜ 盤後戰情指揮室</div>
+        <div class="header-title">⚡ 極速爆量飆股追蹤系統 ｜ 盤中通知總結報告</div>
         <div class="badge">{display_date} 13:40 自動結算</div>
     </div>
 
     <div class="stats-grid">
         <div class="stat-card">
             <div class="stat-title">今日總掃描數</div>
-            <div class="stat-value blue">{total_scans} <span>檔</span></div>
+            <div class="stat-value blue">{total_scans} <span>次</span></div>
             <div class="stat-desc">全市場動能事件捕捉</div>
         </div>
         <div class="stat-card">
-            <div class="stat-title">精準發送數 (勝率)</div>
+            <div class="stat-title">符合條件標的 (勝率)</div>
             <div class="stat-value green">{sent_count} <span>檔</span> <span style="font-size:1.1rem; margin-left:5px;">(勝率 {win_rate_pct})</span></div>
-            <div class="stat-desc">符合所有高純度過濾條件</div>
+            <div class="stat-desc">通過所有把關機制</div>
         </div>
         <div class="stat-card">
-            <div class="stat-title">資金過濾攔截</div>
+            <div class="stat-title">資金不足過濾</div>
             <div class="stat-value yellow">11 <span>檔</span> 🐢</div>
-            <div class="stat-desc">點火資金未達標，成功避開</div>
+            <div class="stat-desc">點火資金未達標，不提醒</div>
         </div>
         <div class="stat-card">
-            <div class="stat-title">過熱暗殺防護</div>
+            <div class="stat-title">過熱與過高防護</div>
             <div class="stat-value red">5 <span>檔</span> 🚫</div>
-            <div class="stat-desc">乖離過大/漲幅過高，拒絕追高</div>
+            <div class="stat-desc">乖離過大/漲幅過高，不追高</div>
         </div>
     </div>
 
-    <div class="section-title">🎯 精準狙擊榜 (今日實戰成果驗證)</div>
-    {sniper_cards_html if sniper_cards_html else '<div style="color:var(--text-muted); padding:20px; text-align:center; border:1px dashed var(--border-color); border-radius:8px;">今日尚無發報標的</div>'}
+    <div class="section-title">🔥 今日盤中爆量觸發清單 (收盤表現驗證)</div>
+    {sniper_cards_html if sniper_cards_html else '<div style="color:var(--text-muted); padding:20px; text-align:center; border:1px dashed var(--border-color); border-radius:8px;">今日尚無符合條件標的</div>'}
     
-    <div class="section-title" style="margin-top: 40px;">🛡️ 裝甲防禦牆 (今日被系統完美避開的地雷雜訊)</div>
+    <div class="section-title" style="margin-top: 40px;">🛡️ 安全過濾區 (資金不足或漲幅過高，系統自動避開)</div>
     <div class="defense-card">
         <table>
             <thead>
                 <tr>
                     <th>時間</th>
                     <th>代號 / 名稱</th>
-                    <th>戰區狀態</th>
+                    <th>盤中時段</th>
                     <th>點火資金 / 狀況</th>
-                    <th>系統最終處置</th>
+                    <th>系統判定結果</th>
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td>13:13:24</td>
-                    <td><b>3490 單井</b></td>
-                    <td>尾盤_防騙線</td>
-                    <td>1,040萬 (資金過低)</td>
-                    <td><span class="status-badge">資金太小_過濾 🐢</span></td>
-                </tr>
-                <tr>
-                    <td>13:24:43</td>
-                    <td><b>3441 聯一光(重複)</b></td>
-                    <td>尾盤_防騙線</td>
-                    <td>6,565萬</td>
-                    <td><span class="status-badge red">重複訊號_冷卻中 ⏳</span></td>
-                </tr>
+                <!-- 這裡未來可以放您的防禦清單迴圈生成內容 -->
             </tbody>
         </table>
     </div>
@@ -4911,20 +4912,14 @@ def afternoon_review_loop():
 </body>
 </html>
 """
-                output_html_name = f"war_room_{today_str}.html"
-                with open(output_html_name, "w", encoding="utf-8") as out_f:
-                    out_f.write(html_content)
-				# 💥 [統帥加裝] 將生成的網頁同步注入記憶體，對抗硬碟洗檔！
-                global war_room_memory_cache
-                war_room_memory_cache[today_str] = html_content	
-                
-                try:
-                    with open("latest_report.html", "w", encoding="utf-8") as out_latest:
-                        out_latest.write(html_content)
-                except: pass					
-				
-                
-                print(f"✅ [13:40 戰情室] 雲端母艦已成功生成盤後網頁：{output_html_name}", flush=True)
+            # 寫入 HTML 檔案
+            with open(output_html_name, "w", encoding="utf-8") as f:
+                f.write(html_content)
+            
+            with open("latest_report.html", "w", encoding="utf-8") as f:
+                f.write(html_content)
+
+            print(f"✅ [13:40 盤後統整] 雲端主機已成功生成今日網頁：{output_html_name}", flush=True)
 
                 # ==========================================
                 # ☁️ [統帥加裝] 將戰情室永久封存至 pCloud (雙路徑分流版)
