@@ -4912,7 +4912,9 @@ def afternoon_review_loop():
 </body>
 </html>
 """
-            # 寫入 HTML 檔案
+
+
+# 寫入 HTML 檔案
             with open(output_html_name, "w", encoding="utf-8") as f:
                 f.write(html_content)
             
@@ -4922,13 +4924,13 @@ def afternoon_review_loop():
             print(f"✅ [13:40 盤後統整] 雲端主機已成功生成今日網頁：{output_html_name}", flush=True)
 
             # ==========================================
-            # ☁️ [統帥加裝] 將戰情室永久封存至 pCloud (雙路徑分流版)
+            # ☁️ 將盤後報告與紀錄永久封存至 pCloud (雙路徑分流版)
             # ==========================================
             try:
                 import requests
                 import os
                 
-                # 🛡️ 從雲端環境變數讀取帳密，並直接寫入雙資料夾的絕對座標
+                # 從雲端環境變數讀取帳密，並直接寫入雙資料夾的絕對座標
                 PCLOUD_EMAIL = os.environ.get('PCLOUD_EMAIL', '')
                 PCLOUD_PASSWORD = os.environ.get('PCLOUD_PASSWORD', '')
                 PCLOUD_FOLDER_ID = os.environ.get('PCLOUD_FOLDER_ID', '31448526072') # money 主資料夾
@@ -4942,7 +4944,7 @@ def afternoon_review_loop():
                     if "auth" in auth_res:
                         token = auth_res["auth"]
                         
-                        # 2. 【每日建檔】上傳今日專屬戰報 到 history_reports 資料夾
+                        # 2. 【每日建檔】上傳今日盤後報告到 history_reports 資料夾
                         with open(output_html_name, 'rb') as f_daily:
                             file_daily = {'file': (output_html_name, f_daily, 'text/html')}
                             requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_daily, timeout=15)
@@ -4953,32 +4955,31 @@ def afternoon_review_loop():
                                 file_latest = {'file': ('latest_report.html', f_latest, 'text/html')}
                                 requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_FOLDER_ID}", files=file_latest, timeout=15)
                                 
-                        # 👇 請在這裡補上這段：4. 【原始數據封存】上傳今日 CSV 紀錄檔
+                        # 4. 【原始數據封存】上傳今日 CSV 紀錄檔
                         if os.path.exists(csv_filename):
                             with open(csv_filename, 'rb') as f_csv:
                                 file_csv = {'file': (csv_filename, f_csv, 'text/csv')}
                                 requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_csv, timeout=15)
-                            print(f"☁️ [戰術回報] 盤中爆量 CSV 原始紀錄檔 {csv_filename} 已同步封存！", flush=True)
-                        # 👆 補上這段結束                              
+                            print(f"☁️ [雲端備份] 盤中爆量 CSV 原始紀錄檔 {csv_filename} 已同步封存！", flush=True)
                         
-                        print(f"☁️ [戰術回報] 戰情室雙路徑空投成功！檔案已分別封存至對應資料夾！", flush=True)
+                        print(f"☁️ [雲端備份] 盤後報告與資料已成功封存至對應資料夾！", flush=True)
                     else:
                         print("⚠️ [警告] pCloud 授權失敗，請確認 Render 環境變數帳密是否正確。", flush=True)
                 else:
                     print("⚠️ [跳過上傳] 未偵測到 pCloud 環境變數。", flush=True)
                     
             except Exception as pcloud_err:
-                print(f"⚠️ 雲端空投 pCloud 異常: {pcloud_err}", flush=True)
+                print(f"⚠️ 雲端備份 pCloud 異常: {pcloud_err}", flush=True)
 
-            # 💥 將 LINE 推播連結，精準指向歷史戰報專屬的公開網址！
+            # 將 LINE 推播連結，精準指向歷史報告專屬的公開網址！
             pcloud_public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{output_html_name}"
             review_lines.append("----------------------")
-            review_lines.append("🛡️ 今日暗黑風戰情室網頁已永久封存！")
-            review_lines.append(f"👉 請點擊下方連結觀看立體覆盤：\n{pcloud_public_url}")
+            review_lines.append("🛡️ 今日盤後統整網頁已永久封存！")
+            review_lines.append(f"👉 請點擊下方連結觀看收盤驗證：\n{pcloud_public_url}")
             
             final_report = "\n".join(review_lines)
             
-            # 🚀 執行 LINE 群組空投
+            # 執行 LINE 群組發送
             TARGET_GROUP_IDS = [
                 "C0481b44935888bb1dc20dfd52a675e8a", 
                 "C47bfa8e16a7216bd54dceb3b5e90cfa0"
@@ -4989,15 +4990,15 @@ def afternoon_review_loop():
                 except: 
                     pass
             
-            print("🚀 [13:40 戰情室] LINE 戰報推播與網頁空投成功！", flush=True)
+            print("🚀 [13:40 盤後統整] LINE 盤後統整推播與網頁上傳成功！", flush=True)
             
             # ✅ 結算完畢，成功標記為今天已發送，中斷無限迴圈！
             last_sent_date = current_date_str
 
-    except Exception as e:
-        print(f"⚠️ 雲端收盤鑑識迴圈異常: {e}", flush=True)
-    
-    time.sleep(30)
+        except Exception as e:
+            print(f"⚠️ 雲端收盤鑑識迴圈異常: {e}", flush=True)
+        
+        time.sleep(30)
 
 
 # 啟動盤中巡邏引擎
