@@ -4704,9 +4704,9 @@ def afternoon_review_loop():
             output_html_name = f"war_room_{today_str}.html"
             csv_filename = f"trading_log_{today_str}.csv"
 
-            # 💥 測試用：無條件觸發
-            if not is_weekend and current_time_num >= 1355 and last_sent_date != current_date_str:
-                print("🔍 [戰場鑑識] 時間已達 13:40，開始自動結算與生成 HTML 戰情網頁...", flush=True)
+            # 💥 【修改這裡】加上嚴格的時間上下限窗口 (13:55 ~ 14:30)，防止重開機誤觸發
+            if not is_weekend and (1355 <= current_time_num <= 1430) and last_sent_date != current_date_str:
+                print("🔍 [戰場鑑識] 時間已達 13:55，開始自動結算與生成 HTML 戰情網頁...", flush=True)
                 
                 # ✅ 宣告文字戰報陣列
                 review_lines = ["📊 【股海觀浪・全方位戰場鑑識與盤後覆盤】\n----------------------"]
