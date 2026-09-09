@@ -4685,34 +4685,31 @@ def afternoon_review_loop():
     
     print("📡 [收盤檢討哨] 雲端 HTML 戰情室自動生成引擎已就位...", flush=True)
     last_sent_date = ""
-	
-	# 💥 直接在這裡預先宣告，確保任何時候都有數值
-    current_date_str_init = (datetime.datetime.utcnow() + datetime.timedelta(hours=8)).strftime('%Y%m%d')
-    output_html_name = f"war_room_{current_date_str_init}.html"
-    csv_filename = f"trading_log_{current_date_str_init}.csv"	
+    
+    # 函式一開始就安全預先宣告變數
+    today_init = (datetime.datetime.utcnow() + datetime.timedelta(hours=8)).strftime('%Y%m%d')
+    output_html_name = f"war_room_{today_init}.html"
+    csv_filename = f"trading_log_{today_init}.csv"
 
     while True:
         try:
-			html_content = ""  # 👈 加上這行，預先初始化防護
+            html_content = ""  # 預先初始化，防止未定義報錯
             now = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
             is_weekend = now.weekday() >= 5
             current_time_num = now.hour * 100 + now.minute
             current_date_str = now.strftime("%Y-%m-%d")
+            
+            # 隨時同步當天的檔名
+            today_str = now.strftime('%Y%m%d')
+            output_html_name = f"war_room_{today_str}.html"
+            csv_filename = f"trading_log_{today_str}.csv"
 
-            # 💥 測試用：無條件觸發 (測試完請記得改回原版加上 is_weekend 與時間判斷)
+            # 💥 測試用：無條件觸發
             if not is_weekend and current_time_num >= 1355 and last_sent_date != current_date_str:
                 print("🔍 [戰場鑑識] 時間已達 13:40，開始自動結算與生成 HTML 戰情網頁...", flush=True)
-				
-				# 💥 【在這裡加上這三行，確保變數第一時間被定義】
-                current_date_str_file = now.strftime('%Y%m%d')
-                output_html_name = f"war_room_{current_date_str_file}.html"
-                csv_filename = f"trading_log_{current_date_str_file}.csv"
                 
-                # ✅ 宣告文字戰報陣列 (解決 NameError)
+                # ✅ 宣告文字戰報陣列
                 review_lines = ["📊 【股海觀浪・全方位戰場鑑識與盤後覆盤】\n----------------------"]
-                
-                today_str = now.strftime('%Y%m%d')
-                csv_filename = f"trading_log_{today_str}.csv"
                 display_date = now.strftime("%Y.%m.%d (%a)")
                 
                 total_scans = 0
