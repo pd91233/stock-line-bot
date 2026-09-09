@@ -4693,6 +4693,7 @@ def afternoon_review_loop():
 
     while True:
         try:
+			html_content = ""  # 👈 加上這行，預先初始化防護
             now = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
             is_weekend = now.weekday() >= 5
             current_time_num = now.hour * 100 + now.minute
