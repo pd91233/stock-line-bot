@@ -675,8 +675,8 @@ def smart_push_with_menu(group_id, message_text):
             QuickReplyButton(action=MessageAction(label="🧠 AI 盤勢講評", text="今日盤勢")),
 
             QuickReplyButton(action=MessageAction(label="📊 盤後選股", text="盤後選股")),
-			
-			QuickReplyButton(action=MessageAction(label="🛡️ 盤後覆盤", text="盤後覆盤"))
+            
+            QuickReplyButton(action=MessageAction(label="🛡️ 盤後覆盤", text="盤後覆盤"))
 
         ]
 
@@ -3585,7 +3585,7 @@ def handle_message(event):
         "AAPL": "AAPL", "GOOG": "GOOG", "META": "META", "AMZN": "AMZN",
         "MSFT": "MSFT", "NFLX": "NFLX", "ORCL": "ORCL",
 
-		# 🔮 戰區八：次世代封裝與玻璃基板 (新增 GLW 與 ONTO)
+        # 🔮 戰區八：次世代封裝與玻璃基板 (新增 GLW 與 ONTO)
         "GLW": "GLW", "ONTO": "ONTO",
         # (註：INTC, AMAT, LRCX, KLAC, COHR 等巨頭已在前方戰區，系統會自動共用報價)
 
@@ -4731,64 +4731,64 @@ def afternoon_review_loop():
                                 # 💥 [統帥升級] 疊合抽屜式狙擊卡片 (預設展開，點擊標題可收合)
                                 # =======================================
                                 sniper_cards_html += f"""
-								<details class="sniper-card" open>
-									<summary class="card-head" style="cursor: pointer; outline: none; list-style: none;">
-										<div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
-											<div>
-												<span class="stock-name">{stock_n} ({stock_c})</span>
-												<span class="time-tag">⏰ {t_time}</span>
-											</div>
-											<div style="display: flex; align-items: center; gap: 10px;">
-												<span class="val {val_color}">🔥 {pct}</span>
-												<span style="color: var(--text-muted); font-size: 0.8rem;">▼ 展開/收合</span>
-											</div>
-										</div>
-									</summary>
-									
-									<div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
-										<div style="margin-bottom: 15px;">
-											<span class="zone-tag">{row.get("Time_Zone", "")}</span>
-										</div>
+                                <details class="sniper-card" open>
+                                    <summary class="card-head" style="cursor: pointer; outline: none; list-style: none;">
+                                        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                                            <div>
+                                                <span class="stock-name">{stock_n} ({stock_c})</span>
+                                                <span class="time-tag">⏰ {t_time}</span>
+                                            </div>
+                                            <div style="display: flex; align-items: center; gap: 10px;">
+                                                <span class="val {val_color}">🔥 {pct}</span>
+                                                <span style="color: var(--text-muted); font-size: 0.8rem;">▼ 展開/收合</span>
+                                            </div>
+                                        </div>
+                                    </summary>
+                                    
+                                    <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
+                                        <div style="margin-bottom: 15px;">
+                                            <span class="zone-tag">{row.get("Time_Zone", "")}</span>
+                                        </div>
 
-										<!-- 📈 技術圖組預留 -->
-										<div class="chart-box">
-											<div class="chart-header">
-												<span>📈 技術線型 (1分K主升段突破點)</span>
-												<span style="color: var(--color-green);">量價齊揚 ｜ 突破確認</span>
-											</div>
-											<div style="color: var(--text-muted); font-size: 0.9rem;">[ 預留版位：未來可串接即時 1 分 K 線圖截圖 ]</div>
-										</div>
-										
-										<div class="data-row highlight-row">
-											<span class="label" style="color: var(--text-main);">⚡ 觸發當下現價：</span>
-											<span class="val green" style="font-size: 1.1rem;">{price_in} 元</span>
-										</div>
+                                        <!-- 📈 技術圖組預留 -->
+                                        <div class="chart-box">
+                                            <div class="chart-header">
+                                                <span>📈 技術線型 (1分K主升段突破點)</span>
+                                                <span style="color: var(--color-green);">量價齊揚 ｜ 突破確認</span>
+                                            </div>
+                                            <div style="color: var(--text-muted); font-size: 0.9rem;">[ 預留版位：未來可串接即時 1 分 K 線圖截圖 ]</div>
+                                        </div>
+                                        
+                                        <div class="data-row highlight-row">
+                                            <span class="label" style="color: var(--text-main);">⚡ 觸發當下現價：</span>
+                                            <span class="val green" style="font-size: 1.1rem;">{price_in} 元</span>
+                                        </div>
 
-										<div class="data-row">
-											<span class="label">主力點火資金</span>
-											<span class="val yellow">{row.get("Ignition_Funds", "")} (✅ 達標)</span>
-										</div>
-										<div class="data-row">
-											<span class="label">正乖離率狀況</span>
-											<span class="val main">{row.get("Deviation_Rate", "")}</span>
-										</div>
+                                        <div class="data-row">
+                                            <span class="label">主力點火資金</span>
+                                            <span class="val yellow">{row.get("Ignition_Funds", "")} (✅ 達標)</span>
+                                        </div>
+                                        <div class="data-row">
+                                            <span class="label">正乖離率狀況</span>
+                                            <span class="val main">{row.get("Deviation_Rate", "")}</span>
+                                        </div>
 
-										<div class="data-row" style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
-											<span class="label">建議觀察價位：</span>
-											<span class="val blue">{row.get("Suggested_Entry", "")}</span>
-										</div>
-										<div class="data-row">
-											<span class="label">嚴格停損參考價：</span>
-											<span class="val red">{row.get("Stop_Loss_Line", "")}</span>
-										</div>
-										
-										<div class="data-row" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
-											<span class="label">13:40 結算狀態：</span>
-											<span class="val {val_color}">{close_price} 元 ｜ {row.get("Trade_Result", "")}</span>
-										</div>
-									</div>
-								</details>
-								"""
+                                        <div class="data-row" style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
+                                            <span class="label">建議觀察價位：</span>
+                                            <span class="val blue">{row.get("Suggested_Entry", "")}</span>
+                                        </div>
+                                        <div class="data-row">
+                                            <span class="label">嚴格停損參考價：</span>
+                                            <span class="val red">{row.get("Stop_Loss_Line", "")}</span>
+                                        </div>
+                                        
+                                        <div class="data-row" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+                                            <span class="label">13:40 結算狀態：</span>
+                                            <span class="val {val_color}">{close_price} 元 ｜ {row.get("Trade_Result", "")}</span>
+                                        </div>
+                                    </div>
+                                </details>
+                                """
 
                 win_rate_pct = f"{(win_count / sent_count * 100):.0f}%" if sent_count > 0 else "0%"
                 if sent_count == 0:
@@ -4921,83 +4921,83 @@ def afternoon_review_loop():
 
             print(f"✅ [13:40 盤後統整] 雲端主機已成功生成今日網頁：{output_html_name}", flush=True)
 
-			# ==========================================
-			# ☁️ [統帥加裝] 將戰情室永久封存至 pCloud (雙路徑分流版)
-			# ==========================================
-			try:
-				import requests
-				import os
-				
-				# 🛡️ 從雲端環境變數讀取帳密，並直接寫入雙資料夾的絕對座標
-				PCLOUD_EMAIL = os.environ.get('PCLOUD_EMAIL', '')
-				PCLOUD_PASSWORD = os.environ.get('PCLOUD_PASSWORD', '')
-				PCLOUD_FOLDER_ID = os.environ.get('PCLOUD_FOLDER_ID', '31448526072') # money 主資料夾
-				PCLOUD_HISTORY_FOLDER_ID = os.environ.get('PCLOUD_HISTORY_FOLDER_ID', '33133582905') # history_reports 專屬資料夾
-				
-				if PCLOUD_EMAIL and PCLOUD_PASSWORD:
-					# 1. 取得 API 授權 Token
-					auth_url = f"https://api.pcloud.com/userinfo?getauth=1&logout=1&username={PCLOUD_EMAIL}&password={PCLOUD_PASSWORD}"
-					auth_res = requests.get(auth_url, timeout=10).json()
-					
-					if "auth" in auth_res:
-						token = auth_res["auth"]
-						
-						# 2. 【每日建檔】上傳今日專屬戰報 到 history_reports 資料夾
-						with open(output_html_name, 'rb') as f_daily:
-							file_daily = {'file': (output_html_name, f_daily, 'text/html')}
-							requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_daily, timeout=15)
-						
-						# 3. 【覆蓋最新】上傳 latest_report.html 到 money 主資料夾
-						if os.path.exists('latest_report.html'):
-							with open('latest_report.html', 'rb') as f_latest:
-								file_latest = {'file': ('latest_report.html', f_latest, 'text/html')}
-								requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_FOLDER_ID}", files=file_latest, timeout=15)
-								
-						# 👇 請在這裡補上這段：4. 【原始數據封存】上傳今日 CSV 紀錄檔
-						if os.path.exists(csv_filename):
-							with open(csv_filename, 'rb') as f_csv:
-								file_csv = {'file': (csv_filename, f_csv, 'text/csv')}
-								requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_csv, timeout=15)
-							print(f"☁️ [戰術回報] 盤中爆量 CSV 原始紀錄檔 {csv_filename} 已同步封存！", flush=True)
-						# 👆 補上這段結束								
-						
-						print(f"☁️ [戰術回報] 戰情室雙路徑空投成功！檔案已分別封存至對應資料夾！", flush=True)
-					else:
-						print("⚠️ [警告] pCloud 授權失敗，請確認 Render 環境變數帳密是否正確。", flush=True)
-				else:
-					print("⚠️ [跳過上傳] 未偵測到 pCloud 環境變數。", flush=True)
-					
-			except Exception as pcloud_err:
-				print(f"⚠️ 雲端空投 pCloud 異常: {pcloud_err}", flush=True)
+            # ==========================================
+            # ☁️ [統帥加裝] 將戰情室永久封存至 pCloud (雙路徑分流版)
+            # ==========================================
+            try:
+                import requests
+                import os
+                
+                # 🛡️ 從雲端環境變數讀取帳密，並直接寫入雙資料夾的絕對座標
+                PCLOUD_EMAIL = os.environ.get('PCLOUD_EMAIL', '')
+                PCLOUD_PASSWORD = os.environ.get('PCLOUD_PASSWORD', '')
+                PCLOUD_FOLDER_ID = os.environ.get('PCLOUD_FOLDER_ID', '31448526072') # money 主資料夾
+                PCLOUD_HISTORY_FOLDER_ID = os.environ.get('PCLOUD_HISTORY_FOLDER_ID', '33133582905') # history_reports 專屬資料夾
+                
+                if PCLOUD_EMAIL and PCLOUD_PASSWORD:
+                    # 1. 取得 API 授權 Token
+                    auth_url = f"https://api.pcloud.com/userinfo?getauth=1&logout=1&username={PCLOUD_EMAIL}&password={PCLOUD_PASSWORD}"
+                    auth_res = requests.get(auth_url, timeout=10).json()
+                    
+                    if "auth" in auth_res:
+                        token = auth_res["auth"]
+                        
+                        # 2. 【每日建檔】上傳今日專屬戰報 到 history_reports 資料夾
+                        with open(output_html_name, 'rb') as f_daily:
+                            file_daily = {'file': (output_html_name, f_daily, 'text/html')}
+                            requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_daily, timeout=15)
+                        
+                        # 3. 【覆蓋最新】上傳 latest_report.html 到 money 主資料夾
+                        if os.path.exists('latest_report.html'):
+                            with open('latest_report.html', 'rb') as f_latest:
+                                file_latest = {'file': ('latest_report.html', f_latest, 'text/html')}
+                                requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_FOLDER_ID}", files=file_latest, timeout=15)
+                                
+                        # 👇 請在這裡補上這段：4. 【原始數據封存】上傳今日 CSV 紀錄檔
+                        if os.path.exists(csv_filename):
+                            with open(csv_filename, 'rb') as f_csv:
+                                file_csv = {'file': (csv_filename, f_csv, 'text/csv')}
+                                requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_csv, timeout=15)
+                            print(f"☁️ [戰術回報] 盤中爆量 CSV 原始紀錄檔 {csv_filename} 已同步封存！", flush=True)
+                        # 👆 補上這段結束                              
+                        
+                        print(f"☁️ [戰術回報] 戰情室雙路徑空投成功！檔案已分別封存至對應資料夾！", flush=True)
+                    else:
+                        print("⚠️ [警告] pCloud 授權失敗，請確認 Render 環境變數帳密是否正確。", flush=True)
+                else:
+                    print("⚠️ [跳過上傳] 未偵測到 pCloud 環境變數。", flush=True)
+                    
+            except Exception as pcloud_err:
+                print(f"⚠️ 雲端空投 pCloud 異常: {pcloud_err}", flush=True)
 
-			# 💥 將 LINE 推播連結，精準指向歷史戰報專屬的公開網址！
-			pcloud_public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{output_html_name}"
-			review_lines.append("----------------------")
-			review_lines.append("🛡️ 今日暗黑風戰情室網頁已永久封存！")
-			review_lines.append(f"👉 請點擊下方連結觀看立體覆盤：\n{pcloud_public_url}")
-			
-			final_report = "\n".join(review_lines)
-			
-			# 🚀 執行 LINE 群組空投
-			TARGET_GROUP_IDS = [
-				"C0481b44935888bb1dc20dfd52a675e8a", 
-				"C47bfa8e16a7216bd54dceb3b5e90cfa0"
-			]
-			for group_id in TARGET_GROUP_IDS:
-				try:
-					smart_push_with_menu(group_id, final_report)
-				except: 
-					pass
-			
-			print("🚀 [13:40 戰情室] LINE 戰報推播與網頁空投成功！", flush=True)
-			
-			# ✅ 結算完畢，成功標記為今天已發送，中斷無限迴圈！
-			last_sent_date = current_date_str
+            # 💥 將 LINE 推播連結，精準指向歷史戰報專屬的公開網址！
+            pcloud_public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{output_html_name}"
+            review_lines.append("----------------------")
+            review_lines.append("🛡️ 今日暗黑風戰情室網頁已永久封存！")
+            review_lines.append(f"👉 請點擊下方連結觀看立體覆盤：\n{pcloud_public_url}")
+            
+            final_report = "\n".join(review_lines)
+            
+            # 🚀 執行 LINE 群組空投
+            TARGET_GROUP_IDS = [
+                "C0481b44935888bb1dc20dfd52a675e8a", 
+                "C47bfa8e16a7216bd54dceb3b5e90cfa0"
+            ]
+            for group_id in TARGET_GROUP_IDS:
+                try:
+                    smart_push_with_menu(group_id, final_report)
+                except: 
+                    pass
+            
+            print("🚀 [13:40 戰情室] LINE 戰報推播與網頁空投成功！", flush=True)
+            
+            # ✅ 結算完畢，成功標記為今天已發送，中斷無限迴圈！
+            last_sent_date = current_date_str
 
-	except Exception as e:
-		print(f"⚠️ 雲端收盤鑑識迴圈異常: {e}", flush=True)
-	
-	time.sleep(30)
+    except Exception as e:
+        print(f"⚠️ 雲端收盤鑑識迴圈異常: {e}", flush=True)
+    
+    time.sleep(30)
 
 
 # 啟動盤中巡邏引擎
