@@ -4987,7 +4987,7 @@ def afternoon_review_loop():
             
             final_report = "\n".join(review_lines)
             
-            # 執行 LINE 群組發送
+            # 🚀 執行 LINE 群組發送
             TARGET_GROUP_IDS = [
                 "C0481b44935888bb1dc20dfd52a675e8a", 
                 "C47bfa8e16a7216bd54dceb3b5e90cfa0"
@@ -5000,13 +5000,15 @@ def afternoon_review_loop():
             
             print("🚀 [13:40 盤後統整] LINE 盤後統整推播與網頁上傳成功！", flush=True)
             
-            # ✅ 結算完畢，成功標記為今天已發送，中斷無限迴圈！
+            # 🔒 【絕對防護鎖】直接把今天日期強制寫死，確保今天絕對不會再觸發第二次！
             last_sent_date = current_date_str
+            print(f"🔒 [防護生效] 今日 ({current_date_str}) 結算已經完成上鎖，今日不再重複發送。", flush=True)
 
         except Exception as e:
             print(f"⚠️ 雲端收盤鑑識迴圈異常: {e}", flush=True)
         
-        time.sleep(30)
+        # 讓迴圈休息久一點（改為每 5 分鐘檢查一次，避免頻繁觸發）
+        time.sleep(300)
 
 
 # 啟動盤中巡邏引擎
