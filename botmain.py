@@ -4696,6 +4696,11 @@ def afternoon_review_loop():
             # 💥 測試用：無條件觸發 (測試完請記得改回原版加上 is_weekend 與時間判斷)
             if not is_weekend and current_time_num >= 1355 and last_sent_date != current_date_str:
                 print("🔍 [戰場鑑識] 時間已達 13:40，開始自動結算與生成 HTML 戰情網頁...", flush=True)
+				
+				# 💥 【在這裡加上這三行，確保變數第一時間被定義】
+                current_date_str_file = now.strftime('%Y%m%d')
+                output_html_name = f"war_room_{current_date_str_file}.html"
+                csv_filename = f"trading_log_{current_date_str_file}.csv"
                 
                 # ✅ 宣告文字戰報陣列 (解決 NameError)
                 review_lines = ["📊 【股海觀浪・全方位戰場鑑識與盤後覆盤】\n----------------------"]
