@@ -103,31 +103,44 @@ def init_csv():
             print(f"⚠️ CSV 初始化失敗: {e}")
 
 def backup_csv_to_pcloud_async():
-    """💥 背景特種兵：無聲無息將最新的 CSV 覆蓋到 pCloud，不影響雷達速度"""
+    """背景小幫手：負責把 CSV 傳到 pCloud，並顯示成功或失敗原因"""
     def task():
         try:
+            import os
+            import requests
             PCLOUD_EMAIL = os.environ.get('PCLOUD_EMAIL', '')
             PCLOUD_PASSWORD = os.environ.get('PCLOUD_PASSWORD', '')
+            # 指向 history_reports 資料夾
             PCLOUD_HISTORY_FOLDER_ID = os.environ.get('PCLOUD_HISTORY_FOLDER_ID', '33133582905')
             
-            if PCLOUD_EMAIL and PCLOUD_PASSWORD and os.path.exists(CSV_FILENAME):
+            if not PCLOUD_EMAIL or not PCLOUD_PASSWORD:
+                print("⚠️ [背景備份失敗] 抓不到 pCloud 帳號密碼，請檢查 Render 環境變數！", flush=True)
+                return
+                
+            if os.path.exists(CSV_FILENAME):
                 auth_url = f"https://api.pcloud.com/userinfo?getauth=1&logout=1&username={PCLOUD_EMAIL}&password={PCLOUD_PASSWORD}"
-                auth_res = requests.get(auth_url, timeout=5).json()
+                auth_res = requests.get(auth_url, timeout=10).json()
+                
                 if "auth" in auth_res:
                     token = auth_res["auth"]
                     with open(CSV_FILENAME, 'rb') as f_csv:
                         file_csv = {'file': (CSV_FILENAME, f_csv, 'text/csv')}
-                        requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_csv, timeout=10)
-        except:
-            pass
+                        res = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_csv, timeout=15)
+                        print(f"☁️ [背景備份] CSV 上傳 pCloud 執行完畢！回傳結果: {res.status_code}", flush=True)
+                else:
+                    print("⚠️ [背景備份失敗] pCloud 登入失敗，請確認帳密是否正確！", flush=True)
+        except Exception as e:
+            print(f"⚠️ [背景備份出錯] 發生異常: {e}", flush=True)
     
-    # 派背景執行緒去處理上傳，主程式繼續掃描飆股
+    # 派背景小幫手去處理上傳，主程式繼續掃描
+    import threading
     threading.Thread(target=task, daemon=True).start()
 
 def log_event(data):
     """逐行追加寫入事件，並即時啟動雲端備份"""
     try:
         init_csv()
+        import csv
         with open(CSV_FILENAME, mode='a', newline='', encoding='utf-8-sig') as f:
             writer = csv.writer(f)
             writer.writerow([
@@ -137,7 +150,7 @@ def log_event(data):
                 data.get("close_price", ""), data.get("result", "")
             ])
         
-        # 💥 本機寫入完成後，瞬間呼叫背景特種兵上傳 pCloud
+        # 本機寫入完成後，呼叫背景小幫手傳上 pCloud
         backup_csv_to_pcloud_async()
         
     except Exception as e:
