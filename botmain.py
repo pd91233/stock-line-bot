@@ -4685,6 +4685,11 @@ def afternoon_review_loop():
     
     print("📡 [收盤檢討哨] 雲端 HTML 戰情室自動生成引擎已就位...", flush=True)
     last_sent_date = ""
+	
+	# 💥 直接在這裡預先宣告，確保任何時候都有數值
+    current_date_str_init = (datetime.datetime.utcnow() + datetime.timedelta(hours=8)).strftime('%Y%m%d')
+    output_html_name = f"war_room_{current_date_str_init}.html"
+    csv_filename = f"trading_log_{current_date_str_init}.csv"	
 
     while True:
         try:
