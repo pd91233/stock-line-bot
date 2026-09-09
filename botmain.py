@@ -4953,9 +4953,13 @@ def afternoon_review_loop():
                         token = auth_res["auth"]
                         
                         # 2. 【每日建檔】上傳今日盤後報告到 history_reports 資料夾
-                        with open(output_html_name, 'rb') as f_daily:
-                            file_daily = {'file': (output_html_name, f_daily, 'text/html')}
-                            requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_daily, timeout=15)
+                        if os.path.exists(output_html_name):
+                            with open(output_html_name, 'rb') as f_daily:
+                                file_daily = {'file': (output_html_name, f_daily, 'text/html')}
+                                requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_daily, timeout=15)
+                            print(f"☁️ [雲端備份] 每日戰報 {output_html_name} 已成功封存！", flush=True)
+                        else:
+                            print(f"⚠️ [警告] 找不到要上傳的 HTML 檔案: {output_html_name}", flush=True)
                         
                         # 3. 【覆蓋最新】上傳 latest_report.html 到 money 主資料夾
                         if os.path.exists('latest_report.html'):
