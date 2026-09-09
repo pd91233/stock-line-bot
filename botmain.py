@@ -4715,60 +4715,67 @@ def afternoon_review_loop():
                                 review_lines.append(f"• {stock_n}({stock_c}) ｜ 發報@{price_in} [{t_time}]\n  ╰ 漲跌幅: {pct}\n")
                                 
                                 # =======================================
-                                # 🎯 產出符合統帥截圖的「高質感狙擊卡片」
+                                # 💥 [統帥升級] 疊合抽屜式狙擊卡片 (預設展開，點擊標題可收合)
                                 # =======================================
                                 sniper_cards_html += f"""
-                                <div class="sniper-card">
-                                    <div class="card-head">
-                                        <div>
-                                            <span class="stock-name">{stock_n} ({stock_c})</span>
-                                            <span class="time-tag">⚡ {t_time} 發報</span>
-                                        </div>
-                                        <span class="zone-tag">{row.get("Time_Zone")}</span>
-                                    </div>
-                                    
-                                    <div class="chart-box">
-                                        <div class="chart-header">
-                                            <span>📈 技術線型 (1分K主升段突破點)</span>
-                                            <span style="color: var(--color-green);">量價齊揚</span>
-                                        </div>
-                                        [ 插入：技術線圖即時截圖 / 均線糾結爆量點 ]
-                                    </div>
+								<details class="sniper-card" open>
+									<summary class="card-head" style="cursor: pointer; outline: none; list-style: none;">
+										<div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+											<div>
+												<span class="stock-name">{stock_n} ({stock_c})</span>
+												<span class="time-tag">⚡ {t_time}</span>
+											</div>
+											<div style="display: flex; align-items: center; gap: 10px;">
+												<span class="val {val_color}">🔥 {pct}</span>
+												<span style="color: var(--text-muted); font-size: 0.8rem;">▼ 展開/收合</span>
+											</div>
+										</div>
+									</summary>
+									
+									<div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
+										<div style="margin-bottom: 15px;">
+											<span class="zone-tag">{row.get("Time_Zone", "")}</span>
+										</div>
 
-                                    <div class="data-row">
-                                        <span class="label">🔥 量能與結構：</span>
-                                        <span class="val yellow">總量預估 ｜ 多頭排列突破</span>
-                                    </div>
+										<!-- 📈 這裡把技術圖組補回來了！ -->
+										<div class="chart-box">
+											<div class="chart-header">
+												<span>📈 技術線型 (1分K主升段突破點)</span>
+												<span style="color: var(--color-green);">量價齊揚 ｜ 法人重倉</span>
+											</div>
+											<div style="color: var(--text-muted); font-size: 0.9rem;">[ 預留版位：未來可串接即時 1 分 K 線圖截圖 ]</div>
+										</div>
+										
+										<div class="data-row highlight-row">
+											<span class="label" style="color: var(--text-main);">⚡ 發報當下現價：</span>
+											<span class="val green" style="font-size: 1.1rem;">{price_in} 元</span>
+										</div>
 
-                                    <div class="data-row highlight-row">
-                                        <span class="label" style="color: var(--text-main);">⚡ 發報當下現價 / 漲幅：</span>
-                                        <span class="val green" style="font-size: 1.1rem;">{price_in} 元 ｜ {pct}</span>
-                                    </div>
+										<div class="data-row">
+											<span class="label">點火資金總額</span>
+											<span class="val yellow">{row.get("Ignition_Funds", "")} (✅ 達標)</span>
+										</div>
+										<div class="data-row">
+											<span class="label">正乖離率狀況</span>
+											<span class="val main">{row.get("Deviation_Rate", "")}</span>
+										</div>
 
-                                    <div class="data-row">
-                                        <span class="label">點火資金總額</span>
-                                        <span class="val yellow">{row.get("Ignition_Funds")} 萬元 (✅ 達標)</span>
-                                    </div>
-                                    <div class="data-row">
-                                        <span class="label">正乖離率狀況</span>
-                                        <span class="val main">{row.get("Deviation")} (合格邊緣)</span>
-                                    </div>
-
-                                    <div class="data-row" style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
-                                        <span class="label">無腦建議進場：</span>
-                                        <span class="val blue">{price_in} (現價+2檔)</span>
-                                    </div>
-                                    <div class="data-row">
-                                        <span class="label">鐵血停損防線：</span>
-                                        <span class="val red">{row.get("Stop_Loss_Line")} (均價線)</span>
-                                    </div>
-                                    
-                                    <div class="data-row" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
-                                        <span class="label">13:40 收盤結算：</span>
-                                        <span class="val green">收結算價 ｜ 🔥 勝負結算</span>
-                                    </div>
-                                </div>
-                                """
+										<div class="data-row" style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
+											<span class="label">無腦建議進場：</span>
+											<span class="val blue">{row.get("Suggested_Entry", "")}</span>
+										</div>
+										<div class="data-row">
+											<span class="label">鐵血停損防線：</span>
+											<span class="val red">{row.get("Stop_Loss_Line", "")}</span>
+										</div>
+										
+										<div class="data-row" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+											<span class="label">13:40 結算狀態：</span>
+											<span class="val {val_color}">{close_price} 元 ｜ {row.get("Trade_Result", "")}</span>
+										</div>
+									</div>
+								</details>
+								"""
 
                 win_rate_pct = f"{(win_count / sent_count * 100):.0f}%" if sent_count > 0 else "0%"
                 if sent_count == 0:
