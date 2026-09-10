@@ -4733,26 +4733,56 @@ def afternoon_review_loop():
                 pcloud_public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{output_html_name}"
                 
 				# ==========================================
-                # 🎯 智慧物資補給：讀取本機 kbars_cache.json，僅過濾出今日入選的股票 K 線資料
+                # 🎯 雲端 K 線即時補給引擎：向 Yahoo 即時請求 K 線
                 # ==========================================
-                import json  # 💥 【修復核心】強制將 import 移到最外層，確保絕對不會未定義！
+                import json
                 embedded_kbars = {}
-                if os.path.exists("kbars_cache.json") and os.path.exists(csv_filename):
+                if os.path.exists(csv_filename):
                     try:
-                        with open("kbars_cache.json", "r", encoding="utf-8") as kf:
-                            full_kb = json.load(kf)
-                            # 收集今天所有入選的股票代號
-                            with open(csv_filename, mode='r', encoding='utf-8-sig') as cf:
-                                creader = csv.DictReader(cf)
-                                target_ids = set(row.get("Stock_ID", "").strip() for row in creader if "強勢達標_發送" in row.get("System_Decision", ""))
-
-                            for scode in target_ids:
-                                if scode in full_kb:
-                                    embedded_kbars[scode] = full_kb[scode]
+                        import requests
+                        import datetime
+                        import csv
+                        
+                        target_ids = set()
+                        with open(csv_filename, mode='r', encoding='utf-8-sig') as cf:
+                            creader = csv.DictReader(cf)
+                            for row in creader:
+                                if "強勢達標_發送" in row.get("System_Decision", ""):
+                                    target_ids.add(row.get("Stock_ID", "").strip())
+                        
+                        print(f"📡 準備從雲端即時獲取 {len(target_ids)} 檔 K 線數據...", flush=True)
+                        for scode in target_ids:
+                            try:
+                                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{scode}.TW?range=2mo&interval=1d"
+                                res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
+                                if not res.get('chart', {}).get('result'):
+                                    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{scode}.TWO?range=2mo&interval=1d"
+                                    res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
+                                
+                                result = res['chart']['result'][0]
+                                timestamps = result['timestamp']
+                                indicators = result['indicators']['quote'][0]
+                                
+                                kbars_dict = {}
+                                tz_tw = datetime.timezone(datetime.timedelta(hours=8))
+                                for i in range(len(timestamps)):
+                                    if indicators.get('close', [])[i] is not None:
+                                        # 格式化日期，使其符合 ECharts 預期的 YYYY/MM/DD
+                                        dt_str = datetime.datetime.fromtimestamp(timestamps[i], tz_tw).strftime('%Y/%m/%d')
+                                        kbars_dict[dt_str] = {
+                                            "o": indicators['open'][i],
+                                            "c": indicators['close'][i],
+                                            "h": indicators['high'][i],
+                                            "l": indicators['low'][i],
+                                            "v": indicators.get('volume', [])[i] if indicators.get('volume') else 0
+                                        }
+                                embedded_kbars[scode] = kbars_dict
+                            except Exception as e:
+                                print(f"⚠️ 抓取 {scode} K線失敗: {e}", flush=True)
+                                
                     except Exception as e:
-                        print(f"⚠️ 注入 K 棒快訊異常: {e}")
+                        print(f"⚠️ 雲端 K 棒即時收集異常: {e}", flush=True)
 
-                # 💥 使用標準的 json.dumps，並且因為 import 已經在外面，絕對不會報錯
                 kbars_json_str = json.dumps(embedded_kbars, ensure_ascii=False)
                 # ==========================================
 				
@@ -4874,6 +4904,7 @@ def afternoon_review_loop():
 
 
 <script>
+    // 注入由 Python 後台即時抓取的真實 K 線資料庫
     const KBARS_DB = {kbars_json_str}; 
     let chartsStore = {{}};
 
