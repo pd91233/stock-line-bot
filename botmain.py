@@ -4646,16 +4646,6 @@ def afternoon_review_loop():
             if not is_weekend and (0 <= current_time_num <= 2359):
                 print("🔍 [戰場鑑識] 時間已達 13:55，開始自動結算與生成 HTML 戰情網頁...", flush=True)
                 
-                # ✅ 宣告文字戰報陣列
-                review_lines = [
-                    f"📊 【股海觀浪・全方位戰場鑑識與盤後覆盤】",
-                    f"----------------------",
-                    f"🎯 今日盤中總計掃描：{total_scans} 次動態事件",
-                    f"🛡️ 符合嚴格把關標的：{sent_count} 檔 (勝率 {win_rate_pct})",
-                    f"----------------------"
-                ]
-                display_date = now.strftime("%Y.%m.%d (%a)")
-                
                 total_scans = 0
                 sent_count = 0
                 win_count = 0
@@ -4668,7 +4658,6 @@ def afternoon_review_loop():
                             total_scans += 1
                             decision = row.get("System_Decision", "")
                             
-                            # 💥 絕對防護：在每一行開頭先將所有變數安全初始化，絕不允許 UnboundLocalError！
                             stock_n = row.get("Stock_Name", "未知")
                             stock_c = row.get("Stock_ID", "0000")
                             price_in = row.get("Suggested_Entry", "0.0")
@@ -4676,7 +4665,6 @@ def afternoon_review_loop():
                             pct = row.get("Price_Change_Pct", "+0.00%")
                             close_price = row.get("Close_Price", "0.0")
                             
-                            # 💥 精準計算漲跌顏色變數
                             raw_pct = 0.0
                             try:
                                 raw_pct = float(pct.replace('%', '').replace('+', ''))
@@ -4687,85 +4675,72 @@ def afternoon_review_loop():
                             if "強勢達標_發送" in decision:
                                 sent_count += 1
                                 win_count += 1  # 預設勝出
-                                
-                                # 💥 精準定義漲跌顏色變數，防止未定義報錯
-                                raw_pct = float(pct.replace('%', '').replace('+', '')) if pct else 0.0
-                                val_color = "red" if raw_pct >= 0 else "green"
-                                
-                                # ✅ 同步將戰報寫入 LINE 推播文字中
-                                stock_n = row.get("Stock_Name")
-                                stock_c = row.get("Stock_ID")
-                                price_in = row.get("Suggested_Entry")
-                                t_time = row.get("Trigger_Time")
-                                pct = row.get("Price_Change_Pct")
-                                review_lines.append(f"• {stock_n}({stock_c}) ｜ 發報@{price_in} [{t_time}]\n  ╰ 漲跌幅: {pct}\n")
-                                
-                                # =======================================
-                                # 💥 [統帥升級] 疊合抽屜式狙擊卡片 (預設展開，點擊標題可收合)
-                                # =======================================
-                                sniper_cards_html += f"""
-                                <details class="sniper-card" open>
-                                    <summary class="card-head" style="cursor: pointer; outline: none; list-style: none;">
-                                        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
-                                            <div>
-                                                <span class="stock-name">{stock_n} ({stock_c})</span>
-                                                <span class="time-tag">⏰ {t_time}</span>
-                                            </div>
-                                            <div style="display: flex; align-items: center; gap: 10px;">
-                                                <span class="val {val_color}">🔥 {pct}</span>
-                                                <span style="color: var(--text-muted); font-size: 0.8rem;">▼ 展開/收合</span>
-                                            </div>
+                            
+                            # 💥 這裡絕對不把股票明細 append 進 LINE 文字中，明細全權交給網頁負責！
+                            
+                            sniper_cards_html += f"""
+                            <details class="sniper-card" open>
+                                <summary class="card-head" style="cursor: pointer; outline: none; list-style: none;">
+                                    <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                                        <div>
+                                            <span class="stock-name">{stock_n} ({stock_c})</span>
+                                            <span class="time-tag">⏰ {t_time}</span>
                                         </div>
-                                    </summary>
-                                    
-                                    <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
-                                        <div style="margin-bottom: 15px;">
-                                            <span class="zone-tag">{row.get("Time_Zone", "")}</span>
-                                        </div>
-
-                                        <!-- 📈 技術圖組預留 -->
-                                        <div class="chart-box">
-                                            <div class="chart-header">
-                                                <span>📈 技術線型 (1分K主升段突破點)</span>
-                                                <span style="color: var(--color-green);">量價齊揚 ｜ 突破確認</span>
-                                            </div>
-                                            <div style="color: var(--text-muted); font-size: 0.9rem;">[ 預留版位：未來可串接即時 1 分 K 線圖截圖 ]</div>
-                                        </div>
-                                        
-                                        <div class="data-row highlight-row">
-                                            <span class="label" style="color: var(--text-main);">⚡ 觸發當下現價：</span>
-                                            <span class="val green" style="font-size: 1.1rem;">{price_in} 元</span>
-                                        </div>
-
-                                        <div class="data-row">
-                                            <span class="label">主力點火資金</span>
-                                            <span class="val yellow">{row.get("Ignition_Funds", "")} (✅ 達標)</span>
-                                        </div>
-                                        <div class="data-row">
-                                            <span class="label">正乖離率狀況</span>
-                                            <span class="val main">{row.get("Deviation_Rate", "")}</span>
-                                        </div>
-
-                                        <div class="data-row" style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
-                                            <span class="label">建議觀察價位：</span>
-                                            <span class="val blue">{row.get("Suggested_Entry", "")}</span>
-                                        </div>
-                                        <div class="data-row">
-                                            <span class="label">嚴格停損參考價：</span>
-                                            <span class="val red">{row.get("Stop_Loss_Line", "")}</span>
-                                        </div>
-                                        
-                                        <div class="data-row" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
-                                            <span class="label">13:40 結算狀態：</span>
-                                            <span class="val {val_color}">{close_price} 元 ｜ {row.get("Trade_Result", "")}</span>
+                                        <div style="display: flex; align-items: center; gap: 10px;">
+                                            <span class="val {val_color}">🔥 {pct}</span>
+                                            <span style="color: var(--text-muted); font-size: 0.8rem;">▼ 展開/收合</span>
                                         </div>
                                     </div>
-                                </details>
-                                """
+                                </summary>
+                                <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
+                                    <div style="margin-bottom: 15px;">
+                                        <span class="zone-tag">{row.get("Time_Zone", "")}</span>
+                                    </div>
+                                    <div class="data-row highlight-row">
+                                        <span class="label" style="color: var(--text-main);">⚡ 觸發當下現價：</span>
+                                        <span class="val green" style="font-size: 1.1rem;">{price_in} 元</span>
+                                    </div>
+                                    <div class="data-row">
+                                        <span class="label">主力點火資金</span>
+                                        <span class="val yellow">{row.get("Ignition_Funds", "")} (✅ 達標)</span>
+                                    </div>
+                                    <div class="data-row">
+                                        <span class="label">正乖離率狀況</span>
+                                        <span class="val main">{row.get("Deviation_Rate", "")}</span>
+                                    </div>
+                                    <div class="data-row" style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
+                                        <span class="label">建議觀察價位：</span>
+                                        <span class="val blue">{row.get("Suggested_Entry", "")}</span>
+                                    </div>
+                                    <div class="data-row">
+                                        <span class="label">嚴格停損參考價：</span>
+                                        <span class="val red">{row.get("Stop_Loss_Line", "")}</span>
+                                    </div>
+                                    <div class="data-row" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+                                        <span class="label">13:40 結算狀態：</span>
+                                        <span class="val {val_color}">{close_price} 元 ｜ {row.get("Trade_Result", "")}</span>
+                                    </div>
+                                </div>
+                            </details>
+                            """
 
                 win_rate_pct = f"{(win_count / sent_count * 100):.0f}%" if sent_count > 0 else "0%"
-                if sent_count == 0:
-                    review_lines.append("🎯 今日盤中無觸發爆量發報標的。")
+                display_date = now.strftime("%Y.%m.%d (%a)")
+
+                pcloud_public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{output_html_name}"
+                
+                # ✅ LINE 推播只留下精煉的總結，絕不洗版
+                review_lines = [
+                    "📊 【股海觀浪・全方位戰場鑑識與盤後覆盤】",
+                    "----------------------",
+                    f"🎯 今日盤中總計掃描：{total_scans} 次動態事件",
+                    f"🛡️ 符合嚴格把關標的：{sent_count} 檔 (勝率 {win_rate_pct})",
+                    "----------------------",
+                    "🛡️ 今日盤後統整網頁已永久封存！",
+                    f"👉 請點擊下方連結觀看收盤驗證：\n{pcloud_public_url}"
+                ]
+                
+                final_report = "\n".join(review_lines)
 
                 # =======================================
                 # 🖥️ 產出符合統帥截圖的「整體戰情室網頁」
