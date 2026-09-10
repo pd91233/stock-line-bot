@@ -4632,7 +4632,7 @@ def afternoon_review_loop():
             csv_filename = f"trading_log_{today_str}.csv"
 
             # 盤後結算條件
-            if not is_weekend and (0 <= current_time_num <= 2359):
+            if not is_weekend and (1355 <= current_time_num <= 1430) and (last_sent_date != current_date_str):
                 print("🔍 [戰場鑑識] 時間已達 13:55，開始自動結算與生成 HTML 戰情網頁...", flush=True)
                 
                 if os.path.exists(csv_filename):
