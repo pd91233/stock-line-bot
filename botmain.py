@@ -4702,7 +4702,13 @@ def afternoon_review_loop():
                 print("🔍 [戰場鑑識] 時間已達 13:55，開始自動結算與生成 HTML 戰情網頁...", flush=True)
                 
                 # ✅ 宣告文字戰報陣列
-                review_lines = ["📊 【股海觀浪・全方位戰場鑑識與盤後覆盤】\n----------------------"]
+                review_lines = [
+                    f"📊 【股海觀浪・全方位戰場鑑識與盤後覆盤】",
+                    f"----------------------",
+                    f"🎯 今日盤中總計掃描：{total_scans} 次動態事件",
+                    f"🛡️ 符合嚴格把關標的：{sent_count} 檔 (勝率 {win_rate_pct})",
+                    f"----------------------"
+                ]
                 display_date = now.strftime("%Y.%m.%d (%a)")
                 
                 total_scans = 0
@@ -4736,9 +4742,6 @@ def afternoon_review_loop():
                             if "強勢達標_發送" in decision:
                                 sent_count += 1
                                 win_count += 1  # 預設勝出
-                                
-                                # 同步將戰報寫入 LINE 推播文字中
-                                review_lines.append(f"• {stock_n}({stock_c}) ｜ 發報@{price_in} [{t_time}]\n  ╰ 漲跌幅: {pct}\n")
 								
 								# 💥 精準定義漲跌顏色變數，防止未定義報錯
                                 raw_pct = float(pct.replace('%', '').replace('+', '')) if pct else 0.0
