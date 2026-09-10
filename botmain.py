@@ -4630,6 +4630,7 @@ def afternoon_review_loop():
             real_overheated_filtered = len(filtered_overheated_codes)
             
             # 💥【絕對安全防護】在進入結算前，先初始化所有變數，絕對不會發生未繫結錯誤！
+			win_rate_pct = "0%"
             review_lines = []
             total_scans = 0
             sent_count = 0
