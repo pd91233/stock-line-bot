@@ -4716,9 +4716,29 @@ def afternoon_review_loop():
                         for row in reader:
                             total_scans += 1
                             decision = row.get("System_Decision", "")
+                            
+                            # 💥 絕對防護：在每一行開頭先將所有變數安全初始化，絕不允許 UnboundLocalError！
+                            stock_n = row.get("Stock_Name", "未知")
+                            stock_c = row.get("Stock_ID", "0000")
+                            price_in = row.get("Suggested_Entry", "0.0")
+                            t_time = row.get("Trigger_Time", "09:00")
+                            pct = row.get("Price_Change_Pct", "+0.00%")
+                            close_price = row.get("Close_Price", "0.0")
+                            
+                            # 💥 精準計算漲跌顏色變數
+                            raw_pct = 0.0
+                            try:
+                                raw_pct = float(pct.replace('%', '').replace('+', ''))
+                            except:
+                                raw_pct = 0.0
+                            val_color = "red" if raw_pct >= 0 else "green"
+
                             if "強勢達標_發送" in decision:
                                 sent_count += 1
                                 win_count += 1  # 預設勝出
+                                
+                                # 同步將戰報寫入 LINE 推播文字中
+                                review_lines.append(f"• {stock_n}({stock_c}) ｜ 發報@{price_in} [{t_time}]\n  ╰ 漲跌幅: {pct}\n")
 								
 								# 💥 精準定義漲跌顏色變數，防止未定義報錯
                                 raw_pct = float(pct.replace('%', '').replace('+', '')) if pct else 0.0
