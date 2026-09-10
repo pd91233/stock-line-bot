@@ -4952,47 +4952,47 @@ def afternoon_review_loop():
                 PCLOUD_HISTORY_FOLDER_ID = os.environ.get('PCLOUD_HISTORY_FOLDER_ID', '33133582905') # history_reports 專屬資料夾
                 
                 if PCLOUD_EMAIL and PCLOUD_PASSWORD:
-					# 1. 取得 API 授權 Token 並印出除錯訊息
-					auth_url = f"https://api.pcloud.com/userinfo?getauth=1&logout=1&username={PCLOUD_EMAIL}&password={PCLOUD_PASSWORD}"
-					auth_res = requests.get(auth_url, timeout=10).json()
-					
-					# 💥 把 pCloud 伺服器回傳的完整結果直接印在 Render 紀錄上！
-					print(f"🔍 pCloud 完整回應內容: {auth_res}", flush=True)
-					
-					if "auth" in auth_res:
-						token = auth_res["auth"]
-						print("✅ 成功取得 pCloud 授權 Token！", flush=True)
-						
-						# 2. 【每日建檔】上傳今日盤後報告到 history_reports 資料夾
-						if os.path.exists(output_html_name):
-							with open(output_html_name, 'rb') as f_daily:
-								file_daily = {'file': (output_html_name, f_daily, 'text/html')}
-								res1 = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_daily, timeout=15)
-								print(f"☁️ [雲端備份] 每日戰報 {output_html_name} 已成功封存！回應碼: {res1.status_code}", flush=True)
-						else:
-							print(f"⚠️ [警告] 找不到要上傳的 HTML 檔案: {output_html_name}", flush=True)
+                    # 1. 取得 API 授權 Token 並印出除錯訊息
+                    auth_url = f"https://api.pcloud.com/userinfo?getauth=1&logout=1&username={PCLOUD_EMAIL}&password={PCLOUD_PASSWORD}"
+                    auth_res = requests.get(auth_url, timeout=10).json()
+                    
+                    # 💥 把 pCloud 伺服器回傳的完整結果直接印在 Render 紀錄上！
+                    print(f"🔍 pCloud 完整回應內容: {auth_res}", flush=True)
+                    
+                    if "auth" in auth_res:
+                        token = auth_res["auth"]
+                        print("✅ 成功取得 pCloud 授權 Token！", flush=True)
+                        
+                        # 2. 【每日建檔】上傳今日盤後報告到 history_reports 資料夾
+                        if os.path.exists(output_html_name):
+                            with open(output_html_name, 'rb') as f_daily:
+                                file_daily = {'file': (output_html_name, f_daily, 'text/html')}
+                                res1 = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_daily, timeout=15)
+                                print(f"☁️ [雲端備份] 每日戰報 {output_html_name} 已成功封存！回應碼: {res1.status_code}", flush=True)
+                        else:
+                            print(f"⚠️ [警告] 找不到要上傳的 HTML 檔案: {output_html_name}", flush=True)
 
-						# 3. 【覆蓋最新】上傳 latest_report.html 到 money 主資料夾
-						if os.path.exists('latest_report.html'):
-							with open('latest_report.html', 'rb') as f_latest:
-								file_latest = {'file': ('latest_report.html', f_latest, 'text/html')}
-								res2 = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_FOLDER_ID}", files=file_latest, timeout=15)
-								print(f"☁️ [雲端備份] 最新戰報 latest_report.html 已覆蓋成功！", flush=True)
+                        # 3. 【覆蓋最新】上傳 latest_report.html 到 money 主資料夾
+                        if os.path.exists('latest_report.html'):
+                            with open('latest_report.html', 'rb') as f_latest:
+                                file_latest = {'file': ('latest_report.html', f_latest, 'text/html')}
+                                res2 = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_FOLDER_ID}", files=file_latest, timeout=15)
+                                print(f"☁️ [雲端備份] 最新戰報 latest_report.html 已覆蓋成功！", flush=True)
 
-						# 4. 【原始數據封存】上傳今日 CSV 記錄檔
-						if os.path.exists(csv_filename):
-							with open(csv_filename, 'rb') as f_csv:
-								file_csv = {'file': (csv_filename, f_csv, 'text/csv')}
-								res3 = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_csv, timeout=15)
-								print(f"☁️ [雲端備份] 原始數據 {csv_filename} 已封存成功！", flush=True)
-								
-						print("☁️ [雲端備份] 盤後報告與資料已成功封存至對應資料夾！", flush=True)
+                        # 4. 【原始數據封存】上傳今日 CSV 記錄檔
+                        if os.path.exists(csv_filename):
+                            with open(csv_filename, 'rb') as f_csv:
+                                file_csv = {'file': (csv_filename, f_csv, 'text/csv')}
+                                res3 = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_csv, timeout=15)
+                                print(f"☁️ [雲端備份] 原始數據 {csv_filename} 已封存成功！", flush=True)
+                                
+                        print("☁️ [雲端備份] 盤後報告與資料已成功封存至對應資料夾！", flush=True)
 
-					else:
-						# 唯一且正確的錯誤出口！
-						print(f"❌ pCloud 登入被拒絕，錯誤代碼與原因: {auth_res}", flush=True)
-				else:
-					print(" ℹ️ [跳過上傳] 未偵測到 pCloud 環境變數。", flush=True)
+                    else:
+                        # 唯一且正確的錯誤出口！
+                        print(f"❌ pCloud 登入被拒絕，錯誤代碼與原因: {auth_res}", flush=True)
+                else:
+                    print(" ℹ️ [跳過上傳] 未偵測到 pCloud 環境變數。", flush=True)
                     
             except Exception as pcloud_err:
                 print(f"⚠️ 雲端備份 pCloud 異常: {pcloud_err}", flush=True)
