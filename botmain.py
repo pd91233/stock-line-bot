@@ -4665,7 +4665,9 @@ def afternoon_review_loop():
                                 open_attr = "open" if is_first_card else ""
                                 is_first_card = False
                                 
-                                # 疊合抽屜式狙擊卡片 (真實 TradingView K線版)
+                                # =======================================
+                                # 💥 [統帥升級] 疊合抽屜式狙擊卡片 (真實 ECharts K線版)
+                                # =======================================
                                 sniper_cards_html += f"""
                                 <details class="sniper-card" {open_attr}>
                                     <summary class="card-head" style="cursor: pointer; outline: none; list-style: none;">
@@ -4686,11 +4688,13 @@ def afternoon_review_loop():
                                             <span class="zone-tag">{row.get("Time_Zone", "")}</span>
                                         </div>
 
-                                        <div class="chart-box" style="height: 280px; width: 100%; margin-bottom: 20px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); background: #000;">
-                                            <iframe src="https://s.tradingview.com/widgetembed/?symbol={stock_c}&interval=1&theme=dark&style=1&timezone=Asia%2FTaipei&hidesidetoolbar=1&hidetoptoolbar=1&saveimage=0" width="100%" height="100%" frameborder="0" loading="lazy" allowtransparency="true"></iframe>
+                                        <!-- 📈 真實 1分K / 日K 技術線型 (ECharts 微型圖表引擎) -->
+                                        <div class="chart-container" id="container_{stock_c}">
+                                            <div id="micro_{stock_c}" class="micro-chart" style="height: 160px; width: 100%;"></div>
+                                            <div class="zoom-hint">📊 真實量價與均線</div>
                                         </div>
                                         
-                                        <div class="data-row highlight-row">
+                                        <div class="data-row highlight-row" style="margin-top: 15px;">
                                             <span class="label" style="color: var(--text-main);">⚡ 觸發當下現價：</span>
                                             <span class="val green" style="font-size: 1.1rem;">{price_in} 元</span>
                                         </div>
@@ -4841,15 +4845,26 @@ def afternoon_review_loop():
                 with open("daily_review_latest.html", "w", encoding="utf-8") as f:
                     f.write(html_content)
 
-                # pCloud 雲端備份
+                # 1. 於本機端儲存一份專屬的收盤鑑識戰報
+                with open("daily_review_latest.html", "w", encoding="utf-8") as f:
+                    f.write(html_content)
+
+                # 2. pCloud 雲端備份 (完全不碰您的 latest_report.html)
                 try:
                     token = os.environ.get('PCLOUD_AUTH_TOKEN', '')
                     folder_id_main = os.environ.get('PCLOUD_FOLDER_ID', '31448526072')
                     folder_id_history = os.environ.get('PCLOUD_HISTORY_FOLDER_ID', '33133582905')
                     
-                    if token and os.path.exists(output_html_name):
-                        with open(output_html_name, 'rb') as f:
-                            requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={folder_id_history}", files={'file': (output_html_name, f, 'text/html')}, timeout=15)
+                    if token:
+                        # 備份今日專屬歷史檔
+                        if os.path.exists(output_html_name):
+                            with open(output_html_name, 'rb') as f:
+                                requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={folder_id_history}", files={'file': (output_html_name, f, 'text/html')}, timeout=15)
+                        
+                        # 同步上傳 daily_review_latest.html 至主目錄
+                        if os.path.exists('daily_review_latest.html'):
+                            with open('daily_review_latest.html', 'rb') as f:
+                                requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={folder_id_main}", files={'file': ('daily_review_latest.html', f, 'text/html')}, timeout=15)
                 except:
                     pass
 
