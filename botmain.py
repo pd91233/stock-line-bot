@@ -4871,12 +4871,12 @@ def afternoon_review_loop():
 
 
 <script>
-    // 注入由 Python 後台精準過濾的真實歷史 K 線資料庫
-    const KBARS_DB = ${kbars_json_str}; 
+    // 注入由 Python 後台精準過濾的真實歷史 K 線資料庫 (去掉前面的 $)
+    const KBARS_DB = {kbars_json_str}; 
 
-    function initCloudCharts() {
+    function initCloudCharts() {{
         if (typeof KBARS_DB === 'undefined') return;
-        for (let code in KBARS_DB) {
+        for (let code in KBARS_DB) {{
             let dom = document.getElementById('micro_' + code);
             if (!dom) continue;
 
@@ -4885,7 +4885,7 @@ def afternoon_review_loop():
             if (dates.length === 0) continue;
 
             let cat = [], vals = [], ma5 = [];
-            dates.slice(-30).forEach(d => {
+            dates.slice(-30).forEach(d => {{
                 let kb = kbars[d];
                 let c = parseFloat(kb.c || kb.Close || 0);
                 let o = parseFloat(kb.o || kb.Open || c);
@@ -4894,29 +4894,29 @@ def afternoon_review_loop():
                 if (c <= 0) return;
                 cat.push(d.substring(5));
                 vals.push([o, c, l, h]);
-            });
+            }});
 
             // 計算 5MA
-            for (let i = 0; i < vals.length; i++) {
-                if (i < 4) { ma5.push('-'); continue; }
+            for (let i = 0; i < vals.length; i++) {{
+                if (i < 4) {{ ma5.push('-'); continue; }}
                 let sum = 0;
                 for (let j = 0; j < 5; j++) sum += vals[i - j][1];
                 ma5.push(+(sum / 5).toFixed(2));
-            }
+            }}
 
             let chart = echarts.init(dom);
-            chart.setOption({
-                grid: { left: 2, right: 2, top: 5, bottom: 5 },
-                xAxis: { type: 'category', data: cat, show: false },
-                yAxis: { type: 'value', scale: true, show: false },
+            chart.setOption({{
+                grid: {{ left: 2, right: 2, top: 5, bottom: 5 }},
+                xAxis: {{ type: 'category', data: cat, show: false }},
+                yAxis: {{ type: 'value', scale: true, show: false }},
                 series: [
-                    { type: 'candlestick', data: vals, itemStyle: { color: '#ef4444', color0: '#10b981', borderColor: '#ef4444', borderColor0: '#10b981' } },
-                    { type: 'line', data: ma5, smooth: true, showSymbol: false, lineStyle: { color: '#fbbf24', width: 1.5 } }
+                    {{ type: 'candlestick', data: vals, itemStyle: {{ color: '#ef4444', color0: '#10b981', borderColor: '#ef4444', borderColor0: '#10b981' }} }},
+                    {{ type: 'line', data: ma5, smooth: true, showSymbol: false, lineStyle: {{ color: '#fbbf24', width: 1.5 }} }}
                 ],
                 animation: false
-            });
-        }
-    }
+            }});
+        }}
+    }}
     window.addEventListener('load', initCloudCharts);
 </script>
 </body>
