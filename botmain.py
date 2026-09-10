@@ -4929,98 +4929,98 @@ def afternoon_review_loop():
 """
 
 
-# 寫入 HTML 檔案
-            with open(output_html_name, "w", encoding="utf-8") as f:
-                f.write(html_content)
-            
-            with open("latest_report.html", "w", encoding="utf-8") as f:
-                f.write(html_content)
+	# 寫入 HTML 檔案
+				with open(output_html_name, "w", encoding="utf-8") as f:
+					f.write(html_content)
+				
+				with open("latest_report.html", "w", encoding="utf-8") as f:
+					f.write(html_content)
 
-            print(f"✅ [13:40 盤後統整] 雲端主機已成功生成今日網頁：{output_html_name}", flush=True)
+				print(f"✅ [13:40 盤後統整] 雲端主機已成功生成今日網頁：{output_html_name}", flush=True)
 
-            # ==========================================
-            # ☁️ 將盤後報告與紀錄永久封存至 pCloud (雙路徑分流版)
-            # ==========================================
-            try:
-                import requests
-                import os
-                
-                # 從雲端環境變數讀取帳密，並直接寫入雙資料夾的絕對座標
-                PCLOUD_EMAIL = os.environ.get('PCLOUD_EMAIL', '')
-                PCLOUD_PASSWORD = os.environ.get('PCLOUD_PASSWORD', '')
-                PCLOUD_FOLDER_ID = os.environ.get('PCLOUD_FOLDER_ID', '31448526072') # money 主資料夾
-                PCLOUD_HISTORY_FOLDER_ID = os.environ.get('PCLOUD_HISTORY_FOLDER_ID', '33133582905') # history_reports 專屬資料夾
-                
-                if PCLOUD_EMAIL and PCLOUD_PASSWORD:
-                    # 1. 取得 API 授權 Token 並印出除錯訊息
-                    auth_url = f"https://api.pcloud.com/userinfo?getauth=1&logout=1&username={PCLOUD_EMAIL}&password={PCLOUD_PASSWORD}"
-                    auth_res = requests.get(auth_url, timeout=10).json()
-                    
-                    # 💥 把 pCloud 伺服器回傳的完整結果直接印在 Render 紀錄上！
-                    print(f"🔍 pCloud 完整回應內容: {auth_res}", flush=True)
-                    
-                    if "auth" in auth_res:
-                        token = auth_res["auth"]
-                        print("✅ 成功取得 pCloud 授權 Token！", flush=True)
-                        
-                        # 2. 【每日建檔】上傳今日盤後報告到 history_reports 資料夾
-                        if os.path.exists(output_html_name):
-                            with open(output_html_name, 'rb') as f_daily:
-                                file_daily = {'file': (output_html_name, f_daily, 'text/html')}
-                                res1 = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_daily, timeout=15)
-                                print(f"☁️ [雲端備份] 每日戰報 {output_html_name} 已成功封存！回應碼: {res1.status_code}", flush=True)
-                        else:
-                            print(f"⚠️ [警告] 找不到要上傳的 HTML 檔案: {output_html_name}", flush=True)
+				# ==========================================
+				# ☁️ 將盤後報告與紀錄永久封存至 pCloud (雙路徑分流版)
+				# ==========================================
+				try:
+					import requests
+					import os
+					
+					# 從雲端環境變數讀取帳密，並直接寫入雙資料夾的絕對座標
+					PCLOUD_EMAIL = os.environ.get('PCLOUD_EMAIL', '')
+					PCLOUD_PASSWORD = os.environ.get('PCLOUD_PASSWORD', '')
+					PCLOUD_FOLDER_ID = os.environ.get('PCLOUD_FOLDER_ID', '31448526072') # money 主資料夾
+					PCLOUD_HISTORY_FOLDER_ID = os.environ.get('PCLOUD_HISTORY_FOLDER_ID', '33133582905') # history_reports 專屬資料夾
+					
+					if PCLOUD_EMAIL and PCLOUD_PASSWORD:
+						# 1. 取得 API 授權 Token 並印出除錯訊息
+						auth_url = f"https://api.pcloud.com/userinfo?getauth=1&logout=1&username={PCLOUD_EMAIL}&password={PCLOUD_PASSWORD}"
+						auth_res = requests.get(auth_url, timeout=10).json()
+						
+						# 💥 把 pCloud 伺服器回傳的完整結果直接印在 Render 紀錄上！
+						print(f"🔍 pCloud 完整回應內容: {auth_res}", flush=True)
+						
+						if "auth" in auth_res:
+							token = auth_res["auth"]
+							print("✅ 成功取得 pCloud 授權 Token！", flush=True)
+							
+							# 2. 【每日建檔】上傳今日盤後報告到 history_reports 資料夾
+							if os.path.exists(output_html_name):
+								with open(output_html_name, 'rb') as f_daily:
+									file_daily = {'file': (output_html_name, f_daily, 'text/html')}
+									res1 = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_daily, timeout=15)
+									print(f"☁️ [雲端備份] 每日戰報 {output_html_name} 已成功封存！回應碼: {res1.status_code}", flush=True)
+							else:
+								print(f"⚠️ [警告] 找不到要上傳的 HTML 檔案: {output_html_name}", flush=True)
 
-                        # 3. 【覆蓋最新】上傳 latest_report.html 到 money 主資料夾
-                        if os.path.exists('latest_report.html'):
-                            with open('latest_report.html', 'rb') as f_latest:
-                                file_latest = {'file': ('latest_report.html', f_latest, 'text/html')}
-                                res2 = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_FOLDER_ID}", files=file_latest, timeout=15)
-                                print(f"☁️ [雲端備份] 最新戰報 latest_report.html 已覆蓋成功！", flush=True)
+							# 3. 【覆蓋最新】上傳 latest_report.html 到 money 主資料夾
+							if os.path.exists('latest_report.html'):
+								with open('latest_report.html', 'rb') as f_latest:
+									file_latest = {'file': ('latest_report.html', f_latest, 'text/html')}
+									res2 = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_FOLDER_ID}", files=file_latest, timeout=15)
+									print(f"☁️ [雲端備份] 最新戰報 latest_report.html 已覆蓋成功！", flush=True)
 
-                        # 4. 【原始數據封存】上傳今日 CSV 記錄檔
-                        if os.path.exists(csv_filename):
-                            with open(csv_filename, 'rb') as f_csv:
-                                file_csv = {'file': (csv_filename, f_csv, 'text/csv')}
-                                res3 = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_csv, timeout=15)
-                                print(f"☁️ [雲端備份] 原始數據 {csv_filename} 已封存成功！", flush=True)
-                                
-                        print("☁️ [雲端備份] 盤後報告與資料已成功封存至對應資料夾！", flush=True)
+							# 4. 【原始數據封存】上傳今日 CSV 記錄檔
+							if os.path.exists(csv_filename):
+								with open(csv_filename, 'rb') as f_csv:
+									file_csv = {'file': (csv_filename, f_csv, 'text/csv')}
+									res3 = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_csv, timeout=15)
+									print(f"☁️ [雲端備份] 原始數據 {csv_filename} 已封存成功！", flush=True)
+									
+							print("☁️ [雲端備份] 盤後報告與資料已成功封存至對應資料夾！", flush=True)
 
-                    else:
-                        # 唯一且正確的錯誤出口！
-                        print(f"❌ pCloud 登入被拒絕，錯誤代碼與原因: {auth_res}", flush=True)
-                else:
-                    print(" ℹ️ [跳過上傳] 未偵測到 pCloud 環境變數。", flush=True)
-                    
-            except Exception as pcloud_err:
-                print(f"⚠️ 雲端備份 pCloud 異常: {pcloud_err}", flush=True)
+						else:
+							# 唯一且正確的錯誤出口！
+							print(f"❌ pCloud 登入被拒絕，錯誤代碼與原因: {auth_res}", flush=True)
+					else:
+						print(" ℹ️ [跳過上傳] 未偵測到 pCloud 環境變數。", flush=True)
+						
+				except Exception as pcloud_err:
+					print(f"⚠️ 雲端備份 pCloud 異常: {pcloud_err}", flush=True)
 
-            # 將 LINE 推播連結，精準指向歷史報告專屬的公開網址！
-            pcloud_public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{output_html_name}"
-            review_lines.append("----------------------")
-            review_lines.append("🛡️ 今日盤後統整網頁已永久封存！")
-            review_lines.append(f"👉 請點擊下方連結觀看收盤驗證：\n{pcloud_public_url}")
-            
-            final_report = "\n".join(review_lines)
-            
-            # 🚀 執行 LINE 群組發送
-            TARGET_GROUP_IDS = [
-                "C0481b44935888bb1dc20dfd52a675e8a", 
-                "C47bfa8e16a7216bd54dceb3b5e90cfa0"
-            ]
-            for group_id in TARGET_GROUP_IDS:
-                try:
-                    smart_push_with_menu(group_id, final_report)
-                except: 
-                    pass
-            
-            print("🚀 [13:40 盤後統整] LINE 盤後統整推播與網頁上傳成功！", flush=True)
-            
-            # 🔒 【絕對防護鎖】直接把今天日期強制寫死，確保今天絕對不會再觸發第二次！
-            last_sent_date = current_date_str
-            print(f"🔒 [防護生效] 今日 ({current_date_str}) 結算已經完成上鎖，今日不再重複發送。", flush=True)
+				# 將 LINE 推播連結，精準指向歷史報告專屬的公開網址！
+				pcloud_public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{output_html_name}"
+				review_lines.append("----------------------")
+				review_lines.append("🛡️ 今日盤後統整網頁已永久封存！")
+				review_lines.append(f"👉 請點擊下方連結觀看收盤驗證：\n{pcloud_public_url}")
+				
+				final_report = "\n".join(review_lines)
+				
+				# 🚀 執行 LINE 群組發送
+				TARGET_GROUP_IDS = [
+					"C0481b44935888bb1dc20dfd52a675e8a", 
+					"C47bfa8e16a7216bd54dceb3b5e90cfa0"
+				]
+				for group_id in TARGET_GROUP_IDS:
+					try:
+						smart_push_with_menu(group_id, final_report)
+					except: 
+						pass
+				
+				print("🚀 [13:40 盤後統整] LINE 盤後統整推播與網頁上傳成功！", flush=True)
+				
+				# 🔒 【絕對防護鎖】直接把今天日期強制寫死，確保今天絕對不會再觸發第二次！
+				last_sent_date = current_date_str
+				print(f"🔒 [防護生效] 今日 ({current_date_str}) 結算已經完成上鎖，今日不再重複發送。", flush=True)
 
         except Exception as e:
             print(f"⚠️ 雲端收盤鑑識迴圈異常: {e}", flush=True)
