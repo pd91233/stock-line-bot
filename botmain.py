@@ -4838,7 +4838,7 @@ def afternoon_review_loop():
                 with open(output_html_name, "w", encoding="utf-8") as f:
                     f.write(html_content)
                 
-                with open("latest_report.html", "w", encoding="utf-8") as f:
+                with open("daily_review_latest.html", "w", encoding="utf-8") as f:
                     f.write(html_content)
 
                 # pCloud 雲端備份
