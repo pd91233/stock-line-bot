@@ -4699,6 +4699,13 @@ def afternoon_review_loop():
             current_time_num = now.hour * 100 + now.minute
             current_date_str = now.strftime("%Y-%m-%d")
             
+            # 💥【絕對安全防護】在進入結算前，先初始化所有變數，絕對不會發生未繫結錯誤！
+            review_lines = []
+            total_scans = 0
+            sent_count = 0
+            win_count = 0
+            sniper_cards_html = ""
+            
             # 隨時同步當天的檔名
             today_str = now.strftime('%Y%m%d')
             output_html_name = f"war_room_{today_str}.html"
