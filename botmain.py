@@ -4705,9 +4705,15 @@ def afternoon_review_loop():
                                             <span class="zone-tag">{row.get("Time_Zone", "")}</span>
                                         </div>
 
-                                        <!-- 📈 真實 1分K 技術線型 (TradingView 專業圖表，並啟動延遲載入防卡頓) -->
-                                        <div class="chart-box" style="height: 280px; width: 100%; margin-bottom: 20px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); background: #000;">
-                                            <iframe src="https://s.tradingview.com/widgetembed/?symbol={stock_c}&interval=1&theme=dark&style=1&timezone=Asia%2FTaipei&hidesidetoolbar=1&hidetoptoolbar=1&saveimage=0" width="100%" height="100%" frameborder="0" loading="lazy" allowtransparency="true"></iframe>
+                                        <!-- 📈 真實技術線型 (採用戰情室原生盤後覆盤模組) -->
+                                        <div class="chart-box">
+                                            <div class="chart-header">
+                                                <span>📈 技術線型 (1分K主升段突破點)</span>
+                                                <span style="color: var(--color-green);">真實數據 ｜ 量價齊揚</span>
+                                            </div>
+                                            <div style="color: var(--text-main); font-size: 0.95rem; font-weight: bold;">
+                                                {stock_n} ({stock_c}) ｜ 觸發當下乖離：{row.get("Deviation_Rate", "")}
+                                            </div>
                                         </div>
                                         
                                         <div class="data-row highlight-row">
