@@ -4733,12 +4733,12 @@ def afternoon_review_loop():
 				# ==========================================
                 # 🎯 智慧物資補給：讀取本機 kbars_cache.json，僅過濾出今日入選的股票 K 線資料
                 # ==========================================
+                import json  # 💥 【修復核心】強制將 import 移到最外層，確保絕對不會未定義！
                 embedded_kbars = {}
                 if os.path.exists("kbars_cache.json") and os.path.exists(csv_filename):
                     try:
-                        import json as safe_json
                         with open("kbars_cache.json", "r", encoding="utf-8") as kf:
-                            full_kb = safe_json.load(kf)
+                            full_kb = json.load(kf)
                             # 收集今天所有入選的股票代號
                             with open(csv_filename, mode='r', encoding='utf-8-sig') as cf:
                                 creader = csv.DictReader(cf)
@@ -4750,7 +4750,8 @@ def afternoon_review_loop():
                     except Exception as e:
                         print(f"⚠️ 注入 K 棒快訊異常: {e}")
 
-                kbars_json_str = safe_json.dumps(embedded_kbars, ensure_ascii=False)
+                # 💥 使用標準的 json.dumps，並且因為 import 已經在外面，絕對不會報錯
+                kbars_json_str = json.dumps(embedded_kbars, ensure_ascii=False)
                 # ==========================================
 				
 				
