@@ -4871,7 +4871,7 @@ def afternoon_review_loop():
 
 
 <script>
-    // 注入由 Python 後台精準過濾的真實歷史 K 線資料庫 (去掉前面的 $)
+    // 注入由 Python 後台精準過濾的真實歷史 K 線資料庫
     const KBARS_DB = {kbars_json_str}; 
 
     function initCloudCharts() {{
@@ -4887,11 +4887,16 @@ def afternoon_review_loop():
             let cat = [], vals = [], ma5 = [];
             dates.slice(-30).forEach(d => {{
                 let kb = kbars[d];
-                let c = parseFloat(kb.c || kb.Close || 0);
-                let o = parseFloat(kb.o || kb.Open || c);
-                let l = parseFloat(kb.l || kb.Low || c);
-                let h = parseFloat(kb.h || kb.High || c);
-                if (c <= 0) return;
+                
+                // 💥 換上與統帥 main_3.py 主機一模一樣的「全方位解析晶片」！
+                let c = parseFloat(String(kb.c || kb.Close || kb.close || kb['收盤價'] || 0).replace(/,/g, ''));
+                let o = parseFloat(String(kb.o || kb.Open || kb.open || kb['開盤價'] || c).replace(/,/g, ''));
+                let l = parseFloat(String(kb.l || kb.Low || kb.low || kb['最低價'] || c).replace(/,/g, ''));
+                let h = parseFloat(String(kb.h || kb.High || kb.high || kb['最高價'] || c).replace(/,/g, ''));
+                
+                // 排除 0 與 NaN (斷崖黑洞防護)
+                if (c <= 0 || isNaN(c)) return; 
+                
                 cat.push(d.substring(5));
                 vals.push([o, c, l, h]);
             }});
@@ -4908,7 +4913,8 @@ def afternoon_review_loop():
             chart.setOption({{
                 grid: {{ left: 2, right: 2, top: 5, bottom: 5 }},
                 xAxis: {{ type: 'category', data: cat, show: false }},
-                yAxis: {{ type: 'value', scale: true, show: false }},
+                // 💥 加上 min: 'dataMin' 讓 K 棒圖形更飽滿貼合
+                yAxis: {{ type: 'value', scale: true, show: false, min: 'dataMin' }},
                 series: [
                     {{ type: 'candlestick', data: vals, itemStyle: {{ color: '#ef4444', color0: '#10b981', borderColor: '#ef4444', borderColor0: '#10b981' }} }},
                     {{ type: 'line', data: ma5, smooth: true, showSymbol: false, lineStyle: {{ color: '#fbbf24', width: 1.5 }} }}
