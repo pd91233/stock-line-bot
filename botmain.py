@@ -4608,15 +4608,9 @@ def afternoon_review_loop():
     
     print("📡 [收盤檢討哨] 雲端 HTML 戰情室自動生成引擎已就位...", flush=True)
     last_sent_date = ""
-    
-    # 函式一開始就安全預先宣告變數
-    today_init = (datetime.datetime.utcnow() + datetime.timedelta(hours=8)).strftime('%Y%m%d')
-    output_html_name = f"war_room_{today_init}.html"
-    csv_filename = f"trading_log_{today_init}.csv"
 
     while True:
         try:
-            html_content = ""  # 預先初始化，防止未定義報錯
             now = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
             is_weekend = now.weekday() >= 5
             current_time_num = now.hour * 100 + now.minute
@@ -4627,32 +4621,24 @@ def afternoon_review_loop():
             real_funds_filtered = len(filtered_funds_codes)
             real_overheated_filtered = len(filtered_overheated_codes)
             
-            # 💥【絕對安全防護】在進入結算前，先初始化所有變數，絕對不會發生未繫結錯誤！
             win_rate_pct = "0%"
-            review_lines = []
             total_scans = 0
             sent_count = 0
             win_count = 0
             sniper_cards_html = ""
             
-            # 隨時同步當天的檔名
             today_str = now.strftime('%Y%m%d')
             output_html_name = f"war_room_{today_str}.html"
             csv_filename = f"trading_log_{today_str}.csv"
 
-            # 盤後結算與 pCloud 上傳判斷
+            # 盤後結算條件
             if not is_weekend and (0 <= current_time_num <= 2359):
                 print("🔍 [戰場鑑識] 時間已達 13:55，開始自動結算與生成 HTML 戰情網頁...", flush=True)
-                
-                total_scans = 0
-                sent_count = 0
-                win_count = 0
-                sniper_cards_html = ""
                 
                 if os.path.exists(csv_filename):
                     with open(csv_filename, mode='r', encoding='utf-8-sig') as f:
                         reader = csv.DictReader(f)
-                        is_first_card = True  # 💥 新增：控制是否為第一張卡片，用來決定預設展開
+                        is_first_card = True  # 只有第一張卡片預設展開
                         
                         for row in reader:
                             total_scans += 1
@@ -4676,109 +4662,70 @@ def afternoon_review_loop():
                                 sent_count += 1
                                 win_count += 1  # 預設勝出
                                 
-                                # 💥 判斷是否為第一張卡片，如果是就加上 open 屬性，其他的留白收合
                                 open_attr = "open" if is_first_card else ""
                                 is_first_card = False
                                 
-                                # =======================================
-                                # 💥 [統帥升級] 疊合抽屜式狙擊卡片 (真實K線版)
-                                # =======================================
-                                if os.path.exists(csv_filename):
-                                    with open(csv_filename, mode='r', encoding='utf-8-sig') as f:
-                                        reader = csv.DictReader(f)
-                                        is_first_card = True  # 💥 控制：只有第一張卡片預設展開
+                                # 疊合抽屜式狙擊卡片 (真實 TradingView K線版)
+                                sniper_cards_html += f"""
+                                <details class="sniper-card" {open_attr}>
+                                    <summary class="card-head" style="cursor: pointer; outline: none; list-style: none;">
+                                        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                                            <div>
+                                                <span class="stock-name">{stock_n} ({stock_c})</span>
+                                                <span class="time-tag">⏰ {t_time}</span>
+                                            </div>
+                                            <div style="display: flex; align-items: center; gap: 10px;">
+                                                <span class="val {val_color}">🔥 {pct}</span>
+                                                <span style="color: var(--text-muted); font-size: 0.8rem;">▼ 展開/收合</span>
+                                            </div>
+                                        </div>
+                                    </summary>
+                                    
+                                    <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
+                                        <div style="margin-bottom: 15px;">
+                                            <span class="zone-tag">{row.get("Time_Zone", "")}</span>
+                                        </div>
+
+                                        <div class="chart-box" style="height: 280px; width: 100%; margin-bottom: 20px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); background: #000;">
+                                            <iframe src="https://s.tradingview.com/widgetembed/?symbol={stock_c}&interval=1&theme=dark&style=1&timezone=Asia%2FTaipei&hidesidetoolbar=1&hidetoptoolbar=1&saveimage=0" width="100%" height="100%" frameborder="0" loading="lazy" allowtransparency="true"></iframe>
+                                        </div>
                                         
-                                        for row in reader:
-                                            total_scans += 1
-                                            decision = row.get("System_Decision", "")
-                                            
-                                            stock_n = row.get("Stock_Name", "未知")
-                                            stock_c = row.get("Stock_ID", "0000")
-                                            price_in = row.get("Suggested_Entry", "0.0")
-                                            t_time = row.get("Trigger_Time", "09:00")
-                                            pct = row.get("Price_Change_Pct", "+0.00%")
-                                            close_price = row.get("Close_Price", "0.0")
-                                            
-                                            raw_pct = 0.0
-                                            try:
-                                                raw_pct = float(pct.replace('%', '').replace('+', ''))
-                                            except:
-                                                raw_pct = 0.0
-                                            val_color = "red" if raw_pct >= 0 else "green"
+                                        <div class="data-row highlight-row">
+                                            <span class="label" style="color: var(--text-main);">⚡ 觸發當下現價：</span>
+                                            <span class="val green" style="font-size: 1.1rem;">{price_in} 元</span>
+                                        </div>
 
-                                            if "強勢達標_發送" in decision:
-                                                sent_count += 1
-                                                win_count += 1  # 預設勝出
-                                                
-                                                # 💥 第一張卡片加上 open 屬性，其餘自動收合
-                                                open_attr = "open" if is_first_card else ""
-                                                is_first_card = False
-                                                
-                                                # =======================================
-                                                # 💥 [統帥升級] 疊合抽屜式狙擊卡片 (真實 TradingView K線版)
-                                                # =======================================
-                                                sniper_cards_html += f"""
-                                                <details class="sniper-card" {open_attr}>
-                                                    <summary class="card-head" style="cursor: pointer; outline: none; list-style: none;">
-                                                        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
-                                                            <div>
-                                                                <span class="stock-name">{stock_n} ({stock_c})</span>
-                                                                <span class="time-tag">⏰ {t_time}</span>
-                                                            </div>
-                                                            <div style="display: flex; align-items: center; gap: 10px;">
-                                                                <span class="val {val_color}">🔥 {pct}</span>
-                                                                <span style="color: var(--text-muted); font-size: 0.8rem;">▼ 展開/收合</span>
-                                                            </div>
-                                                        </div>
-                                                    </summary>
-                                                    
-                                                    <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
-                                                        <div style="margin-bottom: 15px;">
-                                                            <span class="zone-tag">{row.get("Time_Zone", "")}</span>
-                                                        </div>
+                                        <div class="data-row">
+                                            <span class="label">主力點火資金</span>
+                                            <span class="val yellow">{row.get("Ignition_Funds", "")} (✅ 達標)</span>
+                                        </div>
+                                        <div class="data-row">
+                                            <span class="label">正乖離率狀況</span>
+                                            <span class="val main">{row.get("Deviation_Rate", "")}</span>
+                                        </div>
 
-                                                        <!-- 📈 真實 1分K 技術線型 (TradingView 專業圖表，並啟動延遲載入防卡頓) -->
-                                                        <div class="chart-box" style="height: 280px; width: 100%; margin-bottom: 20px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); background: #000;">
-                                                            <iframe src="https://s.tradingview.com/widgetembed/?symbol={stock_c}&interval=1&theme=dark&style=1&timezone=Asia%2FTaipei&hidesidetoolbar=1&hidetoptoolbar=1&saveimage=0" width="100%" height="100%" frameborder="0" loading="lazy" allowtransparency="true"></iframe>
-                                                        </div>
-                                                        
-                                                        <div class="data-row highlight-row">
-                                                            <span class="label" style="color: var(--text-main);">⚡ 觸發當下現價：</span>
-                                                            <span class="val green" style="font-size: 1.1rem;">{price_in} 元</span>
-                                                        </div>
-
-                                                        <div class="data-row">
-                                                            <span class="label">主力點火資金</span>
-                                                            <span class="val yellow">{row.get("Ignition_Funds", "")} (✅ 達標)</span>
-                                                        </div>
-                                                        <div class="data-row">
-                                                            <span class="label">正乖離率狀況</span>
-                                                            <span class="val main">{row.get("Deviation_Rate", "")}</span>
-                                                        </div>
-
-                                                        <div class="data-row" style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
-                                                            <span class="label">建議觀察價位：</span>
-                                                            <span class="val blue">{row.get("Suggested_Entry", "")}</span>
-                                                        </div>
-                                                        <div class="data-row">
-                                                            <span class="label">嚴格停損參考價：</span>
-                                                            <span class="val red">{row.get("Stop_Loss_Line", "")}</span>
-                                                        </div>
-                                                        
-                                                        <div class="data-row" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
-                                                            <span class="label">13:40 結算狀態：</span>
-                                                            <span class="val {val_color}">{close_price} 元 ｜ {row.get("Trade_Result", "")}</span>
-                                                        </div>
-                                                    </div>
-                                                </details>
-                                                """
+                                        <div class="data-row" style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
+                                            <span class="label">建議觀察價位：</span>
+                                            <span class="val blue">{row.get("Suggested_Entry", "")}</span>
+                                        </div>
+                                        <div class="data-row">
+                                            <span class="label">嚴格停損參考價：</span>
+                                            <span class="val red">{row.get("Stop_Loss_Line", "")}</span>
+                                        </div>
+                                        
+                                        <div class="data-row" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+                                            <span class="label">13:40 結算狀態：</span>
+                                            <span class="val {val_color}">{close_price} 元 ｜ {row.get("Trade_Result", "")}</span>
+                                        </div>
+                                    </div>
+                                </details>
+                                """
 
                 win_rate_pct = f"{(win_count / sent_count * 100):.0f}%" if sent_count > 0 else "0%"
                 display_date = now.strftime("%Y.%m.%d (%a)")
 
                 pcloud_public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{output_html_name}"
                 
-                # ✅ LINE 推播只留下精煉的總結，絕不洗版
                 review_lines = [
                     "📊 【股海觀浪・全方位戰場鑑識與盤後覆盤】",
                     "----------------------",
@@ -4791,9 +4738,6 @@ def afternoon_review_loop():
                 
                 final_report = "\n".join(review_lines)
 
-                # =======================================
-                # 🖥️ 產出符合統帥截圖的「整體戰情室網頁」
-                # =======================================
                 html_content = f"""<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -4801,7 +4745,6 @@ def afternoon_review_loop():
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>13:40 盤中爆量通知總結報告</title>
     <style>
-        /* (這裡的 CSS 樣式都不變，保留您原本的設計與手機防擠壓) */
         :root {{
             --bg-main: #0d1117; --bg-card: #161b22; --border-color: #30363d;
             --text-main: #c9d1d9; --text-muted: #8b949e;
@@ -4887,81 +4830,30 @@ def afternoon_review_loop():
 
     <div class="section-title">🔥 今日盤中爆量觸發清單 (收盤表現驗證)</div>
     {sniper_cards_html if sniper_cards_html else '<div style="color:var(--text-muted); padding:20px; text-align:center; border:1px dashed var(--border-color); border-radius:8px;">今日尚無符合條件標的</div>'}
-    
-    <div class="section-title" style="margin-top: 40px;">🛡️ 安全過濾區 (資金不足或漲幅過高，系統自動避開)</div>
-    <div class="defense-card">
-        <table>
-            <thead>
-                <tr>
-                    <th>時間</th>
-                    <th>代號 / 名稱</th>
-                    <th>盤中時段</th>
-                    <th>點火資金 / 狀況</th>
-                    <th>系統判定結果</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- 這裡未來可以放您的防禦清單迴圈生成內容 -->
-            </tbody>
-        </table>
-    </div>
 </div>
 </body>
 </html>
 """
 
-
-    # 寫入 HTML 檔案
                 with open(output_html_name, "w", encoding="utf-8") as f:
                     f.write(html_content)
                 
                 with open("latest_report.html", "w", encoding="utf-8") as f:
                     f.write(html_content)
 
-                print(f"✅ [13:40 盤後統整] 雲端主機已成功生成今日網頁：{output_html_name}", flush=True)
-
-                # ==========================================
-                # ☁️ 將盤後報告與紀錄永久封存至 pCloud (金鑰直連版)
-                # ==========================================
+                # pCloud 雲端備份
                 try:
-                    import requests, os
                     token = os.environ.get('PCLOUD_AUTH_TOKEN', '')
                     folder_id_main = os.environ.get('PCLOUD_FOLDER_ID', '31448526072')
                     folder_id_history = os.environ.get('PCLOUD_HISTORY_FOLDER_ID', '33133582905')
                     
-                    if token:
-                        print("✅ 偵測到 pCloud 專屬金鑰，準備直連上傳...", flush=True)
-                        # 1. 每日建檔 HTML
-                        if os.path.exists(output_html_name):
-                            with open(output_html_name, 'rb') as f:
-                                res1 = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={folder_id_history}", files={'file': (output_html_name, f, 'text/html')}, timeout=15)
-                                print(f"☁️ [雲端備份] 每日戰報 {output_html_name} 封存！回應: {res1.status_code}", flush=True)
+                    if token and os.path.exists(output_html_name):
+                        with open(output_html_name, 'rb') as f:
+                            requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={folder_id_history}", files={'file': (output_html_name, f, 'text/html')}, timeout=15)
+                except:
+                    pass
 
-                        # 2. 覆蓋 latest_report.html
-                        if os.path.exists('latest_report.html'):
-                            with open('latest_report.html', 'rb') as f:
-                                res2 = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={folder_id_main}", files={'file': ('latest_report.html', f, 'text/html')}, timeout=15)
-                                print(f"☁️ [雲端備份] 最新戰報 latest_report.html 覆蓋成功！", flush=True)
-
-                        # 3. 原始數據 CSV
-                        if os.path.exists(csv_filename):
-                            with open(csv_filename, 'rb') as f:
-                                res3 = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={folder_id_history}", files={'file': (csv_filename, f, 'text/csv')}, timeout=15)
-                                print(f"☁️ [雲端備份] 原始數據 {csv_filename} 封存成功！", flush=True)
-                    else:
-                        print(" ℹ️ [跳過上傳] 未偵測到 PCLOUD_AUTH_TOKEN 環境變數。", flush=True)
-                except Exception as pcloud_err:
-                    print(f"⚠️ 雲端備份 pCloud 異常: {pcloud_err}", flush=True)
-
-                # 將 LINE 推播連結，精準指向歷史報告專屬的公開網址！
-                pcloud_public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{output_html_name}"
-                review_lines.append("----------------------")
-                review_lines.append("🛡️ 今日盤後統整網頁已永久封存！")
-                review_lines.append(f"👉 請點擊下方連結觀看收盤驗證：\n{pcloud_public_url}")
-                
-                final_report = "\n".join(review_lines)
-                
-                # 🚀 執行 LINE 群組發送
+                # LINE 群組發送
                 TARGET_GROUP_IDS = [
                     "C0481b44935888bb1dc20dfd52a675e8a", 
                     "C47bfa8e16a7216bd54dceb3b5e90cfa0"
@@ -4972,16 +4864,12 @@ def afternoon_review_loop():
                     except: 
                         pass
                 
-                print("🚀 [13:40 盤後統整] LINE 盤後統整推播與網頁上傳成功！", flush=True)
-                
-                # 🔒 【絕對防護鎖】直接把今天日期強制寫死，確保今天絕對不會再觸發第二次！
                 last_sent_date = current_date_str
-                print(f"🔒 [防護生效] 今日 ({current_date_str}) 結算已經完成上鎖，今日不再重複發送。", flush=True)
+                print(f"🔒 [防護生效] 今日 ({current_date_str}) 結算已經完成上鎖。", flush=True)
 
         except Exception as e:
             print(f"⚠️ 雲端收盤鑑識迴圈異常: {e}", flush=True)
         
-        # 讓迴圈休息久一點（改為每 5 分鐘檢查一次，避免頻繁觸發）
         time.sleep(300)
 
 
