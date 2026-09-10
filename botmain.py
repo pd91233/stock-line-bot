@@ -4623,14 +4623,14 @@ def afternoon_review_loop():
             is_weekend = now.weekday() >= 5
             current_time_num = now.hour * 100 + now.minute
             current_date_str = now.strftime("%Y-%m-%d")
-			
-			# 從全域變數取得今日真實過濾的「總檔數」
+            
+            # 從全域變數取得今日真實過濾的「總檔數」
             global filtered_funds_codes, filtered_overheated_codes
             real_funds_filtered = len(filtered_funds_codes)
             real_overheated_filtered = len(filtered_overheated_codes)
             
             # 💥【絕對安全防護】在進入結算前，先初始化所有變數，絕對不會發生未繫結錯誤！
-			win_rate_pct = "0%"
+            win_rate_pct = "0%"
             review_lines = []
             total_scans = 0
             sent_count = 0
@@ -4687,8 +4687,8 @@ def afternoon_review_loop():
                             if "強勢達標_發送" in decision:
                                 sent_count += 1
                                 win_count += 1  # 預設勝出
-								
-								# 💥 精準定義漲跌顏色變數，防止未定義報錯
+                                
+                                # 💥 精準定義漲跌顏色變數，防止未定義報錯
                                 raw_pct = float(pct.replace('%', '').replace('+', '')) if pct else 0.0
                                 val_color = "red" if raw_pct >= 0 else "green"
                                 
