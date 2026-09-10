@@ -1,7 +1,5 @@
 import eventlet
-
 eventlet.monkey_patch()
-
 # -*- coding: utf-8 -*-
 
 # =========================================================
