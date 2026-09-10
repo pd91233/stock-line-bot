@@ -4690,8 +4690,10 @@ def afternoon_review_loop():
 
                                         <!-- 📈 真實 1分K / 日K 技術線型 (ECharts 微型圖表容器) -->
                                         <div class="chart-container" id="container_{stock_c}">
-                                            <div id="micro_{stock_c}" class="micro-chart" style="height: 160px; width: 100%;"></div>
-                                            <div class="zoom-hint">📊 真實量價與均線</div>
+                                            <div id="micro_{stock_c}" class="micro-chart" onclick="toggleChart('{stock_c}')" style="height: 160px; width: 100%;"></div>
+                                            <div id="hint_{stock_c}" class="zoom-hint">🔍 點擊展開全息圖</div>
+                                            <div id="full_{stock_c}" class="full-chart" style="width: 100%; height: 260px; display: none;"></div>
+                                            <button id="btn_close_{stock_c}" class="btn-close-full" onclick="toggleChart('{stock_c}')" style="display: none; width: 100%; padding: 6px; background: #1e293b; color: #cbd5e1; text-align: center; font-size: 12px; font-weight: bold; cursor: pointer; border: none; border-top: 1px dashed #334155;">▲ 收起大圖</button>
                                         </div>
 
                                         <div class="data-row highlight-row" style="margin-top: 15px;">
@@ -4872,59 +4874,135 @@ def afternoon_review_loop():
 
 
 <script>
-    // 注入由 Python 後台精準過濾的真實歷史 K 線資料庫
     const KBARS_DB = {kbars_json_str}; 
+    let chartsStore = {{}};
 
-    function initCloudCharts() {{
+    // 1. 核心資料解析器
+    function getKData(code) {{
+        let kbars = KBARS_DB[code];
+        if (!kbars) return null;
+        let dates = Object.keys(kbars).sort();
+        if(dates.length === 0) return null;
+
+        let cat = [], vals = [], vols = [];
+        dates.forEach(d => {{
+            let kb = kbars[d];
+            let c = parseFloat(String(kb.c || kb.Close || kb.close || kb['收盤價'] || 0).replace(/,/g, ''));
+            let o = parseFloat(String(kb.o || kb.Open || kb.open || kb['開盤價'] || c).replace(/,/g, ''));
+            let l = parseFloat(String(kb.l || kb.Low || kb.low || kb['最低價'] || c).replace(/,/g, ''));
+            let h = parseFloat(String(kb.h || kb.High || kb.high || kb['最高價'] || c).replace(/,/g, ''));
+            let v = parseFloat(String(kb.v || kb.Volume || kb.vol || kb['成交量'] || 0).replace(/,/g, ''));
+
+            if (c <= 0 || isNaN(c)) return; 
+            
+            cat.push(d.substring(5)); // 只顯示 MM-DD
+            vals.push([o, c, l, h]);
+            vols.push(v);
+        }});
+
+        const calcMA = (dayCount, data) => {{
+            let res = [];
+            for (let i = 0; i < data.length; i++) {{
+                if (i < dayCount - 1) {{ res.push('-'); continue; }}
+                let sum = 0;
+                for (let j = 0; j < dayCount; j++) sum += data[i - j][1]; 
+                res.push(+(sum / dayCount).toFixed(2));
+            }}
+            return res;
+        }};
+        return {{ cat, vals, vols, ma5: calcMA(5, vals), ma10: calcMA(10, vals), ma20: calcMA(20, vals) }};
+    }}
+
+    // 2. 初始微型圖表渲染
+    function initCharts() {{
         if (typeof KBARS_DB === 'undefined') return;
         for (let code in KBARS_DB) {{
             let dom = document.getElementById('micro_' + code);
             if (!dom) continue;
 
-            let kbars = KBARS_DB[code];
-            let dates = Object.keys(kbars).sort();
-            if (dates.length === 0) continue;
+            let kd = getKData(code);
+            if (!kd) continue;
 
-            let cat = [], vals = [], ma5 = [];
-            dates.slice(-30).forEach(d => {{
-                let kb = kbars[d];
-                
-                // 💥 換上與統帥 main_3.py 主機一模一樣的「全方位解析晶片」！
-                let c = parseFloat(String(kb.c || kb.Close || kb.close || kb['收盤價'] || 0).replace(/,/g, ''));
-                let o = parseFloat(String(kb.o || kb.Open || kb.open || kb['開盤價'] || c).replace(/,/g, ''));
-                let l = parseFloat(String(kb.l || kb.Low || kb.low || kb['最低價'] || c).replace(/,/g, ''));
-                let h = parseFloat(String(kb.h || kb.High || kb.high || kb['最高價'] || c).replace(/,/g, ''));
-                
-                // 排除 0 與 NaN (斷崖黑洞防護)
-                if (c <= 0 || isNaN(c)) return; 
-                
-                cat.push(d.substring(5));
-                vals.push([o, c, l, h]);
-            }});
-
-            // 計算 5MA
-            for (let i = 0; i < vals.length; i++) {{
-                if (i < 4) {{ ma5.push('-'); continue; }}
-                let sum = 0;
-                for (let j = 0; j < 5; j++) sum += vals[i - j][1];
-                ma5.push(+(sum / 5).toFixed(2));
-            }}
-
-            let chart = echarts.init(dom);
-            chart.setOption({{
+            let option = {{
                 grid: {{ left: 2, right: 2, top: 5, bottom: 5 }},
-                xAxis: {{ type: 'category', data: cat, show: false }},
-                // 💥 加上 min: 'dataMin' 讓 K 棒圖形更飽滿貼合
+                xAxis: {{ type: 'category', data: kd.cat, show: false }},
                 yAxis: {{ type: 'value', scale: true, show: false, min: 'dataMin' }},
                 series: [
-                    {{ type: 'candlestick', data: vals, itemStyle: {{ color: '#ef4444', color0: '#10b981', borderColor: '#ef4444', borderColor0: '#10b981' }} }},
-                    {{ type: 'line', data: ma5, smooth: true, showSymbol: false, lineStyle: {{ color: '#fbbf24', width: 1.5 }} }}
-                ],
+                    {{ type: 'candlestick', data: kd.vals, itemStyle: {{ color: '#ef4444', color0: '#10b981', borderColor: '#ef4444', borderColor0: '#10b981' }} }},
+                    {{ type: 'line', data: kd.ma5, smooth: true, showSymbol: false, lineStyle: {{ color: '#fbbf24', width: 1.5 }} }}
+                ], 
                 animation: false
-            }});
+            }};
+
+            let chart = echarts.init(dom);
+            chart.setOption(option);
+            chartsStore['micro_' + code] = chart;
         }}
     }}
-    window.addEventListener('load', initCloudCharts);
+
+    // 3. 點擊切換邏輯
+    function toggleChart(stockId) {{
+        const microDiv = document.getElementById('micro_' + stockId);
+        const fullDiv = document.getElementById('full_' + stockId);
+        const hintDiv = document.getElementById('hint_' + stockId);
+        const btnClose = document.getElementById('btn_close_' + stockId);
+        const container = document.getElementById('container_' + stockId);
+
+        if (!microDiv || !fullDiv) return;
+
+        if (microDiv.style.display !== 'none') {{
+            microDiv.style.display = 'none'; hintDiv.style.display = 'none'; fullDiv.style.display = 'block'; btnClose.style.display = 'block';
+            container.style.borderColor = '#38bdf8';
+            setTimeout(() => renderFullChart(stockId, fullDiv), 50);
+        }} else {{
+            fullDiv.style.display = 'none'; btnClose.style.display = 'none'; microDiv.style.display = 'block'; hintDiv.style.display = 'block';
+            container.style.borderColor = '#334155';
+        }}
+    }}
+
+    // 4. 全息圖表渲染
+    function renderFullChart(stockId, dom) {{
+        let key = 'full_' + stockId;
+        if (chartsStore[key]) {{ chartsStore[key].dispose(); }}
+
+        let kd = getKData(stockId); 
+        if (!kd) return;
+
+        const volMapped = kd.vals.map((v, i) => {{ 
+            let volValue = kd.vols[i];
+            if (isNaN(volValue) || volValue < 0) volValue = 0;
+            return {{ value: volValue, itemStyle: {{ color: v[1] >= v[0] ? '#ef4444' : '#10b981' }} }}; 
+        }});
+
+        let chart = echarts.init(dom);
+        chart.setOption({{
+            tooltip: {{ trigger: 'axis', axisPointer: {{ type: 'cross' }}, backgroundColor: 'rgba(15,23,42,0.9)', borderColor: '#334155', textStyle: {{color: '#fff'}} }},
+            axisPointer: {{ link: [{{xAxisIndex: 'all'}}] }},
+            grid: [ 
+                {{ left: '8%', right: '3%', top: '5%', height: '60%' }},
+                {{ left: '8%', right: '3%', top: '70%', height: '22%' }}
+            ],
+            xAxis: [ 
+                {{ type: 'category', data: kd.cat, boundaryGap: true, axisLine: {{ onZero: false }}, splitLine: {{ show: false }}, axisLabel: {{ show: false }}, axisTick: {{ show: false }}, gridIndex: 0 }}, 
+                {{ type: 'category', data: kd.cat, boundaryGap: true, axisLine: {{ onZero: false }}, splitLine: {{ show: false }}, axisLabel: {{ color: '#94a3b8', fontSize: 10 }}, gridIndex: 1 }} 
+            ],
+            yAxis: [ 
+                {{ type: 'value', scale: true, min: 'dataMin', splitLine: {{ lineStyle: {{ color: '#1e293b', type: 'dashed' }} }}, axisLabel: {{ color: '#94a3b8', fontSize: 10 }}, gridIndex: 0 }}, 
+                {{ type: 'value', scale: false, min: 0, splitLine: {{ show: false }}, axisLabel: {{ show: false }}, axisLine: {{ show: false }}, axisTick: {{ show: false }}, gridIndex: 1 }} 
+            ],
+            series: [
+                {{ name: 'K線', type: 'candlestick', data: kd.vals, itemStyle: {{ color: '#ef4444', color0: '#10b981', borderColor: '#ef4444', borderColor0: '#10b981' }}, xAxisIndex: 0, yAxisIndex: 0 }},
+                {{ name: '5MA', type: 'line', data: kd.ma5, smooth: true, showSymbol: false, lineStyle: {{ color: '#fbbf24', width: 2 }}, xAxisIndex: 0, yAxisIndex: 0 }},
+                {{ name: '10MA', type: 'line', data: kd.ma10, smooth: true, showSymbol: false, lineStyle: {{ color: '#3b82f6', width: 2 }}, xAxisIndex: 0, yAxisIndex: 0 }},
+                {{ name: '20MA', type: 'line', data: kd.ma20, smooth: true, showSymbol: false, lineStyle: {{ color: '#c084fc', width: 2 }}, xAxisIndex: 0, yAxisIndex: 0 }},
+                {{ name: '成交量', type: 'bar', data: volMapped, xAxisIndex: 1, yAxisIndex: 1 }} 
+            ],
+            animation: false
+        }});
+        chartsStore[key] = chart;
+    }}
+
+    window.addEventListener('load', initCharts);
 </script>
 </body>
 </html>
