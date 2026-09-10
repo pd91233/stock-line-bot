@@ -4945,21 +4945,29 @@ def afternoon_review_loop():
                 PCLOUD_HISTORY_FOLDER_ID = os.environ.get('PCLOUD_HISTORY_FOLDER_ID', '33133582905') # history_reports 專屬資料夾
                 
                 if PCLOUD_EMAIL and PCLOUD_PASSWORD:
-                    # 1. 取得 API 授權 Token
+                    # 1. 取得 API 授權 Token 並印出除錯訊息
                     auth_url = f"https://api.pcloud.com/userinfo?getauth=1&logout=1&username={PCLOUD_EMAIL}&password={PCLOUD_PASSWORD}"
                     auth_res = requests.get(auth_url, timeout=10).json()
                     
+                    # 💥 把 pCloud 伺服器回傳的完整結果直接印在 Render 紀錄上！
+                    print(f"🔍 pCloud 完整回應內容: {auth_res}", flush=True)
+                    
                     if "auth" in auth_res:
                         token = auth_res["auth"]
+                        print("✅ 成功取得 pCloud 授權 Token！", flush=True)
                         
                         # 2. 【每日建檔】上傳今日盤後報告到 history_reports 資料夾
                         if os.path.exists(output_html_name):
                             with open(output_html_name, 'rb') as f_daily:
                                 file_daily = {'file': (output_html_name, f_daily, 'text/html')}
-                                requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_daily, timeout=15)
-                            print(f"☁️ [雲端備份] 每日戰報 {output_html_name} 已成功封存！", flush=True)
+                                res = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_daily, timeout=15)
+                                print(f"☁️ [雲端備份] 每日戰報 {output_html_name} 已成功封存！伺服器回應碼: {res.status_code}", flush=True)
                         else:
                             print(f"⚠️ [警告] 找不到要上傳的 HTML 檔案: {output_html_name}", flush=True)
+                            
+                    else:
+                        print(f"❌ pCloud 登入被拒絕，錯誤代碼與原因: {auth_res}", flush=True)
+
                         
                         # 3. 【覆蓋最新】上傳 latest_report.html 到 money 主資料夾
                         if os.path.exists('latest_report.html'):
