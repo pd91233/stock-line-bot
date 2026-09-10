@@ -4698,7 +4698,7 @@ def afternoon_review_loop():
             csv_filename = f"trading_log_{today_str}.csv"
 
             # 盤後結算與 pCloud 上傳判斷
-            if not is_weekend and (1355 <= current_time_num <= 1430) and (last_sent_date != current_date_str):
+            if not is_weekend and (0 <= current_time_num <= 2359):
                 print("🔍 [戰場鑑識] 時間已達 13:55，開始自動結算與生成 HTML 戰情網頁...", flush=True)
                 
                 # ✅ 宣告文字戰報陣列
