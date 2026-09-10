@@ -4719,6 +4719,10 @@ def afternoon_review_loop():
                             if "強勢達標_發送" in decision:
                                 sent_count += 1
                                 win_count += 1  # 預設勝出
+								
+								# 💥 精準定義漲跌顏色變數，防止未定義報錯
+                                raw_pct = float(pct.replace('%', '').replace('+', '')) if pct else 0.0
+                                val_color = "red" if raw_pct >= 0 else "green"
                                 
                                 # ✅ 同步將戰報寫入 LINE 推播文字中
                                 stock_n = row.get("Stock_Name")
