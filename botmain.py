@@ -4830,9 +4830,9 @@ def afternoon_review_loop():
 	<!-- ECharts 核心庫 -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <style>
-        .chart-container { position: relative; width: 100%; background: #020617; border: 1px solid #334155; border-radius: 6px; overflow: hidden; margin-top: 10px; }
-        .micro-chart { width: 100%; height: 160px; cursor: zoom-in; }
-        .zoom-hint { position: absolute; bottom: 8px; right: 8px; background: rgba(15, 23, 42, 0.8); color: #38bdf8; border: 1px solid #38bdf8; padding: 2px 6px; font-size: 10px; border-radius: 4px; pointer-events: none; font-weight: bold; }
+        .chart-container {{ position: relative; width: 100%; background: #020617; border: 1px solid #334155; border-radius: 6px; overflow: hidden; margin-top: 10px; }}
+        .micro-chart {{ width: 100%; height: 160px; cursor: zoom-in; }}
+        .zoom-hint {{ position: absolute; bottom: 8px; right: 8px; background: rgba(15, 23, 42, 0.8); color: #38bdf8; border: 1px solid #38bdf8; padding: 2px 6px; font-size: 10px; border-radius: 4px; pointer-events: none; font-weight: bold; }}
     </style>
 	
 </head>
