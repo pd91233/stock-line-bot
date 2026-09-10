@@ -4682,18 +4682,18 @@ def afternoon_review_loop():
                                             </div>
                                         </div>
                                     </summary>
-                                    
+
                                     <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
                                         <div style="margin-bottom: 15px;">
                                             <span class="zone-tag">{row.get("Time_Zone", "")}</span>
                                         </div>
 
-                                        <!-- 📈 真實 1分K / 日K 技術線型 (ECharts 微型圖表引擎) -->
+                                        <!-- 📈 真實 1分K / 日K 技術線型 (ECharts 微型圖表容器) -->
                                         <div class="chart-container" id="container_{stock_c}">
                                             <div id="micro_{stock_c}" class="micro-chart" style="height: 160px; width: 100%;"></div>
                                             <div class="zoom-hint">📊 真實量價與均線</div>
                                         </div>
-                                        
+
                                         <div class="data-row highlight-row" style="margin-top: 15px;">
                                             <span class="label" style="color: var(--text-main);">⚡ 觸發當下現價：</span>
                                             <span class="val green" style="font-size: 1.1rem;">{price_in} 元</span>
@@ -4716,7 +4716,7 @@ def afternoon_review_loop():
                                             <span class="label">嚴格停損參考價：</span>
                                             <span class="val red">{row.get("Stop_Loss_Line", "")}</span>
                                         </div>
-                                        
+
                                         <div class="data-row" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
                                             <span class="label">13:40 結算狀態：</span>
                                             <span class="val {val_color}">{close_price} 元 ｜ {row.get("Trade_Result", "")}</span>
@@ -4730,6 +4730,30 @@ def afternoon_review_loop():
 
                 pcloud_public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{output_html_name}"
                 
+				# ==========================================
+                # 🎯 智慧物資補給：讀取本機 kbars_cache.json，僅過濾出今日入選的股票 K 線資料
+                # ==========================================
+                embedded_kbars = {}
+                if os.path.exists("kbars_cache.json") and os.path.exists(csv_filename):
+                    try:
+                        import json as safe_json
+                        with open("kbars_cache.json", "r", encoding="utf-8") as kf:
+                            full_kb = safe_json.load(kf)
+                            # 收集今天所有入選的股票代號
+                            with open(csv_filename, mode='r', encoding='utf-8-sig') as cf:
+                                creader = csv.DictReader(cf)
+                                target_ids = set(row.get("Stock_ID", "").strip() for row in creader if "強勢達標_發送" in row.get("System_Decision", ""))
+
+                            for scode in target_ids:
+                                if scode in full_kb:
+                                    embedded_kbars[scode] = full_kb[scode]
+                    except Exception as e:
+                        print(f"⚠️ 注入 K 棒快訊異常: {e}")
+
+                kbars_json_str = safe_json.dumps(embedded_kbars, ensure_ascii=False)
+                # ==========================================
+				
+				
                 review_lines = [
                     "📊 【股海觀浪・全方位戰場鑑識與盤後覆盤】",
                     "----------------------",
@@ -4801,6 +4825,15 @@ def afternoon_review_loop():
             .stock-name {{ font-size: 1.2rem; }}
         }}
     </style>
+	
+	<!-- ECharts 核心庫 -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <style>
+        .chart-container { position: relative; width: 100%; background: #020617; border: 1px solid #334155; border-radius: 6px; overflow: hidden; margin-top: 10px; }
+        .micro-chart { width: 100%; height: 160px; cursor: zoom-in; }
+        .zoom-hint { position: absolute; bottom: 8px; right: 8px; background: rgba(15, 23, 42, 0.8); color: #38bdf8; border: 1px solid #38bdf8; padding: 2px 6px; font-size: 10px; border-radius: 4px; pointer-events: none; font-weight: bold; }
+    </style>
+	
 </head>
 <body>
 <div class="container">
@@ -4835,6 +4868,57 @@ def afternoon_review_loop():
     <div class="section-title">🔥 今日盤中爆量觸發清單 (收盤表現驗證)</div>
     {sniper_cards_html if sniper_cards_html else '<div style="color:var(--text-muted); padding:20px; text-align:center; border:1px dashed var(--border-color); border-radius:8px;">今日尚無符合條件標的</div>'}
 </div>
+
+
+<script>
+    // 注入由 Python 後台精準過濾的真實歷史 K 線資料庫
+    const KBARS_DB = ${kbars_json_str}; 
+
+    function initCloudCharts() {
+        if (typeof KBARS_DB === 'undefined') return;
+        for (let code in KBARS_DB) {
+            let dom = document.getElementById('micro_' + code);
+            if (!dom) continue;
+
+            let kbars = KBARS_DB[code];
+            let dates = Object.keys(kbars).sort();
+            if (dates.length === 0) continue;
+
+            let cat = [], vals = [], ma5 = [];
+            dates.slice(-30).forEach(d => {
+                let kb = kbars[d];
+                let c = parseFloat(kb.c || kb.Close || 0);
+                let o = parseFloat(kb.o || kb.Open || c);
+                let l = parseFloat(kb.l || kb.Low || c);
+                let h = parseFloat(kb.h || kb.High || c);
+                if (c <= 0) return;
+                cat.push(d.substring(5));
+                vals.push([o, c, l, h]);
+            });
+
+            // 計算 5MA
+            for (let i = 0; i < vals.length; i++) {
+                if (i < 4) { ma5.push('-'); continue; }
+                let sum = 0;
+                for (let j = 0; j < 5; j++) sum += vals[i - j][1];
+                ma5.push(+(sum / 5).toFixed(2));
+            }
+
+            let chart = echarts.init(dom);
+            chart.setOption({
+                grid: { left: 2, right: 2, top: 5, bottom: 5 },
+                xAxis: { type: 'category', data: cat, show: false },
+                yAxis: { type: 'value', scale: true, show: false },
+                series: [
+                    { type: 'candlestick', data: vals, itemStyle: { color: '#ef4444', color0: '#10b981', borderColor: '#ef4444', borderColor0: '#10b981' } },
+                    { type: 'line', data: ma5, smooth: true, showSymbol: false, lineStyle: { color: '#fbbf24', width: 1.5 } }
+                ],
+                animation: false
+            });
+        }
+    }
+    window.addEventListener('load', initCloudCharts);
+</script>
 </body>
 </html>
 """
