@@ -4083,165 +4083,103 @@ def market_patrol_loop():
 
 
 # 🛡️ 戰情室防禦黑盒子：記錄被攔截的主力陷阱
-
 intercepted_traps_log = []
 
-
-
 stock_tick_memory = {}
-
 intraday_alerted_codes = set()
 
-
+# 💥 新增：用來記錄「盤中真實被系統攔截過濾」的股票集合
+filtered_funds_codes = set()
+filtered_overheated_codes = set()
+last_clear_date = ""
 
 def process_tick_data(data, meta_info, top_ind):
-
     import time, datetime, requests
-
+    global stock_tick_memory, intraday_alerted_codes, intercepted_traps_log
+    global filtered_funds_codes, filtered_overheated_codes, last_clear_date
+    
     code = data.get('c')
+    
+    # 換日自動清空昨天的過濾紀錄
+    tz = datetime.timezone(datetime.timedelta(hours=8))
+    now_dt = datetime.datetime.now(tz)
+    now_date_str = now_dt.strftime("%Y-%m-%d")
+    if last_clear_date != now_date_str:
+        filtered_funds_codes.clear()
+        filtered_overheated_codes.clear()
+        intercepted_traps_log.clear()
+        last_clear_date = now_date_str
 
     if not code or code in intraday_alerted_codes: return None
-
     
-
     try:
-
         name = meta_info.get('name', code)
-
         ind = meta_info.get('ind', '未知')
-
         ma20 = float(meta_info.get('ma20', 0) if meta_info.get('ma20', '-') != '-' else 0)
-
         
-
         z = float(data.get('z', 0) if data.get('z', '-') != '-' else data.get('y', 0))
-
         o = float(data.get('o', 0) if data.get('o', '-') != '-' else z)
-
         h = float(data.get('h', 0) if data.get('h', '-') != '-' else 0)
-
         l = float(data.get('l', 0) if data.get('l', '-') != '-' else z)
-
         y = float(data.get('y', 0))
-
         v = float(data.get('v', 0) if data.get('v', '-') != '-' else 0)
-
         
-
         if z <= 0 or y <= 0: return None
-
         if v < 0.5: return None
-
         
-
         chg_pct = round(((z - y) / y) * 100, 2)
-
         
-
         try:
-
             vwap_est = round((o + h + l + (z * v / (v if v > 0 else 1))) / 4, 2) if v > 0 else round((o + h + l + z * 2) / 5, 2)
-
             if abs(vwap_est - z) / z > 0.07: vwap_est = round((o + h + l + z * 2) / 5, 2)
-
         except:
-
             vwap_est = round((o + h + l + z * 2) / 5, 2)
 
-
-
         now_ts = time.time()
-
-        tz = datetime.timezone(datetime.timedelta(hours=8))
-
-        now_dt = datetime.datetime.now(tz)
-
         time_str = now_dt.strftime("%H:%M:%S")
-
         current_time_num = now_dt.hour * 100 + now_dt.minute
 
-
-
         if 900 <= current_time_num < 1000: time_status = "golden"
-
         elif 1000 <= current_time_num < 1100: time_status = "cooling"
-
         else: time_status = "dead_water"
 
-
-
         if code not in stock_tick_memory: stock_tick_memory[code] = []
-
         stock_tick_memory[code].append((now_ts, z, v, h, l))
-
         
-
-        # 💥 擴大彈匣：因為雷達約 3 秒掃一次，擴充到 30 筆才能存滿超過 1 分鐘的歷史！
-
         if len(stock_tick_memory[code]) > 30: stock_tick_memory[code].pop(0)
 
-
-
         ticks = stock_tick_memory[code]
-
         if len(ticks) >= 6:
-
             current_ts, current_z, current_v = ticks[-1][0], ticks[-1][1], ticks[-1][2]
-
             
-
-            # 💥 動態時間回溯：精準尋找「大約 50~60 秒前」的那一筆資料
-
             past_tick = ticks[0] 
-
             for t in reversed(ticks):
-
                 if current_ts - t[0] >= 50: 
-
                     past_tick = t
-
                     break
-
             
-
-            # 💥 防護罩：如果系統剛開機，該股票記憶體資料還沒搜集滿 40 秒，先靜默
-
             if current_ts - ticks[0][0] < 40:
-
                 return None
 
-
-
             z_1m_ago, v_1m_ago = past_tick[1], past_tick[2]
-
-
-
-            # 這樣算出來的才是貨真價實的「1 分鐘爆量」！
-
             vol_1m = current_v - v_1m_ago
-
             ignite_value = vol_1m * current_z * 1000
 
-
-
             is_real_attack = current_z >= z_1m_ago
-
             is_volume_surge = False
 
-
-            # 💥 [統帥校準] 嚴格把關主力真實點火資金，徹底防堵假單騙線！
+            # 💥 [統帥校準] 嚴格把關主力真實點火資金
             if time_status == "golden":
-                # 早盤 (09:00-10:00)：50張爆量 / 5000萬點火資金
                 if vol_1m >= 50 and ignite_value >= 50000000: is_volume_surge = True
             elif time_status == "cooling":
-                # 盤中 (10:00-11:00)：100張爆量 / 8000萬點火資金
                 if vol_1m >= 100 and ignite_value >= 80000000: is_volume_surge = True
             elif time_status == "dead_water":
-                # 尾盤 (11:00-13:24)：150張爆量 / 1億點火資金
                 if vol_1m >= 150 and ignite_value >= 100000000: is_volume_surge = True
 
-
-
+            # 🛡️ 數據採集 1：資金不足過濾 (有一分鐘爆量>50張，但資金/張數未達嚴格標準)
+            if vol_1m >= 50 and current_z >= z_1m_ago and not is_volume_surge:
+                filtered_funds_codes.add(code)
+                return None
 
             if not (is_volume_surge and is_real_attack): return None
 
@@ -4294,9 +4232,10 @@ def process_tick_data(data, meta_info, top_ind):
 
 
             bias = ((current_z - vwap_est) / vwap_est) * 100 if vwap_est > 0 else 0
-
             if bias >= 2.5:
-
+                # 🛡️ 數據採集 2：將過熱標的記錄進真實數據庫
+                filtered_overheated_codes.add(code)
+                
                 alert_type = "⚠️ 【高檔爆量・極端過熱】"
 
                 action_guide = f"🎯 【操盤手強制指令：嚴禁追高】\n👉 戰況解讀：正乖離達 {bias:+.1f}%，瞬間漲幅過大！\n🔪 動作：切勿市價追高！靜待量縮拉回測試。"
@@ -4684,6 +4623,11 @@ def afternoon_review_loop():
             is_weekend = now.weekday() >= 5
             current_time_num = now.hour * 100 + now.minute
             current_date_str = now.strftime("%Y-%m-%d")
+			
+			# 從全域變數取得今日真實過濾的「總檔數」
+            global filtered_funds_codes, filtered_overheated_codes
+            real_funds_filtered = len(filtered_funds_codes)
+            real_overheated_filtered = len(filtered_overheated_codes)
             
             # 💥【絕對安全防護】在進入結算前，先初始化所有變數，絕對不會發生未繫結錯誤！
             review_lines = []
@@ -4906,12 +4850,12 @@ def afternoon_review_loop():
         </div>
         <div class="stat-card">
             <div class="stat-title">資金不足過濾</div>
-            <div class="stat-value yellow">11 <span>檔</span> 🐢</div>
+            <div class="stat-value yellow">{real_funds_filtered} <span>檔</span> 🐢</div>
             <div class="stat-desc">點火資金未達標，不提醒</div>
         </div>
         <div class="stat-card">
             <div class="stat-title">過熱與過高防護</div>
-            <div class="stat-value red">5 <span>檔</span> 🚫</div>
+            <div class="stat-value red">{real_overheated_filtered} <span>檔</span> 🚫</div>
             <div class="stat-desc">乖離過大/漲幅過高，不追高</div>
         </div>
     </div>
