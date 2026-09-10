@@ -4686,94 +4686,94 @@ def afternoon_review_loop():
                                 # 💥 [統帥升級] 疊合抽屜式狙擊卡片 (真實K線版)
                                 # =======================================
                                 if os.path.exists(csv_filename):
-                    with open(csv_filename, mode='r', encoding='utf-8-sig') as f:
-                        reader = csv.DictReader(f)
-                        is_first_card = True  # 💥 控制：只有第一張卡片預設展開
-                        
-                        for row in reader:
-                            total_scans += 1
-                            decision = row.get("System_Decision", "")
-                            
-                            stock_n = row.get("Stock_Name", "未知")
-                            stock_c = row.get("Stock_ID", "0000")
-                            price_in = row.get("Suggested_Entry", "0.0")
-                            t_time = row.get("Trigger_Time", "09:00")
-                            pct = row.get("Price_Change_Pct", "+0.00%")
-                            close_price = row.get("Close_Price", "0.0")
-                            
-                            raw_pct = 0.0
-                            try:
-                                raw_pct = float(pct.replace('%', '').replace('+', ''))
-                            except:
-                                raw_pct = 0.0
-                            val_color = "red" if raw_pct >= 0 else "green"
-
-                            if "強勢達標_發送" in decision:
-                                sent_count += 1
-                                win_count += 1  # 預設勝出
-                                
-                                # 💥 第一張卡片加上 open 屬性，其餘自動收合
-                                open_attr = "open" if is_first_card else ""
-                                is_first_card = False
-                                
-                                # =======================================
-                                # 💥 [統帥升級] 疊合抽屜式狙擊卡片 (真實 TradingView K線版)
-                                # =======================================
-                                sniper_cards_html += f"""
-                                <details class="sniper-card" {open_attr}>
-                                    <summary class="card-head" style="cursor: pointer; outline: none; list-style: none;">
-                                        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
-                                            <div>
-                                                <span class="stock-name">{stock_n} ({stock_c})</span>
-                                                <span class="time-tag">⏰ {t_time}</span>
-                                            </div>
-                                            <div style="display: flex; align-items: center; gap: 10px;">
-                                                <span class="val {val_color}">🔥 {pct}</span>
-                                                <span style="color: var(--text-muted); font-size: 0.8rem;">▼ 展開/收合</span>
-                                            </div>
-                                        </div>
-                                    </summary>
-                                    
-                                    <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
-                                        <div style="margin-bottom: 15px;">
-                                            <span class="zone-tag">{row.get("Time_Zone", "")}</span>
-                                        </div>
-
-                                        <!-- 📈 真實 1分K 技術線型 (TradingView 專業圖表，並啟動延遲載入防卡頓) -->
-                                        <div class="chart-box" style="height: 280px; width: 100%; margin-bottom: 20px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); background: #000;">
-                                            <iframe src="https://s.tradingview.com/widgetembed/?symbol={stock_c}&interval=1&theme=dark&style=1&timezone=Asia%2FTaipei&hidesidetoolbar=1&hidetoptoolbar=1&saveimage=0" width="100%" height="100%" frameborder="0" loading="lazy" allowtransparency="true"></iframe>
-                                        </div>
+                                    with open(csv_filename, mode='r', encoding='utf-8-sig') as f:
+                                        reader = csv.DictReader(f)
+                                        is_first_card = True  # 💥 控制：只有第一張卡片預設展開
                                         
-                                        <div class="data-row highlight-row">
-                                            <span class="label" style="color: var(--text-main);">⚡ 觸發當下現價：</span>
-                                            <span class="val green" style="font-size: 1.1rem;">{price_in} 元</span>
-                                        </div>
+                                        for row in reader:
+                                            total_scans += 1
+                                            decision = row.get("System_Decision", "")
+                                            
+                                            stock_n = row.get("Stock_Name", "未知")
+                                            stock_c = row.get("Stock_ID", "0000")
+                                            price_in = row.get("Suggested_Entry", "0.0")
+                                            t_time = row.get("Trigger_Time", "09:00")
+                                            pct = row.get("Price_Change_Pct", "+0.00%")
+                                            close_price = row.get("Close_Price", "0.0")
+                                            
+                                            raw_pct = 0.0
+                                            try:
+                                                raw_pct = float(pct.replace('%', '').replace('+', ''))
+                                            except:
+                                                raw_pct = 0.0
+                                            val_color = "red" if raw_pct >= 0 else "green"
 
-                                        <div class="data-row">
-                                            <span class="label">主力點火資金</span>
-                                            <span class="val yellow">{row.get("Ignition_Funds", "")} (✅ 達標)</span>
-                                        </div>
-                                        <div class="data-row">
-                                            <span class="label">正乖離率狀況</span>
-                                            <span class="val main">{row.get("Deviation_Rate", "")}</span>
-                                        </div>
+                                            if "強勢達標_發送" in decision:
+                                                sent_count += 1
+                                                win_count += 1  # 預設勝出
+                                                
+                                                # 💥 第一張卡片加上 open 屬性，其餘自動收合
+                                                open_attr = "open" if is_first_card else ""
+                                                is_first_card = False
+                                                
+                                                # =======================================
+                                                # 💥 [統帥升級] 疊合抽屜式狙擊卡片 (真實 TradingView K線版)
+                                                # =======================================
+                                                sniper_cards_html += f"""
+                                                <details class="sniper-card" {open_attr}>
+                                                    <summary class="card-head" style="cursor: pointer; outline: none; list-style: none;">
+                                                        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                                                            <div>
+                                                                <span class="stock-name">{stock_n} ({stock_c})</span>
+                                                                <span class="time-tag">⏰ {t_time}</span>
+                                                            </div>
+                                                            <div style="display: flex; align-items: center; gap: 10px;">
+                                                                <span class="val {val_color}">🔥 {pct}</span>
+                                                                <span style="color: var(--text-muted); font-size: 0.8rem;">▼ 展開/收合</span>
+                                                            </div>
+                                                        </div>
+                                                    </summary>
+                                                    
+                                                    <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
+                                                        <div style="margin-bottom: 15px;">
+                                                            <span class="zone-tag">{row.get("Time_Zone", "")}</span>
+                                                        </div>
 
-                                        <div class="data-row" style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
-                                            <span class="label">建議觀察價位：</span>
-                                            <span class="val blue">{row.get("Suggested_Entry", "")}</span>
-                                        </div>
-                                        <div class="data-row">
-                                            <span class="label">嚴格停損參考價：</span>
-                                            <span class="val red">{row.get("Stop_Loss_Line", "")}</span>
-                                        </div>
-                                        
-                                        <div class="data-row" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
-                                            <span class="label">13:40 結算狀態：</span>
-                                            <span class="val {val_color}">{close_price} 元 ｜ {row.get("Trade_Result", "")}</span>
-                                        </div>
-                                    </div>
-                                </details>
-                                """
+                                                        <!-- 📈 真實 1分K 技術線型 (TradingView 專業圖表，並啟動延遲載入防卡頓) -->
+                                                        <div class="chart-box" style="height: 280px; width: 100%; margin-bottom: 20px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); background: #000;">
+                                                            <iframe src="https://s.tradingview.com/widgetembed/?symbol={stock_c}&interval=1&theme=dark&style=1&timezone=Asia%2FTaipei&hidesidetoolbar=1&hidetoptoolbar=1&saveimage=0" width="100%" height="100%" frameborder="0" loading="lazy" allowtransparency="true"></iframe>
+                                                        </div>
+                                                        
+                                                        <div class="data-row highlight-row">
+                                                            <span class="label" style="color: var(--text-main);">⚡ 觸發當下現價：</span>
+                                                            <span class="val green" style="font-size: 1.1rem;">{price_in} 元</span>
+                                                        </div>
+
+                                                        <div class="data-row">
+                                                            <span class="label">主力點火資金</span>
+                                                            <span class="val yellow">{row.get("Ignition_Funds", "")} (✅ 達標)</span>
+                                                        </div>
+                                                        <div class="data-row">
+                                                            <span class="label">正乖離率狀況</span>
+                                                            <span class="val main">{row.get("Deviation_Rate", "")}</span>
+                                                        </div>
+
+                                                        <div class="data-row" style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
+                                                            <span class="label">建議觀察價位：</span>
+                                                            <span class="val blue">{row.get("Suggested_Entry", "")}</span>
+                                                        </div>
+                                                        <div class="data-row">
+                                                            <span class="label">嚴格停損參考價：</span>
+                                                            <span class="val red">{row.get("Stop_Loss_Line", "")}</span>
+                                                        </div>
+                                                        
+                                                        <div class="data-row" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+                                                            <span class="label">13:40 結算狀態：</span>
+                                                            <span class="val {val_color}">{close_price} 元 ｜ {row.get("Trade_Result", "")}</span>
+                                                        </div>
+                                                    </div>
+                                                </details>
+                                                """
 
                 win_rate_pct = f"{(win_count / sent_count * 100):.0f}%" if sent_count > 0 else "0%"
                 display_date = now.strftime("%Y.%m.%d (%a)")
