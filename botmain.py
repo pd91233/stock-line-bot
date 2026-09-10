@@ -114,7 +114,7 @@ def backup_csv_to_pcloud_async():
             PCLOUD_HISTORY_FOLDER_ID = os.environ.get('PCLOUD_HISTORY_FOLDER_ID', '33133582905')
             
             if not PCLOUD_EMAIL or not PCLOUD_PASSWORD:
-                print("⚠️ [背景備份失敗] 抓不到 pCloud 帳號密碼，請檢查 Render 環境變數！", flush=True)
+                print("⚠️ [背景備份失敗] 抓不到 pCloud 帳密環境變數！", flush=True)
                 return
                 
             if os.path.exists(CSV_FILENAME):
@@ -128,7 +128,8 @@ def backup_csv_to_pcloud_async():
                         res = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={PCLOUD_HISTORY_FOLDER_ID}", files=file_csv, timeout=15)
                         print(f"☁️ [背景備份] CSV 上傳 pCloud 執行完畢！回傳結果: {res.status_code}", flush=True)
                 else:
-                    print("⚠️ [背景備份失敗] pCloud 登入失敗，請確認帳密是否正確！", flush=True)
+                    # 💥 這裡補上印出完整錯誤訊息！
+                    print(f"⚠️ [背景備份失敗] pCloud 登入被拒絕，伺服器回傳: {auth_res}", flush=True)
         except Exception as e:
             print(f"⚠️ [背景備份出錯] 發生異常: {e}", flush=True)
     
