@@ -62,23 +62,30 @@ import mplfinance as mpf
 import csv
 
 # ==========================================
-# 📊 盤後戰情 CSV 資料庫自動記錄晶片 (不死鳥重生版)
+# 📊 盤後戰情 CSV 資料庫自動記錄晶片 (不死鳥重生版 - 時差校正修復)
 # ==========================================
 import csv
 import threading
+import datetime
+import time
+import requests
+import os
 
-CSV_FILENAME = f"trading_log_{datetime.datetime.now().strftime('%Y%m%d')}.csv"
+def get_today_csv_name():
+    """💥 動態獲取台灣時間 (UTC+8) 的正確檔名，拒絕被開機時間鎖死"""
+    tz_tw = datetime.timezone(datetime.timedelta(hours=8))
+    return f"trading_log_{datetime.datetime.now(tz_tw).strftime('%Y%m%d')}.csv"
 
 def restore_csv_on_boot():
     """💥 浴火重生：開機時立刻去 pCloud 尋找今天遺失的紀錄檔並下載回本機"""
+    csv_name = get_today_csv_name()
     try:
-        # 直接瞄準歷史資料夾的公開網址
-        public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{CSV_FILENAME}?t={int(time.time())}"
+        public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{csv_name}?t={int(time.time())}"
         res = requests.get(public_url, timeout=5)
         if res.status_code == 200:
-            with open(CSV_FILENAME, 'wb') as f:
+            with open(csv_name, 'wb') as f:
                 f.write(res.content)
-            print(f"✅ [浴火重生] 母艦重啟！已成功從 pCloud 救回今日斷點 CSV 戰績！", flush=True)
+            print(f"✅ [浴火重生] 母艦重啟！已成功從 pCloud 救回今日斷點 CSV 戰績: {csv_name}", flush=True)
     except:
         pass
 
@@ -87,9 +94,10 @@ restore_csv_on_boot()
 
 def init_csv():
     """初始化 CSV 檔案標頭"""
-    if not os.path.exists(CSV_FILENAME):
+    csv_name = get_today_csv_name()
+    if not os.path.exists(csv_name):
         try:
-            with open(CSV_FILENAME, mode='w', newline='', encoding='utf-8-sig') as f:
+            with open(csv_name, mode='w', newline='', encoding='utf-8-sig') as f:
                 writer = csv.writer(f)
                 writer.writerow([
                     "Trigger_Time", "Stock_ID", "Stock_Name", "Time_Zone", 
@@ -101,31 +109,40 @@ def init_csv():
             print(f"⚠️ CSV 初始化失敗: {e}")
 
 def backup_csv_to_pcloud_async():
-    """背景小幫手：極速 Token 直連版"""
+    """背景小幫手：極速 Token 直連版 (含 pCloud JSON 除錯升級)"""
     def task():
+        csv_name = get_today_csv_name()
         try:
-            import os, requests
             token = os.environ.get('PCLOUD_AUTH_TOKEN', '')
             folder_id = os.environ.get('PCLOUD_HISTORY_FOLDER_ID', '33133582905')
             if not token:
                 print("⚠️ [背景備份] 找不到 PCLOUD_AUTH_TOKEN", flush=True)
                 return
-            if os.path.exists(CSV_FILENAME):
-                with open(CSV_FILENAME, 'rb') as f_csv:
-                    file_csv = {'file': (CSV_FILENAME, f_csv, 'text/csv')}
+            if os.path.exists(csv_name):
+                with open(csv_name, 'rb') as f_csv:
+                    file_csv = {'file': (csv_name, f_csv, 'text/csv')}
                     res = requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={folder_id}", files=file_csv, timeout=15)
-                    print(f"☁️ [背景備份] CSV 上傳 pCloud 執行完畢！回傳結果: {res.status_code}", flush=True)
+                    
+                    # 💡 解析 pCloud 的 JSON 回應，確保不是「假成功」
+                    try:
+                        res_json = res.json()
+                        if res_json.get("result") == 0:
+                            print(f"☁️ [背景備份] {csv_name} 成功寫入 pCloud 雲端！", flush=True)
+                        else:
+                            print(f"⚠️ [背景備份警告] pCloud 伺服器拒絕: {res_json}", flush=True)
+                    except:
+                        print(f"☁️ [背景備份] 上傳執行完畢！HTTP 狀態碼: {res.status_code}", flush=True)
         except Exception as e:
             print(f"⚠️ [背景備份出錯] 發生異常: {e}", flush=True)
-    import threading
+            
     threading.Thread(target=task, daemon=True).start()
 
 def log_event(data):
     """逐行追加寫入事件，並即時啟動雲端備份"""
     try:
         init_csv()
-        import csv
-        with open(CSV_FILENAME, mode='a', newline='', encoding='utf-8-sig') as f:
+        csv_name = get_today_csv_name()
+        with open(csv_name, mode='a', newline='', encoding='utf-8-sig') as f:
             writer = csv.writer(f)
             writer.writerow([
                 data.get("time"), data.get("id"), data.get("name"), data.get("zone"),
