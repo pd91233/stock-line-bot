@@ -1512,39 +1512,29 @@ def fetch_fundamental_data():
 
 
         def fetch_api_list(url):
+            import time
+            # 💥 升級版：加入 3 次重試機制與 45 秒長效等待
+            for attempt in range(3):
+                try:
+                    # 🎯 戰術判定：若是證交所 (上市) 網址，啟動 Google 跳板隱形滲透
+                    if "openapi.twse.com.tw" in url:
+                        request_url = f"{GAS_URL}?url={url}"
+                    else:
+                        request_url = url # 上櫃 (TPEX) 不會擋，直接連線
 
-            try:
-
-                # 🎯 戰術判定：若是證交所 (上市) 網址，啟動 Google 跳板隱形滲透
-
-                if "openapi.twse.com.tw" in url:
-
-                    request_url = f"{GAS_URL}?url={url}"
-
-                else:
-
-                    request_url = url # 上櫃 (TPEX) 不會擋，直接連線
-
-
-
-                res = requests.get(request_url, headers=headers, timeout=20)
-
-                if res.status_code == 200:
-
-                    data = res.json()
-
-                    if isinstance(data, list): return data
-
-                    if isinstance(data, dict):
-
-                        for k, v in data.items():
-
-                            if isinstance(v, list): return v
-
-            except Exception as e: 
-
-                print(f"⚠️ API 請求異常 ({url}): {e}", flush=True)
-
+                    # ⏳ 將 timeout 放寬至 45 秒，給予巨量資料充裕的傳輸時間
+                    res = requests.get(request_url, headers=headers, timeout=45)
+                    if res.status_code == 200:
+                        data = res.json()
+                        if isinstance(data, list): return data
+                        if isinstance(data, dict):
+                            for k, v in data.items():
+                                if isinstance(v, list): return v
+                except Exception as e: 
+                    print(f"⚠️ API 請求異常 ({url}) [第 {attempt+1} 次嘗試]: {e}", flush=True)
+                    time.sleep(3) # 失敗後冷卻 3 秒再發動下一次衝鋒
+            
+            # 如果 3 次衝鋒都失敗，才宣告撤退
             return []
 
 
