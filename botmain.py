@@ -1512,17 +1512,19 @@ def fetch_fundamental_data():
             # 🛡️ 關閉煩人的 SSL 不安全警告
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             
-            # 💥 升級版：加入 3 次重試機制與 45 秒長效等待
+            # 💥 終極防斷線裝甲：強制關閉 keep-alive，要求伺服器傳完就放手
+            safe_headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "application/json",
+                "Connection": "close"  # 👈 關鍵防斷線設定
+            }
+            
             for attempt in range(3):
                 try:
-                    # 🎯 戰術判定：若是證交所 (上市) 網址，啟動 Google 跳板隱形滲透
-                    if "openapi.twse.com.tw" in url:
-                        request_url = f"{GAS_URL}?url={url}"
-                    else:
-                        request_url = url # 上櫃 (TPEX) 不會擋，直接連線
+                    # 🚀 終極戰術：不分上市上櫃，全部透過 Google 星鏈跳板 (GAS) 進行全域代理！
+                    request_url = f"{GAS_URL}?url={url}"
 
-                    # 💥 終極防護：加上 verify=False 強制略過 TPEX 破爛的 SSL 憑證檢查！
-                    res = requests.get(request_url, headers=headers, timeout=45, verify=False)
+                    res = requests.get(request_url, headers=safe_headers, timeout=45, verify=False)
                     
                     if res.status_code == 200:
                         data = res.json()
