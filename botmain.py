@@ -1507,6 +1507,11 @@ def fetch_fundamental_data():
 
         def fetch_api_list(url):
             import time
+            import requests
+            import urllib3
+            # 🛡️ 關閉煩人的 SSL 不安全警告
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            
             # 💥 升級版：加入 3 次重試機制與 45 秒長效等待
             for attempt in range(3):
                 try:
@@ -1516,8 +1521,9 @@ def fetch_fundamental_data():
                     else:
                         request_url = url # 上櫃 (TPEX) 不會擋，直接連線
 
-                    # ⏳ 將 timeout 放寬至 45 秒，給予巨量資料充裕的傳輸時間
-                    res = requests.get(request_url, headers=headers, timeout=45)
+                    # 💥 終極防護：加上 verify=False 強制略過 TPEX 破爛的 SSL 憑證檢查！
+                    res = requests.get(request_url, headers=headers, timeout=45, verify=False)
+                    
                     if res.status_code == 200:
                         data = res.json()
                         if isinstance(data, list): return data
