@@ -2867,10 +2867,7 @@ def handle_message(event):
 
     if user_msg in ["今日盤勢", "AI講評", "盤勢分析", "收盤講評"]:
         # 1. 光速秒回，破解 5 秒死線 (升級動態槍管)
-		smart_reply_with_menu(
-			event,
-			TextSendMessage(text="🧠 收到指令！AI 正在彙整今日大盤與主流資金流向，約需 5 秒鐘，請稍候...")
-		)
+		smart_reply_with_menu(event, TextSendMessage(text="🧠 收到指令！AI 正在彙整今日大盤與主流資金流向，約需 5 秒鐘，請稍候..."))
         
         # 2. 建立背景分身
         def process_ai_summary():
