@@ -653,120 +653,54 @@ def fetch_cloud_tokens():
 
 
 
-
-
 # 升級版：支援 pCloud 動態無限擴編與「群組自動偵測 (跨版本相容)」的發射樞紐
-
 def smart_push_with_menu(group_id, message_text):
-
-    menu_quick_reply = QuickReply(
-
-        items=[
-
-            QuickReplyButton(action=MessageAction(label="🌍 國際夜盤", text="夜盤")),
-
-            QuickReplyButton(action=MessageAction(label="🎯 尋找買點", text="尋找買點")),
-
-            QuickReplyButton(action=MessageAction(label="🧠 AI 盤勢講評", text="今日盤勢")),
-
-            QuickReplyButton(action=MessageAction(label="📊 盤後選股", text="盤後選股")),
-            
-            QuickReplyButton(action=MessageAction(label="🛡️ 盤後覆盤", text="盤後覆盤"))
-
-        ]
-
-    )
-
-    push_msg = TextSendMessage(
-
-        text=str(message_text)[:4000],  
-
-        quick_reply=menu_quick_reply
-
-    )
-
-    
+    # 💥 關鍵修復：判斷傳入的是純文字還是打包好的陣列 (例如 [圖片, Flex卡片])
+    if isinstance(message_text, str):
+        # 如果是純文字，就包裝成高質感深色面板
+        push_msg = create_flex_menu_message(message_text)
+    else:
+        # 如果已經是陣列，就原封不動當成子彈發射！絕對不強制轉成字串！
+        push_msg = message_text 
 
     # 🎯 每次要發送爆量通知前，自動去 pCloud 抓取最新金鑰清單！
-
     tokens_data = fetch_cloud_tokens()
-
     
-
     success_sent = False
-
     for idx, item in enumerate(tokens_data, start=1):
-
         token = item.get("token", "").strip()
-
         bot_name = item.get("name", f"第 {idx} 號機")
-
         if not token: continue
-
         
-
         try:
-
             temp_api = LineBotApi(token)
-
             
-
             # 💥 【神級雷達防線：開槍前先查水表 (跨套件版本相容)】
-
             try:
-
-                # 自動偵測並相容不同版本的 LINE 套件函數名稱
-
                 if hasattr(temp_api, 'get_group_summary'):
-
                     temp_api.get_group_summary(group_id)
-
                 else:
-
                     temp_api.get_group_members_count(group_id)
-
             except Exception as check_err:
-
-                # 如果發生錯誤，代表機器人不在群組內 (或是被官方阻擋)！
-
                 print(f"⚠️ [跳過] {bot_name} 不在目標群組中，尋找下一台... ({check_err})", flush=True)
-
-                continue  # 👈 直接跳過，不浪費子彈，換下一隻！
-
+                continue  
             
-
             # 確定在群組裡面，才真正對目標群組使用「精準導彈 (push_message)」開槍！
-
             temp_api.push_message(group_id, push_msg)
-
-            print(f"🚀 [雲端彈藥庫] {bot_name} 帶選單推播成功！", flush=True)
-
+            print(f"🚀 [雲端彈藥庫] {bot_name} 雙彈齊發推播成功！", flush=True)
             success_sent = True
-
             break # 發射成功，任務完成，跳出迴圈！
-
             
-
         except Exception as api_err:
-
             err_str = str(api_err)
-
             if "429" in err_str or "limit" in err_str.lower() or "LineBotApiError" in err_str:
-
                 print(f"⚠️ [{bot_name} 額度耗盡/429] 雲端自動切換下一台機器人...", flush=True)
-
                 continue
-
             else:
-
                 print(f"⚠️ {bot_name} 發射受阻 ({err_str})，嘗試切換...", flush=True)
-
                 continue
-
                 
-
     if not success_sent:
-
         print(f"❌ [發射崩潰] 群組 {group_id} 查無可用的機器人，或所有駐紮機器人彈藥皆已耗盡！", flush=True)
 
 # ==========================================================
@@ -3979,28 +3913,6 @@ def create_flex_menu_message(message_text):
     )
 
     return FlexSendMessage(alt_text="📊 股海觀浪戰情選單", contents=flex_content)
-
-
-
-# 🛡️ 統一回覆中繼站 (任何文字回覆透過此函數送出，都會自動夾帶雙排面板)
-
-# 🛡️ 統一回覆中繼站 (支援動態切換槍管)
-from flask import g
-
-def smart_reply_with_menu(event, message_text):
-    if isinstance(message_text, str):
-        flex_msg = create_flex_menu_message(message_text)
-    else:
-        flex_msg = message_text 
-    try:
-        # 瞬間從記憶庫抽出本次對話專屬的槍管
-        active_token = getattr(g, 'active_token', LINE_CHANNEL_ACCESS_TOKEN)
-        dynamic_api = LineBotApi(active_token)
-        
-        # 使用對應的槍管開火！
-        dynamic_api.reply_message(event.reply_token, flex_msg)
-    except Exception as e:
-        print(f"⚠️ 回覆發送受阻: {e}", flush=True)
 
 
 
