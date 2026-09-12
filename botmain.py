@@ -2046,118 +2046,112 @@ def fundamental_patrol_loop():
 
 
 # ==========================================================
-
-# 📊 4. 雙通道個股即時行情分析中心
-
+# 📊 4. 雙通道個股即時行情分析中心 (含扣抵推演與雲端 K 線繪圖)
 # ==========================================================
-
 def fetch_realtime_data(stock_code):
-
     headers = {"User-Agent": "Mozilla/5.0"}
-
-    yahoo_ma = ""; yahoo_price = ""
-
+    yahoo_ma = ""; yahoo_price = ""; imgbb_url = ""
     try:
-
+        # 將 Range 延長至 3 個月，確保均線扣抵資料足夠
         if stock_code == "^TWII":
-
-            url = "https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?range=2mo&interval=1d"
-
+            url = "https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?range=3mo&interval=1d"
         else:
-
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TW?range=2mo&interval=1d"
-
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TW?range=3mo&interval=1d"
         res = requests.get(url, headers=headers, timeout=5).json()
-
         if not res.get('chart', {}).get('result') and stock_code != "^TWII":
-
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TWO?range=2mo&interval=1d"
-
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_code}.TWO?range=3mo&interval=1d"
             res = requests.get(url, headers=headers, timeout=5).json()
 
-
-
         result = res['chart']['result'][0]
-
-        closes = result['indicators']['quote'][0]['close']
-
-        volumes = result['indicators']['quote'][0]['volume']
-
-        highs = result['indicators']['quote'][0]['high']
-
-        lows = result['indicators']['quote'][0]['low']
-
+        timestamps = result['timestamp']
+        quotes = result['indicators']['quote'][0]
+        opens = quotes['open']
+        closes = quotes['close']
+        volumes = quotes['volume']
+        highs = quotes['high']
+        lows = quotes['low']
         
+        # 過濾空值並打包成 DataFrame 餵給 mplfinance
+        valid_data = []
+        for i in range(len(closes)):
+            if closes[i] is not None and volumes[i] is not None:
+                valid_data.append({
+                    'Date': pd.to_datetime(timestamps[i], unit='s', utc=True).tz_convert('Asia/Taipei'),
+                    'Open': opens[i] if opens[i] is not None else closes[i],
+                    'High': highs[i] if highs[i] is not None else closes[i],
+                    'Low': lows[i] if lows[i] is not None else closes[i],
+                    'Close': closes[i],
+                    'Volume': volumes[i]
+                })
 
-        valid_closes = [c for c in closes if c is not None]
+        if len(valid_data) > 0:
+            df = pd.DataFrame(valid_data)
+            df.set_index('Date', inplace=True)
 
-        valid_vols = [v for v in volumes if v is not None]
-
-        valid_highs = [h for h in highs if h is not None]
-
-        valid_lows = [l for l in lows if l is not None]
-
-        
-
-        if len(valid_closes) > 0:
-
-            curr_price = round(valid_closes[-1], 2)
-
-            curr_vol = int(valid_vols[-1] / 1000)
-
-            curr_h = round(valid_highs[-1], 2)
-
-            curr_l = round(valid_lows[-1], 2)
-
+            valid_closes = df['Close'].tolist()
+            valid_vols = df['Volume'].tolist()
+            valid_highs = df['High'].tolist()
+            valid_lows = df['Low'].tolist()
             
-
+            curr_price = round(valid_closes[-1], 2)
+            curr_vol = int(valid_vols[-1] / 1000)
+            curr_h = round(valid_highs[-1], 2)
+            curr_l = round(valid_lows[-1], 2)
+            
             yahoo_price = f"🔴雲端即時成交價: {curr_price} (最高:{curr_h} 最低:{curr_l} 總量:{curr_vol}張)"
 
-
-
             if len(valid_closes) >= 20:
-
                 ma5 = round(sum(valid_closes[-5:]) / 5, 2)
-
                 ma10 = round(sum(valid_closes[-10:]) / 10, 2)
-
                 ma20 = round(sum(valid_closes[-20:]) / 20, 2)
-
-                kd5 = round(valid_closes[-5], 2); kd10 = round(valid_closes[-10], 2); kd20 = round(valid_closes[-20], 2)
+                
+                # 💥 扣抵推演算法 (明日的扣抵價)
+                kd5 = round(valid_closes[-5], 2)
+                kd20 = round(valid_closes[-20], 2)
+                
+                # 💥 扣抵分析白話文生成
+                kd5_status = "⚠️明日扣抵高價位，5MA有下彎壓力" if curr_price < kd5 else "🔥明日扣抵低價位，5MA具上揚支撐"
+                kd20_status = "⚠️明日月線扣抵高價，趨勢有反轉疑慮" if curr_price < kd20 else "🔥明日月線扣抵低價，月線保護力道強烈"
 
                 vol_5ma = sum(valid_vols[-5:]) / 5
-
-                
-
                 if valid_vols[-1] > vol_5ma * 1.5: 
-
                     big_player = "🔥大戶放量攻擊"
-
                 elif valid_vols[-1] < vol_5ma * 0.7: 
-
                     big_player = "🧊量縮散戶觀望"
-
                 else: 
-
                     big_player = "⚖️籌碼動能平穩"
-
                 
-
-                yahoo_ma = f"📊均線數值(5/10/20): {ma5}, {ma10}, {ma20}\n扣抵價位: {kd5}, {kd10}, {kd20}\n籌碼動向: {big_player}"
+                # 防干擾字眼更新：改為「均線(五/十/廿)」
+                yahoo_ma = f"📊均線(五/十/廿): {ma5}, {ma10}, {ma20}\n🛡️【扣抵戰略推演】\n👉短線: {kd5_status} (扣抵:{kd5})\n👉中線: {kd20_status} (扣抵:{kd20})\n籌碼動向: {big_player}"
+                
+                # 🎨 雲端畫圖與上傳 ImgBB
+                try:
+                    mc = mpf.make_marketcolors(up='#ef4444', down='#10b981', edge='inherit', wick='inherit', volume='inherit')
+                    s = mpf.make_mpf_style(marketcolors=mc, base_mpf_style='nightclouds')
+                    buf = io.BytesIO()
+                    mpf.plot(df, type='candle', volume=True, mav=(5, 10, 20), style=s, figsize=(8, 5), savefig=buf)
+                    buf.seek(0)
+                    
+                    if IMGBB_API_KEY:
+                        img_res = requests.post(
+                            "https://api.imgbb.com/1/upload",
+                            data={"key": IMGBB_API_KEY},
+                            files={"image": ("chart.png", buf, "image/png")},
+                            timeout=8
+                        ).json()
+                        if img_res.get("success"):
+                            imgbb_url = img_res["data"]["url"]
+                except Exception as chart_err:
+                    print(f"畫圖或上傳失敗: {chart_err}", flush=True)
 
             else: 
-
                 yahoo_ma = "均線資料庫不足"
-
     except Exception as e: 
-
         yahoo_ma = "備援線路連線受阻"
+        yahoo_price = f"⚠️報價抓取失敗 ({e})"
 
-        yahoo_price = "⚠️報價抓取失敗"
-
-
-
-    return f"{yahoo_price}\n{yahoo_ma}"
+    # 現在回傳 tuple (文字報告, 圖片網址)
+    return f"{yahoo_price}\n{yahoo_ma}", imgbb_url
 
 
 
@@ -3442,77 +3436,66 @@ def handle_message(event):
 
 
     # 2. 如果直接命中代號或精確名稱，直接回傳專業操盤手級別的立體戰情
-
     if target_code:
-
-        realtime_info = fetch_realtime_data(target_code)
-
-        
-
-        # 🛡️ 智慧解析即時數據以供操盤手評分函數使用
-
-        current_price = 0.0
-
-        ma5 = 0.0
-
-        ma20 = 0.0
-
-        volume = 0
-
-        chip_status = "平穩"
-
-        
-
-        try:
-
-            # 從 realtime_info 字串中把關鍵數值解析出來
-
-            for line in realtime_info.split('\n'):
-
-                if "雲端即時成交價" in line:
-
-                    # 擷取成交價與總量
-
-                    p_match = re.search(r'成交價:\s*([0-9.]+)', line)
-
-                    if p_match: current_price = float(p_match.group(1))
-
-                    v_match = re.search(r'總量:\s*([0-9,]+)張', line)
-
-                    if v_match: volume = int(v_match.group(1).replace(',', ''))
-
-                elif "均線數值" in line:
-
-                    m_match = re.findall(r'([0-9.]+)', line)
-
-                    if len(m_match) >= 3:
-
-                        ma5 = float(m_match[0])
-
-                        ma20 = float(m_match[2])
-
-                elif "籌碼動向" in line:
-
-                    chip_status = line
-
-        except:
-
-            pass
-
-
-
-        # 呼叫專業操盤手動態分析引擎
-
-        reply_msg = generate_professional_analysis(
-
-            target_name, target_code, realtime_info, current_price, ma5, ma20, volume, chip_status
-
+        # 光速秒回安撫，破解 5 秒死線
+        smart_reply_with_menu(
+            event, 
+            TextSendMessage(text=f"📊 收到指令！正在調閱 {target_name} 的即時數據、未來扣抵推演並繪製雲端 K 線圖，請稍候...")
         )
 
-        
+        def process_stock_query():
+            try:
+                target_id = event.source.group_id if hasattr(event.source, 'group_id') else event.source.user_id
+                
+                # 接收新版函數的 tuple (文字, 圖片網址)
+                realtime_info, img_url = fetch_realtime_data(target_code)
+                
+                # 🛡️ 智慧解析即時數據以供操盤手評分函數使用
+                current_price = 0.0
+                ma5 = 0.0
+                ma20 = 0.0
+                volume = 0
+                chip_status = "平穩"
+                
+                try:
+                    for line in realtime_info.split('\n'):
+                        if "雲端即時成交價" in line:
+                            p_match = re.search(r'成交價:\s*([0-9.]+)', line)
+                            if p_match: current_price = float(p_match.group(1))
+                            v_match = re.search(r'總量:\s*([0-9,]+)張', line)
+                            if v_match: volume = int(v_match.group(1).replace(',', ''))
+                        elif "均線(五/十/廿)" in line:  # 對應新版防干擾字眼
+                            m_match = re.findall(r'([0-9.]+)', line)
+                            if len(m_match) >= 3:
+                                ma5 = float(m_match[0])
+                                ma20 = float(m_match[2])
+                        elif "籌碼動向" in line:
+                            chip_status = line
+                except:
+                    pass
 
-        smart_reply_with_menu(event, reply_msg[:4000])
+                # 呼叫專業操盤手動態分析引擎
+                reply_msg = generate_professional_analysis(
+                    target_name, target_code, realtime_info, current_price, ma5, ma20, volume, chip_status
+                )
+                
+                # 包裝原本的面板訊息
+                flex_msg = create_flex_menu_message(reply_msg[:4000])
+                
+                # 如果畫圖並上傳成功，就圖片+面板「雙彈齊發」！
+                if img_url:
+                    img_msg = ImageSendMessage(original_content_url=img_url, preview_image_url=img_url)
+                    smart_push_with_menu(target_id, [img_msg, flex_msg])
+                else:
+                    # 如果畫圖失敗，仍送出純面板報告
+                    smart_push_with_menu(target_id, flex_msg)
+                    
+            except Exception as e:
+                print(f"個股查詢背景處理失敗: {e}", flush=True)
 
+        # 啟動背景推演分身
+        import eventlet
+        eventlet.spawn(process_stock_query)
         return
 
 
