@@ -2914,16 +2914,18 @@ def handle_message(event):
 
 
 
-    # 💥 新增：讓用戶隨時透過 LINE 調閱完整盤後選股網址
-
+    # 💥 盤後選股 (雙彈齊發版)
     if user_msg in ["盤後選股", "選股策略", "最新選股"]:
-
         report_url = "https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/latest_report.html"
-
-        reply_msg = f"📊 【股海觀浪】最新盤後選股策略：\n請點擊以下連結前往觀看：\n{report_url}"
-
-        smart_reply_with_menu(event, reply_msg)
-
+        reply_msg = "📊 【股海觀浪】最新盤後選股策略：\n系統已為您產出最新報告，請點擊下方專屬連結前往觀看！"
+        
+        # 1. 第一發：帶有按鈕的深色面板
+        flex_msg = create_flex_menu_message(reply_msg)
+        # 2. 第二發：純文字網址 (LINE會自動轉成可點擊連結)
+        link_msg = TextSendMessage(text=report_url)
+        
+        # 3. 包裝成陣列 [ ] 一次發射兩發！
+        smart_reply_with_menu(event, [flex_msg, link_msg])
         return
 
 
@@ -2936,31 +2938,38 @@ def handle_message(event):
 
     # ==========================================
 
+    # 💥 盤後覆盤 (雙彈齊發版)
     if user_msg in ["防禦報告", "盤後覆盤", "攔截清單"]:
         try:
             today_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime('%Y%m%d')
             render_url = f"https://stock-line-bot-c8em.onrender.com/war_room_{today_str}.html"
             
             if not intercepted_traps_log:
-                reply_msg = f"🛡️ 【戰情室盤後覆盤】\n今日雷達未偵測到符合爆量門檻的主力陷阱。\n\n📊 今日 13:40 戰情室網頁已結算，請點擊查看：\n{render_url}"
+                reply_msg = f"🛡️ 【盤後覆盤】\n今日雷達未偵測到符合爆量門檻的主力陷阱。\n\n📊 今日 13:40 盤後覆盤網頁已結算，請點擊下方專屬連結查看："
             else:
                 reply_lines = [
-                    "🛡️ 【戰情室盤後覆盤：今日攔截假突破清單】",
+                    "🛡️ 【盤後覆盤：今日攔截假突破清單】",
                     "----------------------"
                 ]
                 for trap in intercepted_traps_log:
                     reply_lines.append(trap)
                 
                 reply_lines.append("----------------------")
-                reply_lines.append(f"🎯 總計為統帥擋下 {len(intercepted_traps_log)} 次主力割韭菜陷阱！")
-                reply_lines.append(f"\n📊 今日 13:40 戰情室網頁已結算，請點擊查看：\n{render_url}")
+                reply_lines.append(f"🎯 總計擋下 {len(intercepted_traps_log)} 次主力割韭菜陷阱！")
+                reply_lines.append(f"\n📊 今日 13:40 盤後覆盤網頁已結算，請點擊下方專屬連結查看：")
                 
                 reply_msg = "\n".join(reply_lines)
-                
+            
+            # 1. 第一發：帶有按鈕的深色面板
+            flex_msg = create_flex_menu_message(reply_msg[:3000])
+            # 2. 第二發：純文字網址
+            link_msg = TextSendMessage(text=render_url)
+            
+            # 3. 雙彈齊發！
+            smart_reply_with_menu(event, [flex_msg, link_msg])
+            
         except Exception as e:
-            reply_msg = f"⚠️ 查詢防禦報告異常：{e}"
-
-        smart_reply_with_menu(event, reply_msg[:4000])
+            smart_reply_with_menu(event, f"⚠️ 查詢防禦報告異常：{e}")
         return
 
 
