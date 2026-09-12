@@ -2860,7 +2860,7 @@ def handle_message(event):
 
 # 💥 新增模組：AI 總結今日盤勢與收盤講評
 
-    if user_msg in ["今日盤勢", "AI講評", "盤勢分析", "收盤講評"]:if user_msg in ["今日盤勢", "AI講評", "盤勢分析", "收盤講評"]:
+    if user_msg in ["今日盤勢", "AI講評", "盤勢分析", "收盤講評"]:
         # 1. 光速秒回，破解 5 秒死線
         line_bot_api.reply_message(
             event.reply_token,
