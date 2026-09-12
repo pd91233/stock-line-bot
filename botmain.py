@@ -569,8 +569,6 @@ LINE_CHANNEL_SECRET_2 = os.environ.get('LINE_CHANNEL_SECRET_2', 'c5bed42c2d36c3f
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)     # 一號主戰機
 
-handler = WebhookHandler(LINE_CHANNEL_SECRET)
-
 line_bot_api_2 = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN_2) # 二號備用機
 
 
@@ -2539,22 +2537,57 @@ def home():
 
 
 
+import hmac
+import hashlib
+import base64
+from linebot import WebhookHandler
+
+# 建立一個全域的預設守衛 (先隨便給個假暗號，後面會動態換掉)
+handler = WebhookHandler('dummy_secret_for_init')
+
 @app.route("/callback", methods=['POST'])
-
 def callback():
-
     signature = request.headers['X-Line-Signature']
-
     body = request.get_data(as_text=True)
+    
+    # 1. 把 pCloud 上的 9 組 Secret 抓下來
+    all_secrets = []
+    try:
+        tokens_data = fetch_cloud_tokens()
+        for item in tokens_data:
+            sec = item.get("secret", "").strip()
+            if sec and sec not in all_secrets:
+                all_secrets.append(sec)
+    except Exception as e:
+        print(f"⚠️ [大門守衛] 無法從 pCloud 抓取暗號表: {e}", flush=True)
 
-    try: 
-
-        handler.handle(body, signature)
-
-    except InvalidSignatureError: 
-
+    # 2. 如果 pCloud 抓不到，拿 Render 的備用暗號來擋一下
+    if not all_secrets:
+        if LINE_CHANNEL_SECRET: all_secrets.append(LINE_CHANNEL_SECRET)
+        if LINE_CHANNEL_SECRET_2: all_secrets.append(LINE_CHANNEL_SECRET_2)
+            
+    # 3. 啟動多重暗號解碼器：拿這 9 組 Secret 輪流跟 LINE 官方比對！
+    matched_secret = None
+    for secret in all_secrets:
+        hash_val = hmac.new(secret.encode('utf-8'), body.encode('utf-8'), hashlib.sha256).digest()
+        if base64.b64encode(hash_val).decode('utf-8') == signature:
+            matched_secret = secret
+            break
+            
+    # 4. 如果 9 組都錯，代表是駭客，直接開槍轟出去 (這就是您之前遇到的 400 錯誤)
+    if not matched_secret:
+        print("⚠️ [大門守衛] 警告：收到不明來源的 Webhook，暗號皆不符，強制攔截！", flush=True)
         abort(400)
-
+        
+    # 5. 抓到真兇 (正確的 Secret)！瞬間把守衛的金鑰換成這把
+    handler.parser.signature_validator.channel_secret = matched_secret.encode('utf-8')
+    
+    # 6. 暗號確認無誤，放行處理訊息！
+    try: 
+        handler.handle(body, signature)
+    except InvalidSignatureError: 
+        abort(400)
+        
     return 'OK'
 
 
@@ -2827,74 +2860,52 @@ def handle_message(event):
 
 # 💥 新增模組：AI 總結今日盤勢與收盤講評
 
-    if user_msg in ["今日盤勢", "AI講評", "盤勢分析", "收盤講評"]:
-
-        try:
-
+    if user_msg in ["今日盤勢", "AI講評", "盤勢分析", "收盤講評"]:if user_msg in ["今日盤勢", "AI講評", "盤勢分析", "收盤講評"]:
+        # 1. 光速秒回，破解 5 秒死線
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="🧠 收到指令！AI 正在彙整今日大盤與主流資金流向，約需 5 秒鐘，請稍候...")
+        )
+        
+        # 2. 建立背景分身
+        def process_ai_summary():
             try:
+                target_id = event.source.group_id if hasattr(event.source, 'group_id') else event.source.user_id
+                
+                try:
+                    profile = line_bot_api.get_profile(event.source.user_id)
+                    user_name = profile.display_name
+                except:
+                    user_name = "戰友"
 
-                profile = line_bot_api.get_profile(user_id)
+                cache_data = read_cache()
+                funds_summary = cache_data.get('fundsText', '目前無大盤數據')
+                stocks_summary = cache_data.get('stocksText', '目前無主流數據')
 
-                user_name = profile.display_name
+                prompt = f"""
+                你是一位頂尖的台股操盤手與總體經濟分析師。請根據以下今日的盤勢數據與資金流向，為戰友寫一篇精簡有力、專業且具備前瞻性的「今日盤勢總結與明日觀盤重點」（大約150-200字，分段清晰，帶有股市實戰風格）：
+                - 大盤與資金流向摘要：{funds_summary}
+                - 盤面主流族群/精選標的：{stocks_summary}
+                """
+                response = ai_model.generate_content(prompt)
+                ai_commentary = response.text.strip() if response and response.text else "目前 AI 大腦正在冷卻中，請稍後再試。"
 
-            except Exception:
+                reply_msg = (
+                    f"🧠 【股海觀浪・AI 每日盤勢總結】\n"
+                    f"報告 {user_name}，今日戰情剖析如下：\n"
+                    f"----------------------\n"
+                    f"{ai_commentary}\n"
+                    f"----------------------\n"
+                    f"💡 提醒：盤勢瞬息萬變，操作請嚴格執行資金控管與停損紀律！"
+                )
+                # 算完後，用原本的雙排面板主動推播回群組！
+                smart_push_with_menu(target_id, reply_msg[:4000])
+            except Exception as e:
+                print(f"AI盤勢背景處理失敗: {e}")
 
-                user_name = "戰友"
-
-
-
-            cache_data = read_cache()
-
-            funds_summary = cache_data.get('fundsText', '目前無大盤數據')
-
-            stocks_summary = cache_data.get('stocksText', '目前無主流數據')
-
-
-
-            # 呼叫 Gemini 進行專業盤勢總結編排
-
-            prompt = f"""
-
-            你是一位頂尖的台股操盤手與總體經濟分析師。請根據以下今日的盤勢數據與資金流向，為戰友寫一篇精簡有力、專業且具備前瞻性的「今日盤勢總結與明日觀盤重點」（大約150-200字，分段清晰，帶有股市實戰風格）：
-
-            - 大盤與資金流向摘要：{funds_summary}
-
-            - 盤面主流族群/精選標的：{stocks_summary}
-
-            """
-
-            
-
-            response = ai_model.generate_content(prompt)
-
-            ai_commentary = response.text.strip() if response and response.text else "目前 AI 大腦正在冷卻中，請稍後再試。"
-
-
-
-            reply_msg = (
-
-                f"🧠 【股海觀浪・AI 每日盤勢總結】\n"
-
-                f"報告 {user_name}，今日戰情剖析如下：\n"
-
-                f"----------------------\n"
-
-                f"{ai_commentary}\n"
-
-                f"----------------------\n"
-
-                f"💡 提醒：盤勢瞬息萬變，操作請嚴格執行資金控管與停損紀律！"
-
-            )
-
-        except Exception as e:
-
-            reply_msg = f"⚠️ AI 盤勢講評生成異常：{e}"
-
-
-
-        smart_reply_with_menu(event, reply_msg[:4000])
-
+        # 3. 發射分身！
+        import eventlet
+        eventlet.spawn(process_ai_summary)
         return
 
 
