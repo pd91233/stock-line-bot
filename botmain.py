@@ -907,24 +907,22 @@ def create_flex_menu_message(message_text):
 
 
 
-# 🛡️ 統一回覆中繼站 (任何文字回覆透過此函數送出，都會自動夾帶雙排面板)
+# 🛡️ 統一回覆中繼站 (支援動態切換槍管)
+from flask import g
 
 def smart_reply_with_menu(event, message_text):
-
     if isinstance(message_text, str):
-
         flex_msg = create_flex_menu_message(message_text)
-
     else:
-
         flex_msg = message_text 
-
     try:
-
-        line_bot_api.reply_message(event.reply_token, flex_msg)
-
+        # 瞬間從記憶庫抽出本次對話專屬的槍管
+        active_token = getattr(g, 'active_token', LINE_CHANNEL_ACCESS_TOKEN)
+        dynamic_api = LineBotApi(active_token)
+        
+        # 使用對應的槍管開火！
+        dynamic_api.reply_message(event.reply_token, flex_msg)
     except Exception as e:
-
         print(f"⚠️ 回覆發送受阻: {e}", flush=True)
 
         
@@ -2545,12 +2543,12 @@ def home():
 
 
 
+from flask import g  # 👈 第一行引入 Flask 的全域變數字典
 import hmac
 import hashlib
 import base64
 from linebot import WebhookHandler
 
-# 建立一個全域的預設守衛 (先隨便給個假暗號，後面會動態換掉)
 handler = WebhookHandler('dummy_secret_for_init')
 
 @app.route("/callback", methods=['POST'])
@@ -2558,23 +2556,27 @@ def callback():
     signature = request.headers['X-Line-Signature']
     body = request.get_data(as_text=True)
     
-    # 1. 把 pCloud 上的 9 組 Secret 抓下來
     all_secrets = []
+    secret_token_map = {} # 👈 新增：暗號與槍管的對應表
+    
     try:
         tokens_data = fetch_cloud_tokens()
         for item in tokens_data:
             sec = item.get("secret", "").strip()
+            tok = item.get("token", "").strip()
             if sec and sec not in all_secrets:
                 all_secrets.append(sec)
-    except Exception as e:
-        print(f"⚠️ [大門守衛] 無法從 pCloud 抓取暗號表: {e}", flush=True)
+                secret_token_map[sec] = tok  # 將暗號與 Token 配對
+    except: pass
 
-    # 2. 如果 pCloud 抓不到，拿 Render 的備用暗號來擋一下
     if not all_secrets:
-        if LINE_CHANNEL_SECRET: all_secrets.append(LINE_CHANNEL_SECRET)
-        if LINE_CHANNEL_SECRET_2: all_secrets.append(LINE_CHANNEL_SECRET_2)
+        if LINE_CHANNEL_SECRET: 
+            all_secrets.append(LINE_CHANNEL_SECRET)
+            secret_token_map[LINE_CHANNEL_SECRET] = LINE_CHANNEL_ACCESS_TOKEN
+        if LINE_CHANNEL_SECRET_2: 
+            all_secrets.append(LINE_CHANNEL_SECRET_2)
+            secret_token_map[LINE_CHANNEL_SECRET_2] = LINE_CHANNEL_ACCESS_TOKEN_2
             
-    # 3. 啟動多重暗號解碼器：拿這 9 組 Secret 輪流跟 LINE 官方比對！
     matched_secret = None
     for secret in all_secrets:
         hash_val = hmac.new(secret.encode('utf-8'), body.encode('utf-8'), hashlib.sha256).digest()
@@ -2582,15 +2584,13 @@ def callback():
             matched_secret = secret
             break
             
-    # 4. 如果 9 組都錯，代表是駭客，直接開槍轟出去 (這就是您之前遇到的 400 錯誤)
     if not matched_secret:
-        print("⚠️ [大門守衛] 警告：收到不明來源的 Webhook，暗號皆不符，強制攔截！", flush=True)
         abort(400)
         
-    # 5. 抓到真兇 (正確的 Secret)！瞬間把守衛的金鑰換成這把
-    handler.parser.signature_validator.channel_secret = matched_secret.encode('utf-8')
+    # 💡 終極魔法：把對應的 Token 存進這回合的記憶庫 (g) 裡！
+    g.active_token = secret_token_map.get(matched_secret, LINE_CHANNEL_ACCESS_TOKEN)
     
-    # 6. 暗號確認無誤，放行處理訊息！
+    handler.parser.signature_validator.channel_secret = matched_secret.encode('utf-8')
     try: 
         handler.handle(body, signature)
     except InvalidSignatureError: 
@@ -2756,13 +2756,10 @@ def handle_join(event):
 
         
 
-        line_bot_api.reply_message(
-
-            event.reply_token,
-
-            TextSendMessage(text=welcome_msg)
-
-        )
+        smart_reply_with_menu(
+			event,
+			TextSendMessage(text=welcome_msg)
+		)
 
 
 
@@ -2869,11 +2866,11 @@ def handle_message(event):
 # 💥 新增模組：AI 總結今日盤勢與收盤講評
 
     if user_msg in ["今日盤勢", "AI講評", "盤勢分析", "收盤講評"]:
-        # 1. 光速秒回，破解 5 秒死線
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="🧠 收到指令！AI 正在彙整今日大盤與主流資金流向，約需 5 秒鐘，請稍候...")
-        )
+        # 1. 光速秒回，破解 5 秒死線 (升級動態槍管)
+		smart_reply_with_menu(
+			event,
+			TextSendMessage(text="🧠 收到指令！AI 正在彙整今日大盤與主流資金流向，約需 5 秒鐘，請稍候...")
+		)
         
         # 2. 建立背景分身
         def process_ai_summary():
@@ -3998,22 +3995,22 @@ def create_flex_menu_message(message_text):
 
 # 🛡️ 統一回覆中繼站 (任何文字回覆透過此函數送出，都會自動夾帶雙排面板)
 
+# 🛡️ 統一回覆中繼站 (支援動態切換槍管)
+from flask import g
+
 def smart_reply_with_menu(event, message_text):
-
     if isinstance(message_text, str):
-
         flex_msg = create_flex_menu_message(message_text)
-
     else:
-
-        flex_msg = message_text # 如果原本就是 FlexSendMessage 就直接發送
-
+        flex_msg = message_text 
     try:
-
-        line_bot_api.reply_message(event.reply_token, flex_msg)
-
+        # 瞬間從記憶庫抽出本次對話專屬的槍管
+        active_token = getattr(g, 'active_token', LINE_CHANNEL_ACCESS_TOKEN)
+        dynamic_api = LineBotApi(active_token)
+        
+        # 使用對應的槍管開火！
+        dynamic_api.reply_message(event.reply_token, flex_msg)
     except Exception as e:
-
         print(f"⚠️ 回覆發送受阻: {e}", flush=True)
 
 
