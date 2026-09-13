@@ -4241,49 +4241,49 @@ def process_tick_data(data, meta_info, top_ind):
                 if current_z <= best_bid:
                     filtered_overheated_codes.add(code) # 寫入防禦黑盒子
                     return None
+					
 
-            # 通過重重考驗，開始運算均線
-            ma5_now = sum([t[1] for t in ticks[-5:]]) / 5
-            ma5_prev = sum([t[1] for t in ticks[-6:-1]]) / 5
-
+            # 💥 機構級核心升級：導入短線 EMA (指數移動平均線) 動能矩陣
+            # 賦予近期價格更高權重，對轉折的敏感度遠大於傳統 MA
+            prices = [t[1] for t in ticks]
             
+            def calc_ema(data_list, period):
+                if len(data_list) < period: return sum(data_list) / len(data_list) if data_list else 0
+                k = 2 / (period + 1)
+                ema = sum(data_list[:period]) / period
+                for price in data_list[period:]:
+                    ema = (price * k) + (ema * (1 - k))
+                return ema
 
-            is_ma_up = ma5_now > ma5_prev
+            # 運算高頻 EMA 矩陣
+            ema5_now = calc_ema(prices, 5)
+            ema5_prev = calc_ema(prices[:-1], 5) if len(prices) > 1 else ema5_now
+            ema12_now = calc_ema(prices, 12) # 增加 12EMA 作為趨勢護城河
 
+            is_ema_up = ema5_now > ema5_prev
             is_cross_vwap = (z_1m_ago < vwap_est and current_z >= vwap_est)
-
             
-
-            if not is_ma_up and not is_cross_vwap: return None
-
-
+            # 戰術一：破底翻 (剛站上均價線，且短線 EMA 準備黃金交叉)
+            is_bottom_reversal = is_cross_vwap and (current_z > ema5_now)
+            
+            # 戰術二：主升段 (高頻多頭排列：EMA5 > EMA12 > 均價線，且現價創高)
+            is_main_trend = is_ema_up and (ema5_now > ema12_now) and (current_z >= vwap_est)
+            
+            if not is_bottom_reversal and not is_main_trend: return None
 
             is_below_20ma = (ma20 > 0 and current_z < ma20)
-
             if is_below_20ma: return None
-
             
-
             alert_type = ""
-
             action_guide = ""
-
             
-
-            if not is_ma_up and is_cross_vwap:
-
-                alert_type = "💥 【破底翻突襲】爆量貫穿均價線！"
-
-                action_guide = f"🎯 【實戰戰術：低檔 V 轉搶短】\n👉 戰況解讀：主力瞬間爆量強攻站上均價線！\n🛡️ 生死防線：以均價線 {vwap_est} 為絕對防禦，跌破立刻撤退！"
-
-            elif is_ma_up and current_z >= vwap_est:
-
-                alert_type = "🚀 【主升段點火】均線多頭強勢推升！"
-
-                action_guide = f"🎯 【實戰戰術：右側順勢加碼】\n👉 戰況解讀：短均線上揚，趨勢極度健康！\n🛡️ 移動防線：沿著上揚走勢操作，爆量跌破 {vwap_est} 則拔檔！"
-
+            if is_bottom_reversal and not is_main_trend:
+                alert_type = "💥 【破底翻突襲】爆量貫穿均價與EMA！"
+                action_guide = f"🎯 【實戰戰術：低檔 V 轉搶短】\n👉 戰況解讀：主力瞬間爆量強攻，現價已站上 {vwap_est} 均價與 EMA5 雙重防禦！\n🛡️ 生死防線：以均價線為絕對底線，跌破立刻撤退！"
+            elif is_main_trend:
+                alert_type = "🚀 【EMA 主升段】高頻多頭動能強勢推升！"
+                action_guide = f"🎯 【實戰戰術：右側順勢加碼】\n👉 戰況解讀：高頻 EMA(5,12) 呈現黃金多頭排列，趨勢極度強勢！\n🛡️ 移動防線：沿著 EMA5 ({round(ema5_now, 2)}) 操作，跌破則拔檔！"
             else:
-
                 return None 
 
 
