@@ -4756,6 +4756,87 @@ def continuous_radar_loop():
 
 
 # ==========================================================
+# 🛡️ 戰術四：台股策略衰退監控與 T+1 回測引擎 (Alpha Decay Tracker)
+# ==========================================================
+def evaluate_alpha_decay():
+    import glob, csv, requests
+    try:
+        # 尋找所有本機的交易紀錄檔
+        files = sorted(glob.glob("trading_log_*.csv"))
+        if len(files) < 2:
+            return (
+                "<div class='stat-card'><div class='stat-title'>T+1 隔日沖勝率</div><div class='stat-value yellow'>收集中</div><div class='stat-desc'>需累積兩天數據</div></div>",
+                "⏳ T+1 回測：數據收集中 (需至少兩日紀錄)"
+            )
+        
+        # 鎖定 T-1 (前一個交易日)
+        t1_file = files[-2]
+        track_list = []
+        with open(t1_file, mode='r', encoding='utf-8-sig') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if "強勢達標" in row.get("System_Decision", ""):
+                    try:
+                        track_list.append({
+                            "code": row["Stock_ID"],
+                            "name": row["Stock_Name"],
+                            "entry": float(row["Suggested_Entry"])
+                        })
+                    except: pass
+
+        if not track_list:
+            return (
+                "<div class='stat-card'><div class='stat-title'>T+1 隔日沖勝率</div><div class='stat-value yellow'>無訊號</div><div class='stat-desc'>昨日無觸發進場訊號</div></div>",
+                "⏳ T+1 回測：前一交易日無觸發訊號"
+            )
+
+        win_count = 0
+        total_valid = 0
+        
+        # 批次反查今日收盤價
+        for item in track_list:
+            code = item["code"]
+            entry_p = item["entry"]
+            try:
+                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=1d"
+                res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
+                if not res.get('chart', {}).get('result'):
+                    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TWO?range=1d&interval=1d"
+                    res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
+                
+                close_p = res['chart']['result'][0]['meta']['regularMarketPrice']
+                if close_p > 0:
+                    total_valid += 1
+                    # 隔日沖勝率定義：T+1 收盤價 >= 昨日進場價
+                    if close_p >= entry_p:
+                        win_count += 1
+            except: pass
+        
+        if total_valid > 0:
+            win_rate = (win_count / total_valid) * 100
+            color_cls = "green" if win_rate >= 50 else ("yellow" if win_rate >= 40 else "red")
+            alert_tag = "🚀 動能延續，策略健康" if win_rate >= 50 else "⚠️ 動能衰退，嚴防假突破"
+            
+            html_block = f"""
+            <div class='stat-card'>
+                <div class='stat-title'>T+1 隔日沖勝率 (追蹤 {total_valid} 檔)</div>
+                <div class='stat-value {color_cls}'>{win_rate:.0f}%</div>
+                <div class='stat-desc'>{alert_tag}</div>
+            </div>
+            """
+            line_text = f"🧪 T+1 隔日沖回測勝率：{win_rate:.0f}% ({alert_tag})"
+            return html_block, line_text
+            
+    except Exception as e:
+        print(f"⚠️ Alpha Decay 運算失敗: {e}")
+        
+    return (
+        "<div class='stat-card'><div class='stat-title'>T+1 隔日沖勝率</div><div class='stat-value red'>異常</div><div class='stat-desc'>請檢查系統日誌</div></div>", 
+        "⚠️ T+1 回測運算異常"
+    )
+
+
+# ==========================================================
 # 📊 13:40 雲端收盤自動戰情與 HTML 網頁生成引擎
 # ==========================================================
 def afternoon_review_loop():
@@ -4943,13 +5024,16 @@ def afternoon_review_loop():
 
                 kbars_json_str = json.dumps(embedded_kbars, ensure_ascii=False)
                 # ==========================================
-				
-				
+                
+                # 💥 戰術四：呼叫 T+1 策略衰退回測引擎
+                alpha_decay_html, alpha_decay_text = evaluate_alpha_decay()
+
                 review_lines = [
                     "📊 【股海觀浪・全方位戰場鑑識與盤後覆盤】",
                     "----------------------",
                     f"🎯 今日盤中總計掃描：{total_scans} 次動態事件",
                     f"🛡️ 符合嚴格把關標的：{sent_count} 檔 (勝率 {win_rate_pct})",
+                    f"{alpha_decay_text}",
                     "----------------------",
                     "🛡️ 今日盤後統整網頁已永久封存！",
                     f"👉 請點擊下方連結觀看收盤驗證：\n{pcloud_public_url}"
@@ -5045,15 +5129,11 @@ def afternoon_review_loop():
             <div class="stat-desc">通過所有把關機制</div>
         </div>
         <div class="stat-card">
-            <div class="stat-title">資金不足過濾</div>
-            <div class="stat-value yellow">{real_funds_filtered} <span>檔</span> 🐢</div>
-            <div class="stat-desc">點火資金未達標，不提醒</div>
+            <div class="stat-title">假突破與過熱防禦</div>
+            <div class="stat-value yellow">{real_funds_filtered + real_overheated_filtered} <span>檔</span> 🚫</div>
+            <div class="stat-desc">嚴格攔截資金不足與追高陷阱</div>
         </div>
-        <div class="stat-card">
-            <div class="stat-title">過熱與過高防護</div>
-            <div class="stat-value red">{real_overheated_filtered} <span>檔</span> 🚫</div>
-            <div class="stat-desc">乖離過大/漲幅過高，不追高</div>
-        </div>
+        {alpha_decay_html}
     </div>
 
     <div class="section-title">🔥 今日盤中爆量觸發清單 (收盤表現驗證)</div>
