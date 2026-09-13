@@ -2751,15 +2751,20 @@ def handle_message(event):
 	# ==========================================
     # 🛡️ VIP 自選股防護網指令中心
     # ==========================================
-    # 1. 新增自選股 (支援格式：「新增自選 2330」或「+2330」)
+    # 1. 新增自選股 (支援格式：「+2330」或「+台積電」)
     if user_msg.startswith("新增自選") or user_msg.startswith("+"):
-        stock_code = user_msg.replace("新增自選", "").replace("+", "").strip()
+        input_val = user_msg.replace("新增自選", "").replace("+", "").strip()
         target_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
         
+        # 呼叫資料庫進行中文與代號雙向反查
+        res_data = get_stock_dict()
+        stock_dict = res_data[0] if isinstance(res_data, tuple) else {}
+        full_list = res_data[1] if isinstance(res_data, tuple) else []
+        
+        # 💥 智慧反查：輸入中文會自動變代號，輸入代號就維持代號
+        stock_code = stock_dict.get(input_val, input_val)
+        
         if stock_code.isdigit() and len(stock_code) <= 6:
-            # 呼叫資料庫反查名稱
-            res_data = get_stock_dict()
-            full_list = res_data[1] if isinstance(res_data, tuple) else []
             stock_name = stock_code
             for item in full_list:
                 if str(item.get("code", "")).strip() == stock_code:
@@ -2771,18 +2776,23 @@ def handle_message(event):
             else:
                 smart_reply_with_menu(event, f"⚠️ 【{stock_name} ({stock_code})】 已經在您的雷達網中囉！")
         else:
-            smart_reply_with_menu(event, "❌ 格式錯誤，請輸入正確的股票代號，例如：「新增自選 2330」或「+2330」")
+            smart_reply_with_menu(event, "❌ 找不到該標的，請確認股票代號或完整中文名稱是否正確，例如：「+2330」或「+台積電」")
         return
 
-    # 2. 刪除自選股 (支援格式：「刪除自選 2330」或「-2330」)
+    # 2. 刪除自選股 (支援格式：「-2330」或「-台積電」)
     if user_msg.startswith("刪除自選") or user_msg.startswith("-"):
-        stock_code = user_msg.replace("刪除自選", "").replace("-", "").strip()
+        input_val = user_msg.replace("刪除自選", "").replace("-", "").strip()
         target_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
         
+        # 呼叫資料庫進行中文反查
+        res_data = get_stock_dict()
+        stock_dict = res_data[0] if isinstance(res_data, tuple) else {}
+        stock_code = stock_dict.get(input_val, input_val)
+        
         if remove_from_watchlist(target_id, stock_code):
-            smart_reply_with_menu(event, f"🗑️ 已成功將代號 【{stock_code}】 移出您的雷達網。")
+            smart_reply_with_menu(event, f"🗑️ 已成功將 【{input_val}】 移出您的雷達網。")
         else:
-            smart_reply_with_menu(event, f"⚠️ 您的雷達網中找不到代號 【{stock_code}】。")
+            smart_reply_with_menu(event, f"⚠️ 您的雷達網中找不到 【{input_val}】。")
         return
 
     # 3. 查詢我的自選清單
@@ -2810,11 +2820,11 @@ def handle_message(event):
 	
 	# 4. 按鈕防呆引導教學
     if user_msg == "如何加自選":
-        smart_reply_with_menu(event, "💡 【新增自選股教學】\n請直接在對話框輸入：\n「+股票代號」 或 「新增自選 股票代號」\n\n範例：\n+2330\n新增自選 2317")
+        smart_reply_with_menu(event, "💡 【新增自選股教學】\n請直接在對話框輸入：\n「+股票代號」 或 「+中文名稱」\n\n範例：\n+2330\n+台積電")
         return
 
     if user_msg == "如何刪自選":
-        smart_reply_with_menu(event, "💡 【刪除自選股教學】\n請直接在對話框輸入：\n「-股票代號」 或 「刪除自選 股票代號」\n\n範例：\n-2330\n刪除自選 2317")
+        smart_reply_with_menu(event, "💡 【刪除自選股教學】\n請直接在對話框輸入：\n「-股票代號」 或 「-中文名稱」\n\n範例：\n-2330\n-台積電")
         return
 	
 	
