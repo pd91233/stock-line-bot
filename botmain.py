@@ -4221,10 +4221,19 @@ def process_tick_data(data, meta_info, top_ind):
 
             if not (is_volume_surge and is_real_attack): return None
 
+            # 💥 機構級微觀籌碼過濾：內外盤失衡判定
+            best_bid = float(data.get('bid', 0.0))
+            best_ask = float(data.get('ask', 0.0))
+            
+            if best_bid > 0 and best_ask > 0:
+                # 若現價小於等於委買價(Bid)，代表是賣方急於變現「主動倒貨（內盤成交）」
+                # 這種爆量屬於「主力假突破 / 出貨」，系統將強制攔截！
+                if current_z <= best_bid:
+                    filtered_overheated_codes.add(code) # 寫入防禦黑盒子
+                    return None
 
-
+            # 通過重重考驗，開始運算均線
             ma5_now = sum([t[1] for t in ticks[-5:]]) / 5
-
             ma5_prev = sum([t[1] for t in ticks[-6:-1]]) / 5
 
             
@@ -4529,36 +4538,27 @@ def continuous_radar_loop():
 
                                 
 
-                                # 萃取官方結算價量
-
+                                # 萃取官方結算價量與最佳買賣檔位 (機構級微觀籌碼)
                                 z = quote.get('regularMarketPrice', 0)
-
                                 y = quote.get('regularMarketPreviousClose', z)
-
                                 v = quote.get('regularMarketVolume', 0) / 1000.0 
-
                                 
+                                # 💥 新增：擷取五檔最優委買 (bid) 與委賣 (ask) 價格
+                                bid = quote.get('bid', 0.0)
+                                ask = quote.get('ask', 0.0)
 
                                 if z == 0 or v == 0 or code not in stock_data_map: continue
 
-                                
-
                                 formatted_data = {
-
                                     'c': code,
-
                                     'z': z,
-
                                     'y': y,
-
                                     'o': quote.get('regularMarketOpen', z),
-
                                     'h': quote.get('regularMarketDayHigh', z),
-
                                     'l': quote.get('regularMarketDayLow', z),
-
-                                    'v': v
-
+                                    'v': v,
+                                    'bid': bid,  # 傳遞委買價給大腦
+                                    'ask': ask   # 傳遞委賣價給大腦
                                 }
 
                                 
