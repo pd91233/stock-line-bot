@@ -352,7 +352,43 @@ def update_vips(data):
 
 
 
+# ==========================================================
+# 🛡️ VIP 專屬自選股防護網：記憶晶片與存取模組
+# ==========================================================
+WATCHLIST_FILE = "vip_watchlists.json"
 
+def read_watchlists():
+    if os.path.exists(WATCHLIST_FILE):
+        try:
+            with open(WATCHLIST_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except: pass
+    return {}
+
+def update_watchlists(data):
+    try:
+        with open(WATCHLIST_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"⚠️ 自選股記憶寫入失敗: {e}", flush=True)
+
+def add_to_watchlist(user_id, stock_code):
+    data = read_watchlists()
+    if user_id not in data:
+        data[user_id] = []
+    if stock_code not in data[user_id]:
+        data[user_id].append(stock_code)
+        update_watchlists(data)
+        return True
+    return False
+
+def remove_from_watchlist(user_id, stock_code):
+    data = read_watchlists()
+    if user_id in data and stock_code in data[user_id]:
+        data[user_id].remove(stock_code)
+        update_watchlists(data)
+        return True
+    return False
 
 
 
@@ -2689,29 +2725,76 @@ def handle_join(event):
 			TextSendMessage(text=welcome_msg)
 		)
 
-
-
-
-
-
-
 # ==========================================================
-
 # LINE群組查詢股票 💡 最完美的智慧過濾邏輯
-
 # ==========================================================
-
-
-
 @handler.add(MessageEvent, message=TextMessage)
-
 def handle_message(event):
-
     user_msg = event.message.text.strip()
-
-    user_id = event.source.user_id  
-
+    user_id = event.source.user_id
     
+	
+	# ==========================================
+    # 🛡️ VIP 自選股防護網指令中心
+    # ==========================================
+    # 1. 新增自選股 (支援格式：「新增自選 2330」或「+2330」)
+    if user_msg.startswith("新增自選") or user_msg.startswith("+"):
+        stock_code = user_msg.replace("新增自選", "").replace("+", "").strip()
+        target_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
+        
+        if stock_code.isdigit() and len(stock_code) <= 6:
+            # 呼叫資料庫反查名稱
+            res_data = get_stock_dict()
+            full_list = res_data[1] if isinstance(res_data, tuple) else []
+            stock_name = stock_code
+            for item in full_list:
+                if str(item.get("code", "")).strip() == stock_code:
+                    stock_name = str(item.get("name", "")).strip()
+                    break
+            
+            if add_to_watchlist(target_id, stock_code):
+                smart_reply_with_menu(event, f"✅ 已成功將 【{stock_name} ({stock_code})】 加入您的專屬防禦雷達網！\n當該標的出現盤中爆量或重大訊息時，系統將第一時間為您警戒。")
+            else:
+                smart_reply_with_menu(event, f"⚠️ 【{stock_name} ({stock_code})】 已經在您的雷達網中囉！")
+        else:
+            smart_reply_with_menu(event, "❌ 格式錯誤，請輸入正確的股票代號，例如：「新增自選 2330」或「+2330」")
+        return
+
+    # 2. 刪除自選股 (支援格式：「刪除自選 2330」或「-2330」)
+    if user_msg.startswith("刪除自選") or user_msg.startswith("-"):
+        stock_code = user_msg.replace("刪除自選", "").replace("-", "").strip()
+        target_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
+        
+        if remove_from_watchlist(target_id, stock_code):
+            smart_reply_with_menu(event, f"🗑️ 已成功將代號 【{stock_code}】 移出您的雷達網。")
+        else:
+            smart_reply_with_menu(event, f"⚠️ 您的雷達網中找不到代號 【{stock_code}】。")
+        return
+
+    # 3. 查詢我的自選清單
+    if user_msg in ["我的自選", "自選清單", "防禦網"]:
+        target_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
+        data = read_watchlists()
+        my_list = data.get(target_id, [])
+        
+        if not my_list:
+            smart_reply_with_menu(event, "📋 報告！您目前尚未設定任何自選股。\n請使用「+股票代號」來建立您的專屬防禦網！")
+        else:
+            res_data = get_stock_dict()
+            full_list = res_data[1] if isinstance(res_data, tuple) else []
+            display_list = []
+            for code in my_list:
+                name = code
+                for item in full_list:
+                    if str(item.get("code", "")).strip() == code:
+                        name = str(item.get("name", "")).strip()
+                        break
+                display_list.append(f"• {name} ({code})")
+            
+            smart_reply_with_menu(event, f"🛡️ 【VIP 專屬防禦雷達網】\n報告，系統目前正為您全天候嚴密監控以下標的：\n----------------------\n" + "\n".join(display_list) + "\n----------------------\n💡 輸入「-代號」即可解除監控。")
+        return
+	
+	
 
     # 💥 新增：讓使用者隨時點名查詢當日已被系統鎖定的標的清單
 
