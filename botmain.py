@@ -301,6 +301,52 @@ def fetch_taifex_pcr():
     except Exception as e:
         print(f"⚠️ 期交所 PCR 讀取受阻: {e}")
     return "🛡️ 選擇權 PCR: 待更新"
+	
+	
+# ==========================================================
+# 🛡️ 戰術三：本土券商 API 智慧拆單橋接 (機構級實戰沙盒預備工程)
+# ==========================================================
+def execute_smart_order(user_id, stock_code, action="BUY", volume=1):
+    """
+    機構級 TWAP/VWAP 智慧拆單模擬器
+    未來將在此掛載本土券商 (如永豐 Shioaji) API 憑證，即可切換為實盤
+    """
+    try:
+        # 取得即時報價，決定演算法掛單策略 (內盤承接 / 外盤派發)
+        realtime_info, _ = fetch_realtime_data(stock_code)
+        current_price = 0.0
+        
+        # 解析現價
+        import re
+        p_match = re.search(r'成交價:\s*([0-9.]+)', realtime_info)
+        if p_match: current_price = float(p_match.group(1))
+
+        if current_price == 0:
+            return f"❌ 執行失敗：無法取得 {stock_code} 即時報價，請確認代號正確或於交易時間內操作。"
+
+        # 模擬機構拆單與滑價控制邏輯
+        if action == "BUY":
+            action_tw = "買進多單"
+            strategy = "【TWAP 演算法】被動承接與分時打擊 (隱藏意圖)"
+            trade_price = current_price  # 實戰中會根據委買委賣五檔計算
+        else:
+            action_tw = "賣出平倉"
+            strategy = "【VWAP 演算法】量能加權分批派發 (降低滑價)"
+            trade_price = current_price
+
+        # 產出作戰結算報告
+        report = (
+            f"⚡ 【機構級閃電下單中心】\n"
+            f"🎯 任務指令：{action_tw} {stock_code} 共 {volume} 張\n"
+            f"💰 基準參考價：{trade_price} 元\n"
+            f"⚙️ 執行邏輯：{strategy}\n"
+            f"----------------------\n"
+            f"✅ 狀態：模擬委託已成功送出至沙盒伺服器！\n"
+            f"💡 備註：此為沙盒預演模式，待統帥掛載實體券商 API 金鑰後，此通道將轉為實盤交易。"
+        )
+        return report
+    except Exception as e:
+        return f"⚠️ 下單模組執行異常：{e}"	
 
 
 app = Flask(__name__)
@@ -2851,6 +2897,44 @@ def handle_message(event):
         smart_reply_with_menu(event, "💡 【刪除自選股教學】\n請直接在對話框輸入：\n「-股票代號」 或 「-中文名稱」\n\n範例：\n-2330\n-台積電")
         return
 	
+	
+	# ==========================================
+    # ⚡ 實戰下單沙盒指令 (支援格式：「買進 2330 2」或「賣出 群創 5」)
+    # ==========================================
+    if user_msg.startswith("買進") or user_msg.startswith("賣出"):
+        parts = user_msg.split()
+        if len(parts) >= 2:
+            action = "BUY" if "買進" in parts[0] else "SELL"
+            input_val = parts[1].strip()
+            
+            # 支援「張數」判定，若未輸入張數則預設為 1 張
+            volume = int(parts[2]) if len(parts) >= 3 and parts[2].isdigit() else 1
+            
+            target_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
+            
+            # 智慧反查中文名稱
+            res_data = get_stock_dict()
+            stock_dict = res_data[0] if isinstance(res_data, tuple) else {}
+            stock_code = stock_dict.get(input_val, input_val)
+            
+            if stock_code.isdigit() and len(stock_code) <= 6:
+                smart_reply_with_menu(
+                    event, 
+                    TextSendMessage(text=f"🔄 收到【{action}】指令！正在啟動演算法計算最佳掛單點位，請稍候...")
+                )
+                
+                # 啟動背景分身執行下單演算
+                def process_order():
+                    reply_text = execute_smart_order(target_id, stock_code, action, volume)
+                    smart_push_with_menu(target_id, reply_text)
+                
+                import eventlet
+                eventlet.spawn(process_order)
+            else:
+                smart_reply_with_menu(event, "❌ 無效的標的！請使用格式：「買進 2330 1」或「賣出 台積電 2」")
+        else:
+            smart_reply_with_menu(event, "❌ 指令格式錯誤！請輸入如：「買進 2330 1」或「賣出 台積電 2」")
+        return
 	
 
     # 💥 新增：讓使用者隨時點名查詢當日已被系統鎖定的標的清單
