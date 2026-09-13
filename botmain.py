@@ -267,7 +267,40 @@ def get_market_leader():
     return "🔥 資金主攻：【半導體】(0.0%)"
 
 
-
+# ==========================================================
+# 🛡️ 戰術二：期交所籌碼防線與選擇權 PCR 掃描 (大盤多空防禦罩)
+# ==========================================================
+def fetch_taifex_pcr():
+    try:
+        # 直接深入台灣期交所核心抓取每日莊家未平倉數據
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        res = requests.get("https://www.taifex.com.tw/cht/3/pcRatio", headers=headers, timeout=5)
+        res.encoding = 'utf-8'
+        soup = BeautifulSoup(res.text, 'html.parser')
+        
+        # 破解期交所表格結構，鎖定最新交易日的 PCR 總計數值
+        table = soup.find('table', {'class': 'table_f'})
+        if table:
+            rows = table.find_all('tr')
+            if len(rows) > 1:
+                cols = rows[1].find_all('td')
+                if len(cols) >= 6:
+                    pcr_value = float(cols[5].text.strip().replace('%', ''))
+                    
+                    # 💥 機構級多空判定邏輯
+                    if pcr_value > 110:
+                        status = "🔥 莊家強力護盤 (做多勝率高)"
+                    elif pcr_value > 100:
+                        status = "🟢 下檔具備支撐"
+                    elif pcr_value < 90:
+                        status = "⚠️ 莊家強力佈空 (嚴防假突破)"
+                    else:
+                        status = "🔴 上檔壓力沉重"
+                        
+                    return f"🛡️ 選擇權 PCR: {pcr_value}% ({status})"
+    except Exception as e:
+        print(f"⚠️ 期交所 PCR 讀取受阻: {e}")
+    return "🛡️ 選擇權 PCR: 待更新"
 
 
 app = Flask(__name__)
@@ -2474,27 +2507,18 @@ def execute_force_refresh():
             
 
             flow_text = f"🔥 資金主攻：【{true_market_top_ind}】({true_market_top_chg}%)"
-
             news_headline = fetch_cnyes_news()
-
-            display_stocks = " ｜ ".join([f"{s['name']}({s['code']})" for s in ai_payload]) if ai_payload else "📡 監控中..."
-
+            pcr_defense_text = fetch_taifex_pcr() # 💥 呼叫期交所 PCR 解碼晶片
             
-
-            # 💥 階段一：將最新的 focus 與 full 財報數據，一併注入快取給前端 UI 讀取！
-
+            display_stocks = " ｜ ".join([f"{s['name']}({s['code']})" for s in ai_payload]) if ai_payload else "📡 監控中..."
+            
+            # 💥 將 PCR 莊家防線情報，無縫合併進大盤戰情報告中！
             update_cache({
-
-                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {flow_text} ｜ {news_headline}",
-
+                "fundsText": f"📊 加權指數 {round(twii_chg, 2)}% ｜ {flow_text}\n{pcr_defense_text}\n{news_headline}",
                 "stocksText": display_stocks,
-
                 "fundamental_focus": fundamental_focus_cache,
-
                 "fundamental_full": fundamental_full_cache,
-
-                "intraday_alerts": intraday_breakout_cache[:10] # 💥 裝載當沖快訊彈藥 (只保留最新10筆)
-
+                "intraday_alerts": intraday_breakout_cache[:10] 
             })
 
             print("✅ [戰術回報] 變數防護版寫入成功，財報數據已同步封裝！")
