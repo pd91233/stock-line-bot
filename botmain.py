@@ -856,23 +856,37 @@ def create_flex_menu_message(message_text):
                             style="primary",
                             color="#2ea043",
                             height="sm"
-
                         )
-
                     ]
-
+                ),
+                # 💥 新增第四排按鈕 (VIP 防禦網專區)
+                BoxComponent(
+                    layout='horizontal',
+                    spacing='sm',
+                    margin="sm",
+                    contents=[
+                        ButtonComponent(
+                            action=MessageAction(label="➕ 加自選", text="如何加自選"),
+                            style="secondary",
+                            height="sm"
+                        ),
+                        ButtonComponent(
+                            action=MessageAction(label="➖ 刪自選", text="如何刪自選"),
+                            style="secondary",
+                            height="sm"
+                        ),
+                        ButtonComponent(
+                            action=MessageAction(label="📋 查自選", text="我的自選"),
+                            style="secondary",
+                            height="sm"
+                        )
+                    ]
                 )
-
             ],
-
             background_color="#0f172a",
-
             padding_all="15px"
-
         )
-
     )
-
     return FlexSendMessage(alt_text="📊 股海觀浪戰情選單", contents=flex_content)
 
 
@@ -2794,6 +2808,15 @@ def handle_message(event):
             smart_reply_with_menu(event, f"🛡️ 【VIP 專屬防禦雷達網】\n報告，系統目前正為您全天候嚴密監控以下標的：\n----------------------\n" + "\n".join(display_list) + "\n----------------------\n💡 輸入「-代號」即可解除監控。")
         return
 	
+	# 4. 按鈕防呆引導教學
+    if user_msg == "如何加自選":
+        smart_reply_with_menu(event, "💡 【新增自選股教學】\n請直接在對話框輸入：\n「+股票代號」 或 「新增自選 股票代號」\n\n範例：\n+2330\n新增自選 2317")
+        return
+
+    if user_msg == "如何刪自選":
+        smart_reply_with_menu(event, "💡 【刪除自選股教學】\n請直接在對話框輸入：\n「-股票代號」 或 「刪除自選 股票代號」\n\n範例：\n-2330\n刪除自選 2317")
+        return
+	
 	
 
     # 💥 新增：讓使用者隨時點名查詢當日已被系統鎖定的標的清單
@@ -3978,23 +4001,37 @@ def create_flex_menu_message(message_text):
                             style="primary",
                             color="#2ea043",
                             height="sm"
-
                         )
-
                     ]
-
+                ),
+                # 💥 新增第四排按鈕 (VIP 防禦網專區)
+                BoxComponent(
+                    layout='horizontal',
+                    spacing='sm',
+                    margin="sm",
+                    contents=[
+                        ButtonComponent(
+                            action=MessageAction(label="➕ 加自選", text="如何加自選"),
+                            style="secondary",
+                            height="sm"
+                        ),
+                        ButtonComponent(
+                            action=MessageAction(label="➖ 刪自選", text="如何刪自選"),
+                            style="secondary",
+                            height="sm"
+                        ),
+                        ButtonComponent(
+                            action=MessageAction(label="📋 查自選", text="我的自選"),
+                            style="secondary",
+                            height="sm"
+                        )
+                    ]
                 )
-
             ],
-
             background_color="#0f172a",
-
             padding_all="15px"
-
         )
-
     )
-
     return FlexSendMessage(alt_text="📊 股海觀浪戰情選單", contents=flex_content)
 
 
