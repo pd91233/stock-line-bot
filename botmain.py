@@ -23,39 +23,30 @@ from linebot.models import (
 )
 
 from bs4 import BeautifulSoup
-
 import json
-
 import requests
-
 import os
-
 import google.generativeai as genai
-
 import re
-
 import itertools
-
 import io
-
 import base64
-
 import datetime
-
+import threading
+import time
+import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
+import mplfinance as mpf
+from broker_gateway import gateway
 import threading
 
-import time
+def background_broker_init():
+    """背景非同步初始化實盤連線，不阻塞主機 Flask 啟動"""
+    time.sleep(6) # 等候 Flask / SocketIO 穩定
+    gateway.connect_and_sync()
 
-import pandas as pd
-
-import matplotlib
-
-matplotlib.use('Agg')
-
-import mplfinance as mpf
-
-
-import csv
+threading.Thread(target=background_broker_init, daemon=True).start()
 
 # ==========================================
 # 📊 盤後戰情 CSV 資料庫自動記錄晶片 (不死鳥重生版 - 時差校正修復)
@@ -304,45 +295,24 @@ def fetch_taifex_pcr():
 	
 	
 # ==========================================================
-# 🛡️ 戰術三：本土券商 API 智慧拆單橋接 (機構級實戰沙盒預備工程)
+# 🛡️ 戰術三：本土券商 API 智慧拆單橋接 (升級實盤真實彈道)
 # ==========================================================
 def execute_smart_order(user_id, stock_code, action="BUY", volume=1):
     """
-    機構級 TWAP/VWAP 智慧拆單模擬器
-    未來將在此掛載本土券商 (如永豐 Shioaji) API 憑證，即可切換為實盤
+    機構級智慧路由轉發：串接 broker_gateway 實盤對接
     """
     try:
-        # 取得即時報價，決定演算法掛單策略 (內盤承接 / 外盤派發)
-        realtime_info, _ = fetch_realtime_data(stock_code)
-        current_price = 0.0
+        # 呼叫實盤閘道執行
+        result_msg = gateway.execute_order(stock_code, action, volume)
         
-        # 解析現價
-        import re
-        p_match = re.search(r'成交價:\s*([0-9.]+)', realtime_info)
-        if p_match: current_price = float(p_match.group(1))
-
-        if current_price == 0:
-            return f"❌ 執行失敗：無法取得 {stock_code} 即時報價，請確認代號正確或於交易時間內操作。"
-
-        # 模擬機構拆單與滑價控制邏輯
-        if action == "BUY":
-            action_tw = "買進多單"
-            strategy = "【TWAP 演算法】被動承接與分時打擊 (隱藏意圖)"
-            trade_price = current_price  # 實戰中會根據委買委賣五檔計算
-        else:
-            action_tw = "賣出平倉"
-            strategy = "【VWAP 演算法】量能加權分批派發 (降低滑價)"
-            trade_price = current_price
-
         # 產出作戰結算報告
         report = (
-            f"⚡ 【機構級閃電下單中心】\n"
-            f"🎯 任務指令：{action_tw} {stock_code} 共 {volume} 張\n"
-            f"💰 基準參考價：{trade_price} 元\n"
-            f"⚙️ 執行邏輯：{strategy}\n"
+            f"⚡ 【機構級閃電下單/實盤導彈中心】\n"
+            f"🎯 任務指令：{'買進多單' if action=='BUY' else '賣出平倉'} {stock_code} 共 {volume} 單位\n"
             f"----------------------\n"
-            f"✅ 狀態：模擬委託已成功送出至沙盒伺服器！\n"
-            f"💡 備註：此為沙盒預演模式，待統帥掛載實體券商 API 金鑰後，此通道將轉為實盤交易。"
+            f"{result_msg}\n"
+            f"----------------------\n"
+            f"💡 提示：若切換至 REAL 模式，委託與回報將由 OnReport 非同步連動。"
         )
         return report
     except Exception as e:
