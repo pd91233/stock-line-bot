@@ -248,22 +248,21 @@ def get_market_leader():
 # ==========================================================
 def fetch_taifex_pcr():
     try:
-        # 直接深入台灣期交所核心抓取每日莊家未平倉數據
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        headers = {"User-Agent": "Mozilla/5.0"}
         res = requests.get("https://www.taifex.com.tw/cht/3/pcRatio", headers=headers, timeout=5)
         res.encoding = 'utf-8'
         soup = BeautifulSoup(res.text, 'html.parser')
         
-        # 破解期交所表格結構，鎖定最新交易日的 PCR 總計數值
         table = soup.find('table', {'class': 'table_f'})
         if table:
             rows = table.find_all('tr')
             if len(rows) > 1:
                 cols = rows[1].find_all('td')
                 if len(cols) >= 6:
-                    pcr_value = float(cols[5].text.strip().replace('%', ''))
+                    # 💥 增強防護：把逗號清掉、確保能安全轉成 float
+                    raw_text = cols[5].text.strip().replace('%', '').replace(',', '')
+                    pcr_value = float(raw_text)
                     
-                    # 💥 機構級多空判定邏輯
                     if pcr_value > 110:
                         status = "🔥 莊家強力護盤 (做多勝率高)"
                     elif pcr_value > 100:
