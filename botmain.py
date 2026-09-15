@@ -7,19 +7,12 @@ eventlet.monkey_patch()
 # =========================================================
 
 from flask import Flask, request, abort, jsonify, make_response
-
 from flask_socketio import SocketIO, emit
-
 from linebot import LineBotApi, WebhookHandler
-
 from linebot.exceptions import InvalidSignatureError
-
 from linebot.models import (
-
     MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction, ImageSendMessage,
-
     JoinEvent, SourceGroup, FlexSendMessage, BubbleContainer, BoxComponent, ButtonComponent
-
 )
 
 from bs4 import BeautifulSoup
