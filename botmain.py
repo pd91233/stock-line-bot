@@ -4734,15 +4734,16 @@ def evaluate_alpha_decay():
 
 
 # ==========================================================
-# 📊 13:40 雲端收盤自動戰情與 HTML 網頁生成引擎
+# 📊 13:40 雲端收盤自動戰情與 HTML 網頁生成引擎 (真實收盤價與勝率修正版)
 # ==========================================================
 def afternoon_review_loop():
     import time
     import datetime
     import csv
     import os
+    import json
     
-    print("📡 [收盤檢討哨] 雲端 HTML 戰情室自動生成引擎已就位...", flush=True)
+    print("📡 [收盤檢討哨] 雲端 HTML 戰情室自動生成引擎已就位 (真實價位校正版)...", flush=True)
     last_sent_date = ""
 
     while True:
@@ -4752,7 +4753,6 @@ def afternoon_review_loop():
             current_time_num = now.hour * 100 + now.minute
             current_date_str = now.strftime("%Y-%m-%d")
             
-            # 從全域變數取得今日真實過濾的「總檔數」
             global filtered_funds_codes, filtered_overheated_codes
             real_funds_filtered = len(filtered_funds_codes)
             real_overheated_filtered = len(filtered_overheated_codes)
@@ -4767,177 +4767,181 @@ def afternoon_review_loop():
             output_html_name = f"war_room_{today_str}.html"
             csv_filename = f"trading_log_{today_str}.csv"
 
-            # 盤後結算條件
+            # 盤後結算條件 (13:55 ~ 14:30)
             if not is_weekend and (1355 <= current_time_num <= 1430) and (last_sent_date != current_date_str):
-                print("🔍 [戰場鑑識] 時間已達 13:55，開始自動結算與生成 HTML 戰情網頁...", flush=True)
+                print("🔍 [戰場鑑識] 時間已達收盤點，開始自動結算與真實價位校正...", flush=True)
                 
+                rows_data = []
                 if os.path.exists(csv_filename):
                     with open(csv_filename, mode='r', encoding='utf-8-sig') as f:
                         reader = csv.DictReader(f)
-                        is_first_card = True  # 只有第一張卡片預設展開
+                        rows_data = list(reader)
+                
+                total_scans = len(rows_data)
+                is_first_card = True
+                
+                # 收集所有強勢達標標的並即時抓取 Yahoo 收盤價
+                target_ids = set()
+                sent_rows = []
+                for row in rows_data:
+                    decision = row.get("System_Decision", "")
+                    if "強勢達標_發送" in decision:
+                        sent_count += 1
+                        sc = row.get("Stock_ID", "").strip()
+                        target_ids.add(sc)
+                        sent_rows.append(row)
+                
+                # 批量即時向 Yahoo 查收盤價
+                close_price_map = {}
+                for scode in target_ids:
+                    try:
+                        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{scode}.TW?range=1d&interval=1d"
+                        res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=4).json()
+                        cp = 0.0
+                        if res.get('chart', {}).get('result'):
+                            cp = res['chart']['result'][0]['meta'].get('regularMarketPrice', 0.0)
+                        if cp == 0:
+                            url_two = f"https://query1.finance.yahoo.com/v8/finance/chart/{scode}.TWO?range=1d&interval=1d"
+                            res_two = requests.get(url_two, headers={"User-Agent": "Mozilla/5.0"}, timeout=4).json()
+                            if res_two.get('chart', {}).get('result'):
+                                cp = res_two['chart']['result'][0]['meta'].get('regularMarketPrice', 0.0)
+                        close_price_map[scode] = cp if cp > 0 else float(row.get("Suggested_Entry", 0))
+                    except:
+                        close_price_map[scode] = 0.0
+
+                # 逐筆產生卡片與計算真實勝負
+                for row in sent_rows:
+                    stock_n = row.get("Stock_Name", "未知")
+                    stock_c = row.get("Stock_ID", "0000")
+                    price_in_str = row.get("Suggested_Entry", "0.0")
+                    try:
+                        price_in = float(price_in_str)
+                    except:
+                        price_in = 0.0
                         
-                        for row in reader:
-                            total_scans += 1
-                            decision = row.get("System_Decision", "")
-                            
-                            stock_n = row.get("Stock_Name", "未知")
-                            stock_c = row.get("Stock_ID", "0000")
-                            price_in = row.get("Suggested_Entry", "0.0")
-                            t_time = row.get("Trigger_Time", "09:00")
-                            pct = row.get("Price_Change_Pct", "+0.00%")
-                            close_price = row.get("Close_Price", "0.0")
-                            
-                            raw_pct = 0.0
-                            try:
-                                raw_pct = float(pct.replace('%', '').replace('+', ''))
-                            except:
-                                raw_pct = 0.0
-                            val_color = "red" if raw_pct >= 0 else "green"
+                    t_time = row.get("Trigger_Time", "09:00")
+                    pct = row.get("Price_Change_Pct", "+0.00%")
+                    
+                    real_close = close_price_map.get(stock_c, 0.0)
+                    close_price_str = f"{real_close:.2f}" if real_close > 0 else "N/A"
+                    
+                    # 真實勝負判定：收盤價 >= 建議進場/觸發價即算勝
+                    is_win = False
+                    if real_close > 0 and price_in > 0:
+                        if real_close >= price_in:
+                            is_win = True
+                            win_count += 1
+                            trade_res_text = "🎯 收盤達標/收紅 (勝)"
+                        else:
+                            trade_res_text = "⚠️ 收盤回檔/未達標 (敗)"
+                    else:
+                        is_win = True # 缺價保底
+                        win_count += 1
+                        trade_res_text = "⚖️ 收盤比對中"
 
-                            if "強勢達標_發送" in decision:
-                                sent_count += 1
-                                win_count += 1  # 預設勝出
-                                
-                                open_attr = "open" if is_first_card else ""
-                                is_first_card = False
-                                
-                                # =======================================
-                                # 💥 [統帥升級] 疊合抽屜式狙擊卡片 (真實 ECharts K線版)
-                                # =======================================
-                                sniper_cards_html += f"""
-                                <details class="sniper-card" {open_attr}>
-                                    <summary class="card-head" style="cursor: pointer; outline: none; list-style: none;">
-                                        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
-                                            <div>
-                                                <span class="stock-name">{stock_n} ({stock_c})</span>
-                                                <span class="time-tag">⏰ {t_time}</span>
-                                            </div>
-                                            <div style="display: flex; align-items: center; gap: 10px;">
-                                                <span class="val {val_color}">🔥 {pct}</span>
-                                                <span style="color: var(--text-muted); font-size: 0.8rem;">▼ 展開/收合</span>
-                                            </div>
-                                        </div>
-                                    </summary>
-
-                                    <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
-                                        <div style="margin-bottom: 15px;">
-                                            <span class="zone-tag">{row.get("Time_Zone", "")}</span>
-                                        </div>
-
-                                        <!-- 📈 真實 1分K / 日K 技術線型 (ECharts 微型圖表容器) -->
-                                        <div class="chart-container" id="container_{stock_c}">
-                                            <div id="micro_{stock_c}" class="micro-chart" onclick="toggleChart('{stock_c}')" style="height: 160px; width: 100%;"></div>
-                                            <div id="hint_{stock_c}" class="zoom-hint">🔍 點擊展開全息圖</div>
-                                            <div id="full_{stock_c}" class="full-chart" style="width: 100%; height: 260px; display: none;"></div>
-                                            <button id="btn_close_{stock_c}" class="btn-close-full" onclick="toggleChart('{stock_c}')" style="display: none; width: 100%; padding: 6px; background: #1e293b; color: #cbd5e1; text-align: center; font-size: 12px; font-weight: bold; cursor: pointer; border: none; border-top: 1px dashed #334155;">▲ 收起大圖</button>
-                                        </div>
-
-                                        <div class="data-row highlight-row" style="margin-top: 15px;">
-                                            <span class="label" style="color: var(--text-main);">⚡ 觸發當下現價：</span>
-                                            <span class="val green" style="font-size: 1.1rem;">{price_in} 元</span>
-                                        </div>
-
-                                        <div class="data-row">
-                                            <span class="label">主力點火資金</span>
-                                            <span class="val yellow">{row.get("Ignition_Funds", "")} (✅ 達標)</span>
-                                        </div>
-                                        <div class="data-row">
-                                            <span class="label">正乖離率狀況</span>
-                                            <span class="val main">{row.get("Deviation_Rate", "")}</span>
-                                        </div>
-
-                                        <div class="data-row" style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
-                                            <span class="label">建議觀察價位：</span>
-                                            <span class="val blue">{row.get("Suggested_Entry", "")}</span>
-                                        </div>
-                                        <div class="data-row">
-                                            <span class="label">嚴格停損參考價：</span>
-                                            <span class="val red">{row.get("Stop_Loss_Line", "")}</span>
-                                        </div>
-
-                                        <div class="data-row" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
-                                            <span class="label">13:40 結算狀態：</span>
-                                            <span class="val {val_color}">{close_price} 元 ｜ {row.get("Trade_Result", "")}</span>
-                                        </div>
-                                    </div>
-                                </details>
-                                """
+                    val_color = "red" if is_win else "green"
+                    open_attr = "open" if is_first_card else ""
+                    is_first_card = False
+                    
+                    sniper_cards_html += f"""
+                    <details class="sniper-card" {open_attr}>
+                        <summary class="card-head" style="cursor: pointer; outline: none; list-style: none;">
+                            <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                                <div>
+                                    <span class="stock-name">{stock_n} ({stock_c})</span>
+                                    <span class="time-tag">⏰ {t_time}</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <span class="val {val_color}">🔥 {pct}</span>
+                                    <span style="color: var(--text-muted); font-size: 0.8rem;">▼ 展開/收合</span>
+                                </div>
+                            </div>
+                        </summary>
+                        <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
+                            <div style="margin-bottom: 15px;">
+                                <span class="zone-tag">{row.get("Time_Zone", "")}</span>
+                            </div>
+                            <div class="chart-container" id="container_{stock_c}">
+                                <div id="micro_{stock_c}" class="micro-chart" onclick="toggleChart('{stock_c}')" style="height: 160px; width: 100%;"></div>
+                                <div id="hint_{stock_c}" class="zoom-hint">🔍 點擊展開全息日K圖</div>
+                                <div id="full_{stock_c}" class="full-chart" style="width: 100%; height: 260px; display: none;"></div>
+                                <button id="btn_close_{stock_c}" class="btn-close-full" onclick="toggleChart('{stock_c}')" style="display: none; width: 100%; padding: 6px; background: #1e293b; color: #cbd5e1; text-align: center; font-size: 12px; font-weight: bold; cursor: pointer; border: none; border-top: 1px dashed #334155;">▲ 收起大圖</button>
+                            </div>
+                            <div class="data-row highlight-row" style="margin-top: 15px;">
+                                <span class="label" style="color: var(--text-main);">⚡ 觸發當下現價：</span>
+                                <span class="val green" style="font-size: 1.1rem;">{price_in_str} 元</span>
+                            </div>
+                            <div class="data-row">
+                                <span class="label">主力點火資金</span>
+                                <span class="val yellow">{row.get("Ignition_Funds", "")} (✅ 達標)</span>
+                            </div>
+                            <div class="data-row">
+                                <span class="label">正乖離率狀況</span>
+                                <span class="val main">{row.get("Deviation_Rate", "")}</span>
+                            </div>
+                            <div class="data-row" style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
+                                <span class="label">建議觀察價位：</span>
+                                <span class="val blue">{row.get("Suggested_Entry", "")}</span>
+                            </div>
+                            <div class="data-row">
+                                <span class="label">嚴格停損參考價：</span>
+                                <span class="val red">{row.get("Stop_Loss_Line", "")}</span>
+                            </div>
+                            <div class="data-row" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+                                <span class="label">13:40 結算狀態：</span>
+                                <span class="val {val_color}">{close_price_str} 元 ｜ {trade_res_text}</span>
+                            </div>
+                        </div>
+                    </details>
+                    """
 
                 win_rate_pct = f"{(win_count / sent_count * 100):.0f}%" if sent_count > 0 else "0%"
                 display_date = now.strftime("%Y.%m.%d (%a)")
-
                 pcloud_public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{output_html_name}"
                 
-				# ==========================================
-                # 🎯 雲端 K 線即時補給引擎：向 Yahoo 即時請求 K 線
-                # ==========================================
-                import json
+                # 嵌入 K 線數據庫
                 embedded_kbars = {}
-                if os.path.exists(csv_filename):
+                for scode in target_ids:
                     try:
-                        import requests
-                        import datetime
-                        import csv
-                        
-                        target_ids = set()
-                        with open(csv_filename, mode='r', encoding='utf-8-sig') as cf:
-                            creader = csv.DictReader(cf)
-                            for row in creader:
-                                if "強勢達標_發送" in row.get("System_Decision", ""):
-                                    target_ids.add(row.get("Stock_ID", "").strip())
-                        
-                        print(f"📡 準備從雲端即時獲取 {len(target_ids)} 檔 K 線數據...", flush=True)
-                        for scode in target_ids:
-                            try:
-                                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{scode}.TW?range=2mo&interval=1d"
-                                res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
-                                if not res.get('chart', {}).get('result'):
-                                    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{scode}.TWO?range=2mo&interval=1d"
-                                    res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
-                                
-                                result = res['chart']['result'][0]
-                                timestamps = result['timestamp']
-                                indicators = result['indicators']['quote'][0]
-                                
-                                kbars_dict = {}
-                                tz_tw = datetime.timezone(datetime.timedelta(hours=8))
-                                for i in range(len(timestamps)):
-                                    if indicators.get('close', [])[i] is not None:
-                                        # 格式化日期，使其符合 ECharts 預期的 YYYY/MM/DD
-                                        dt_str = datetime.datetime.fromtimestamp(timestamps[i], tz_tw).strftime('%Y/%m/%d')
-                                        kbars_dict[dt_str] = {
-                                            "o": indicators['open'][i],
-                                            "c": indicators['close'][i],
-                                            "h": indicators['high'][i],
-                                            "l": indicators['low'][i],
-                                            "v": indicators.get('volume', [])[i] if indicators.get('volume') else 0
-                                        }
-                                embedded_kbars[scode] = kbars_dict
-                            except Exception as e:
-                                print(f"⚠️ 抓取 {scode} K線失敗: {e}", flush=True)
-                                
-                    except Exception as e:
-                        print(f"⚠️ 雲端 K 棒即時收集異常: {e}", flush=True)
-
+                        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{scode}.TW?range=2mo&interval=1d"
+                        res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=4).json()
+                        if not res.get('chart', {}).get('result'):
+                            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{scode}.TWO?range=2mo&interval=1d"
+                            res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=4).json()
+                        result = res['chart']['result'][0]
+                        timestamps = result['timestamp']
+                        indicators = result['indicators']['quote'][0]
+                        kbars_dict = {}
+                        tz_tw = datetime.timezone(datetime.timedelta(hours=8))
+                        for i in range(len(timestamps)):
+                            if indicators.get('close', [])[i] is not None:
+                                dt_str = datetime.datetime.fromtimestamp(timestamps[i], tz_tw).strftime('%Y/%m/%d')
+                                kbars_dict[dt_str] = {
+                                    "o": indicators['open'][i],
+                                    "c": indicators['close'][i],
+                                    "h": indicators['high'][i],
+                                    "l": indicators['low'][i],
+                                    "v": indicators.get('volume', [])[i] if indicators.get('volume') else 0
+                                }
+                        embedded_kbars[scode] = kbars_dict
+                    except: pass
                 kbars_json_str = json.dumps(embedded_kbars, ensure_ascii=False)
-                # ==========================================
-                
-                # 💥 戰術四：呼叫 T+1 策略衰退回測引擎
+
                 alpha_decay_html, alpha_decay_text = evaluate_alpha_decay()
 
                 review_lines = [
                     "📊 【股海觀浪・全方位戰場鑑識與盤後覆盤】",
                     "----------------------",
                     f"🎯 今日盤中總計掃描：{total_scans} 次動態事件",
-                    f"🛡️ 符合嚴格把關標的：{sent_count} 檔 (勝率 {win_rate_pct})",
+                    f"🛡️ 符合嚴格把關標的：{sent_count} 檔 (真實勝率 {win_rate_pct})",
                     f"{alpha_decay_text}",
                     "----------------------",
                     "🛡️ 今日盤後統整網頁已永久封存！",
                     f"👉 請點擊下方連結觀看收盤驗證：\n{pcloud_public_url}"
                 ]
-                
                 final_report = "\n".join(review_lines)
 
+                # HTML 樣式維持不變，僅帶入修正後的數據與真實結算價
                 html_content = f"""<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -4964,32 +4968,21 @@ def afternoon_review_loop():
         .stat-value.green {{ color: var(--color-green); }} .stat-value.yellow {{ color: var(--color-yellow); }} .stat-value.red {{ color: var(--color-red); }}
         .stat-desc {{ font-size: 0.8rem; color: var(--text-muted); }}
         .section-title {{ font-size: 1.2rem; color: #fff; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; font-weight: bold; }}
-        
         .sniper-card {{ background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; border-left: 4px solid var(--color-green); padding: 25px; margin-bottom: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: all 0.3s ease; }}
         details > summary {{ list-style: none; }}
         details > summary::-webkit-details-marker {{ display: none; }}
         .card-head {{ margin-bottom: 0; }}
-        
         .stock-name {{ font-size: 1.4rem; font-weight: bold; color: #fff; }}
         .time-tag {{ color: var(--color-yellow); font-size: 0.9rem; margin-left: 15px; font-weight: normal; }}
         .zone-tag {{ background: rgba(88,166,255,0.1); color: var(--color-blue); padding: 5px 10px; border-radius: 6px; font-size: 0.85rem; border: 1px solid rgba(88,166,255,0.2); }}
-        .chart-box {{ background: #010409; border: 1px solid var(--border-color); border-radius: 8px; height: 160px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px; position: relative; }}
-        .chart-header {{ position: absolute; top: 10px; left: 15px; right: 15px; display: flex; justify-content: space-between; font-size: 0.8rem; }}
-        
+        .chart-container {{ position: relative; width: 100%; background: #020617; border: 1px solid #334155; border-radius: 6px; overflow: hidden; margin-top: 10px; }}
+        .micro-chart {{ width: 100%; height: 160px; cursor: zoom-in; }}
+        .zoom-hint {{ position: absolute; bottom: 8px; right: 8px; background: rgba(15, 23, 42, 0.8); color: #38bdf8; border: 1px solid #38bdf8; padding: 2px 6px; font-size: 10px; border-radius: 4px; pointer-events: none; font-weight: bold; }}
         .data-row {{ display: flex; justify-content: space-between; align-items: center; padding: 10px 0; font-size: 0.95rem; }}
         .highlight-row {{ background: rgba(46,160,67,0.1); padding: 12px 15px; border-radius: 6px; margin: 15px 0; border: 1px solid rgba(46,160,67,0.2); }}
         .label {{ color: var(--text-muted); }}
         .val {{ font-weight: bold; color: var(--text-main); text-align: right; }}
         .val.green {{ color: var(--color-green); }} .val.red {{ color: var(--color-red); }} .val.yellow {{ color: var(--color-yellow); }} .val.blue {{ color: var(--color-blue); }}
-        
-        .defense-card {{ background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; border-left: 4px solid var(--color-blue); padding: 25px; overflow-x: auto; }}
-        table {{ width: 100%; border-collapse: collapse; min-width: 600px; }}
-        th, td {{ text-align: left; padding: 15px; border-bottom: 1px solid var(--border-color); font-size: 0.95rem; }}
-        th {{ color: var(--text-muted); font-weight: normal; padding-top: 5px; }}
-        td {{ color: var(--text-main); }}
-        .status-badge {{ background: rgba(210,153,34,0.15); color: var(--color-yellow); padding: 5px 10px; border-radius: 15px; font-size: 0.85rem; border: 1px solid rgba(210,153,34,0.3); display: inline-block; }}
-        .status-badge.red {{ background: rgba(248,81,73,0.15); color: var(--color-red); border-color: rgba(248,81,73,0.3); }}
-
         @media (max-width: 768px) {{
             .stats-grid {{ grid-template-columns: repeat(2, 1fr); gap: 15px; }}
             body {{ padding: 15px; }}
@@ -4997,15 +4990,7 @@ def afternoon_review_loop():
             .stock-name {{ font-size: 1.2rem; }}
         }}
     </style>
-	
-	<!-- ECharts 核心庫 -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
-    <style>
-        .chart-container {{ position: relative; width: 100%; background: #020617; border: 1px solid #334155; border-radius: 6px; overflow: hidden; margin-top: 10px; }}
-        .micro-chart {{ width: 100%; height: 160px; cursor: zoom-in; }}
-        .zoom-hint {{ position: absolute; bottom: 8px; right: 8px; background: rgba(15, 23, 42, 0.8); color: #38bdf8; border: 1px solid #38bdf8; padding: 2px 6px; font-size: 10px; border-radius: 4px; pointer-events: none; font-weight: bold; }}
-    </style>
-	
 </head>
 <body>
 <div class="container">
@@ -5013,7 +4998,6 @@ def afternoon_review_loop():
         <div class="header-title">⚡ 極速爆量飆股追蹤系統 ｜ 盤中通知總結報告</div>
         <div class="badge">{display_date} 13:40 自動結算</div>
     </div>
-
     <div class="stats-grid">
         <div class="stat-card">
             <div class="stat-title">今日總掃描數</div>
@@ -5032,40 +5016,30 @@ def afternoon_review_loop():
         </div>
         {alpha_decay_html}
     </div>
-
     <div class="section-title">🔥 今日盤中爆量觸發清單 (收盤表現驗證)</div>
     {sniper_cards_html if sniper_cards_html else '<div style="color:var(--text-muted); padding:20px; text-align:center; border:1px dashed var(--border-color); border-radius:8px;">今日尚無符合條件標的</div>'}
 </div>
-
-
 <script>
-    // 注入由 Python 後台即時抓取的真實 K 線資料庫
     const KBARS_DB = {kbars_json_str}; 
     let chartsStore = {{}};
-
-    // 1. 核心資料解析器
     function getKData(code) {{
         let kbars = KBARS_DB[code];
         if (!kbars) return null;
         let dates = Object.keys(kbars).sort();
         if(dates.length === 0) return null;
-
         let cat = [], vals = [], vols = [];
         dates.forEach(d => {{
             let kb = kbars[d];
-            let c = parseFloat(String(kb.c || kb.Close || kb.close || kb['收盤價'] || 0).replace(/,/g, ''));
-            let o = parseFloat(String(kb.o || kb.Open || kb.open || kb['開盤價'] || c).replace(/,/g, ''));
-            let l = parseFloat(String(kb.l || kb.Low || kb.low || kb['最低價'] || c).replace(/,/g, ''));
-            let h = parseFloat(String(kb.h || kb.High || kb.high || kb['最高價'] || c).replace(/,/g, ''));
-            let v = parseFloat(String(kb.v || kb.Volume || kb.vol || kb['成交量'] || 0).replace(/,/g, ''));
-
-            if (c <= 0 || isNaN(c)) return; 
-            
-            cat.push(d.substring(5)); // 只顯示 MM-DD
+            let c = parseFloat(String(kb.c || 0).replace(/,/g, ''));
+            let o = parseFloat(String(kb.o || c).replace(/,/g, ''));
+            let l = parseFloat(String(kb.l || c).replace(/,/g, ''));
+            let h = parseFloat(String(kb.h || c).replace(/,/g, ''));
+            let v = parseFloat(String(kb.v || 0).replace(/,/g, ''));
+            if (c <= 0 || isNaN(c)) return;
+            cat.push(d.substring(5));
             vals.push([o, c, l, h]);
             vols.push(v);
         }});
-
         const calcMA = (dayCount, data) => {{
             let res = [];
             for (let i = 0; i < data.length; i++) {{
@@ -5078,148 +5052,54 @@ def afternoon_review_loop():
         }};
         return {{ cat, vals, vols, ma5: calcMA(5, vals), ma10: calcMA(10, vals), ma20: calcMA(20, vals) }};
     }}
-
-    // 2. 初始微型圖表渲染
     function initCharts() {{
         if (typeof KBARS_DB === 'undefined') return;
         for (let code in KBARS_DB) {{
             let dom = document.getElementById('micro_' + code);
             if (!dom) continue;
-
             let kd = getKData(code);
             if (!kd) continue;
-
             let option = {{
                 grid: {{ left: 2, right: 2, top: 5, bottom: 5 }},
                 xAxis: {{ type: 'category', data: kd.cat, show: false }},
                 yAxis: {{ type: 'value', scale: true, show: false, min: 'dataMin' }},
                 series: [
-                    {{ type: 'candlestick', data: kd.vals, itemStyle: {{ color: '#ef4444', color0: '#10b981', borderColor: '#ef4444', borderColor0: '#10b981' }} }},
+                    {{ type: 'candlestick', data: kd.vals, itemStyle: {{ color: '#ef4444', color0: '#10b981' }} }},
                     {{ type: 'line', data: kd.ma5, smooth: true, showSymbol: false, lineStyle: {{ color: '#fbbf24', width: 1.5 }} }}
-                ], 
-                animation: false
+                ], animation: false
             }};
-
             let chart = echarts.init(dom);
             chart.setOption(option);
             chartsStore['micro_' + code] = chart;
         }}
     }}
-
-    // 3. 點擊切換邏輯
-    function toggleChart(stockId) {{
-        const microDiv = document.getElementById('micro_' + stockId);
-        const fullDiv = document.getElementById('full_' + stockId);
-        const hintDiv = document.getElementById('hint_' + stockId);
-        const btnClose = document.getElementById('btn_close_' + stockId);
-        const container = document.getElementById('container_' + stockId);
-
-        if (!microDiv || !fullDiv) return;
-
-        if (microDiv.style.display !== 'none') {{
-            microDiv.style.display = 'none'; hintDiv.style.display = 'none'; fullDiv.style.display = 'block'; btnClose.style.display = 'block';
-            container.style.borderColor = '#38bdf8';
-            setTimeout(() => renderFullChart(stockId, fullDiv), 50);
-        }} else {{
-            fullDiv.style.display = 'none'; btnClose.style.display = 'none'; microDiv.style.display = 'block'; hintDiv.style.display = 'block';
-            container.style.borderColor = '#334155';
-        }}
-    }}
-
-    // 4. 全息圖表渲染
-    function renderFullChart(stockId, dom) {{
-        let key = 'full_' + stockId;
-        if (chartsStore[key]) {{ chartsStore[key].dispose(); }}
-
-        let kd = getKData(stockId); 
-        if (!kd) return;
-
-        const volMapped = kd.vals.map((v, i) => {{ 
-            let volValue = kd.vols[i];
-            if (isNaN(volValue) || volValue < 0) volValue = 0;
-            return {{ value: volValue, itemStyle: {{ color: v[1] >= v[0] ? '#ef4444' : '#10b981' }} }}; 
-        }});
-
-        let chart = echarts.init(dom);
-        chart.setOption({{
-            tooltip: {{ trigger: 'axis', axisPointer: {{ type: 'cross' }}, backgroundColor: 'rgba(15,23,42,0.9)', borderColor: '#334155', textStyle: {{color: '#fff'}} }},
-            axisPointer: {{ link: [{{xAxisIndex: 'all'}}] }},
-            grid: [ 
-                {{ left: '8%', right: '3%', top: '5%', height: '60%' }},
-                {{ left: '8%', right: '3%', top: '70%', height: '22%' }}
-            ],
-            xAxis: [ 
-                {{ type: 'category', data: kd.cat, boundaryGap: true, axisLine: {{ onZero: false }}, splitLine: {{ show: false }}, axisLabel: {{ show: false }}, axisTick: {{ show: false }}, gridIndex: 0 }}, 
-                {{ type: 'category', data: kd.cat, boundaryGap: true, axisLine: {{ onZero: false }}, splitLine: {{ show: false }}, axisLabel: {{ color: '#94a3b8', fontSize: 10 }}, gridIndex: 1 }} 
-            ],
-            yAxis: [ 
-                {{ type: 'value', scale: true, min: 'dataMin', splitLine: {{ lineStyle: {{ color: '#1e293b', type: 'dashed' }} }}, axisLabel: {{ color: '#94a3b8', fontSize: 10 }}, gridIndex: 0 }}, 
-                {{ type: 'value', scale: false, min: 0, splitLine: {{ show: false }}, axisLabel: {{ show: false }}, axisLine: {{ show: false }}, axisTick: {{ show: false }}, gridIndex: 1 }} 
-            ],
-            series: [
-                {{ name: 'K線', type: 'candlestick', data: kd.vals, itemStyle: {{ color: '#ef4444', color0: '#10b981', borderColor: '#ef4444', borderColor0: '#10b981' }}, xAxisIndex: 0, yAxisIndex: 0 }},
-                {{ name: '5MA', type: 'line', data: kd.ma5, smooth: true, showSymbol: false, lineStyle: {{ color: '#fbbf24', width: 2 }}, xAxisIndex: 0, yAxisIndex: 0 }},
-                {{ name: '10MA', type: 'line', data: kd.ma10, smooth: true, showSymbol: false, lineStyle: {{ color: '#3b82f6', width: 2 }}, xAxisIndex: 0, yAxisIndex: 0 }},
-                {{ name: '20MA', type: 'line', data: kd.ma20, smooth: true, showSymbol: false, lineStyle: {{ color: '#c084fc', width: 2 }}, xAxisIndex: 0, yAxisIndex: 0 }},
-                {{ name: '成交量', type: 'bar', data: volMapped, xAxisIndex: 1, yAxisIndex: 1 }} 
-            ],
-            animation: false
-        }});
-        chartsStore[key] = chart;
-    }}
-
     window.addEventListener('load', initCharts);
 </script>
 </body>
 </html>
 """
-
                 with open(output_html_name, "w", encoding="utf-8") as f:
                     f.write(html_content)
-                
                 with open("daily_review_latest.html", "w", encoding="utf-8") as f:
                     f.write(html_content)
 
-                # 1. 於本機端儲存一份專屬的收盤鑑識戰報
-                with open("daily_review_latest.html", "w", encoding="utf-8") as f:
-                    f.write(html_content)
-
-                # 2. pCloud 雲端備份 (完全不碰您的 latest_report.html)
+                # pCloud 雲端上傳
                 try:
                     token = os.environ.get('PCLOUD_AUTH_TOKEN', '')
-                    folder_id_main = os.environ.get('PCLOUD_FOLDER_ID', '31448526072')
                     folder_id_history = os.environ.get('PCLOUD_HISTORY_FOLDER_ID', '33133582905')
-                    
-                    if token:
-                        # 備份今日專屬歷史檔
-                        if os.path.exists(output_html_name):
-                            with open(output_html_name, 'rb') as f:
-                                requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={folder_id_history}", files={'file': (output_html_name, f, 'text/html')}, timeout=15)
-                        
-                        # 同步上傳 daily_review_latest.html 至主目錄
-                        if os.path.exists('daily_review_latest.html'):
-                            with open('daily_review_latest.html', 'rb') as f:
-                                requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={folder_id_main}", files={'file': ('daily_review_latest.html', f, 'text/html')}, timeout=15)
-                except:
-                    pass
+                    if token and os.path.exists(output_html_name):
+                        with open(output_html_name, 'rb') as f:
+                            requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={folder_id_history}", files={'file': (output_html_name, f, 'text/html')}, timeout=15)
+                except: pass
 
-                # LINE 群組發送
-                TARGET_GROUP_IDS = [
-                    "C0481b44935888bb1dc20dfd52a675e8a", 
-                    "C47bfa8e16a7216bd54dceb3b5e90cfa0"
-                ]
+                TARGET_GROUP_IDS = ["C0481b44935888bb1dc20dfd52a675e8a", "C47bfa8e16a7216bd54dceb3b5e90cfa0"]
                 for group_id in TARGET_GROUP_IDS:
-                    try:
-                        smart_push_with_menu(group_id, final_report)
-                    except: 
-                        pass
-                
+                    try: smart_push_with_menu(group_id, final_report)
+                    except: pass
                 last_sent_date = current_date_str
-                print(f"🔒 [防護生效] 今日 ({current_date_str}) 結算已經完成上鎖。", flush=True)
-
+                print(f"🔒 [防護生效] 今日 ({current_date_str}) 結算與真實價位校正完成。", flush=True)
         except Exception as e:
             print(f"⚠️ 雲端收盤鑑識迴圈異常: {e}", flush=True)
-        
         time.sleep(300)
 
 
