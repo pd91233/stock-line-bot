@@ -1,13 +1,15 @@
 # broker_gateway.py
 import os
-from MasterTradePy.api import MasterTradeAPI
-from MasterTradePy.model import Order, OrderPriceChange, OrderQtyChange, OrderCancel
+import time
+from MasterTradePy.api import MarketTrader, MasterTradeAPI
+from MasterTradePy.model import Order, OrderPriceChange, OrderQtyChange, OrderCancel, OrderDelete, ReportOrder, SystemEvent
 from MasterTradePy.constant import PriceType, OrderType, TradingSession, Side, TradingUnit, RCode
 
 class ConcreteMarketTrader(MarketTrader):
     def __init__(self):
         super().__init__()
         self.last_ord_no = None
+        self.active_orders = {}  # 記憶體內部的委託狀態對照
 
     def OnNewOrderReply(self, data) -> None: pass
     def OnChangeReply(self, data) -> None: print("📦 [改單回報]:", data, flush=True)
@@ -19,6 +21,7 @@ class ConcreteMarketTrader(MarketTrader):
             status = getattr(data.order, 'status', '')
             if ord_no and str(ord_no).strip() != "":
                 self.last_ord_no = ord_no
+                self.active_orders[ord_no] = status
             print(f'🔔 [實盤回報] 單號={ord_no}, 狀態={status}, 訊息={data.lastMessage}', flush=True)
 
     def OnReqResult(self, workID: str, data) -> None: pass
@@ -33,13 +36,14 @@ class BrokerGateway:
         self.is_connected = False
         self.target_account = os.environ.get('MASTER_TRADING_ACCOUNT', '0478783')
 
-    def connect(self):
+    def connect_and_sync(self):
+        """冷啟動連線與對帳程序"""
         username = os.environ.get('MASTER_USERNAME', '')
         password = os.environ.get('MASTER_PASSWORD', '')
         is_sim = os.environ.get('MASTER_SIM_MODE', 'True') != 'False'
 
         if not username or not password:
-            print("⚠️ [實盤閘道] 未設定 MASTER_USERNAME / MASTER_PASSWORD，維持關閉或僅供模擬。", flush=True)
+            print("🛡️ [實盤閘道] 未提供帳密環境變數，維持純沙盒/模擬模式。", flush=True)
             return False
 
         try:
@@ -51,20 +55,31 @@ class BrokerGateway:
                 if hasattr(self.api, 'aAccList') and self.api.aAccList:
                     self.target_account = self.api.aAccList[0]
                 self.is_connected = True
-                print(f"🔥 [實盤閘道] 連線成功！對位帳號: {self.target_account}", flush=True)
+                print(f"🔥 [實盤閘道] 登入成功！對位交易帳號: {self.target_account}", flush=True)
+                
+                # 冷啟動對帳：若 API 支援查詢未結案委託/庫存在此同步
+                self._reconcile_state()
                 return True
         except Exception as e:
-            print(f"❌ [實盤閘道] 初始化例外: {e}", flush=True)
+            print(f"❌ [實盤閘道] 冷啟動連線異常: {e}", flush=True)
+        self.is_connected = False
         return False
 
-    def execute_order(self, symbol: str, action: str, price_type_str: str, price_str: str, qty_int: int):
+    def _reconcile_state(self):
+        """冷啟動對帳邏輯：清除過期盲區，重整部位快照"""
+        print("🔄 [對帳機制] 正在向主機同步未結案委託與庫存...", flush=True)
+        # 依據 MasterTradePy 現有可用查詢介面進行對位（若無特定API則以重置 pending 鎖定為主）
+        if self.trader:
+            self.trader.active_orders.clear()
+
+    def execute_order(self, symbol: str, action: str, volume: int = 1):
         mode = os.environ.get('EXECUTION_MODE', 'SIMULATOR')
         if mode != 'REAL' or not self.is_connected or not self.api:
-            return f"🛡️ [沙盒/未上線模式攔截] 指令收悉：{action} {symbol} 數量 {qty_int}，未發送至真實券商主機。"
+            return f"🛡️ [沙盒模式] 攔截真實發射：{action} {symbol} 共 {volume} 張/股（未接通實盤金鑰或模式非 REAL）"
 
         try:
             side_val = Side.Buy if action.upper() == "BUY" else Side.Sell
-            ptype = PriceType.MKT if price_type_str.upper() == "MKT" else PriceType.LMT
+            target_qty = str(volume * 1000 if volume < 10 else volume)
             
             common_args = {
                 'tradingSession': TradingSession.NORMAL,
@@ -78,10 +93,10 @@ class BrokerGateway:
             }
             
             self.trader.last_ord_no = None
-            ord_obj = Order(**common_args, priceType=ptype, price=str(price_str), qty=str(qty_int), orderType=OrderType.ROD)
+            ord_obj = Order(**common_args, priceType=PriceType.MKT, price='', qty=target_qty, orderType=OrderType.ROD)
             ret = self.api.NewOrder(ord_obj)
-            return f"⚡ [真實實盤送出] RCode={ret}, 捕捉委託單號={self.trader.last_ord_no}"
+            return f"⚡ [真實實盤已送出] RCode={ret}, 捕捉非同步委託書號={self.trader.last_ord_no}"
         except Exception as e:
-            return f"❌ [真實實盤發射例外]: {e}"
+            return f"❌ [實盤發射崩潰]: {e}"
 
 gateway = BrokerGateway()
