@@ -2119,25 +2119,30 @@ def fetch_realtime_data(stock_code):
                 # 防干擾字眼更新：改為「均線(五/十/廿)」
                 yahoo_ma = f"📊均線(五/十/廿): {ma5}, {ma10}, {ma20}\n🛡️【扣抵戰略推演】\n👉短線: {kd5_status} (扣抵:{kd5})\n👉中線: {kd20_status} (扣抵:{kd20})\n籌碼動向: {big_player}"
                 
-                # 🎨 雲端畫圖與上傳 ImgBB
-                try:
-                    mc = mpf.make_marketcolors(up='#ef4444', down='#10b981', edge='inherit', wick='inherit', volume='inherit')
-                    s = mpf.make_mpf_style(marketcolors=mc, base_mpf_style='nightclouds')
-                    buf = io.BytesIO()
-                    mpf.plot(df, type='candle', volume=True, mav=(5, 10, 20), style=s, figsize=(8, 5), savefig=buf)
-                    buf.seek(0)
-                    
-                    if IMGBB_API_KEY:
-                        img_res = requests.post(
-                            "https://api.imgbb.com/1/upload",
-                            data={"key": IMGBB_API_KEY},
-                            files={"image": ("chart.png", buf, "image/png")},
-                            timeout=8
-                        ).json()
-                        if img_res.get("success"):
-                            imgbb_url = img_res["data"]["url"]
-                except Exception as chart_err:
-                    print(f"畫圖或上傳失敗: {chart_err}", flush=True)
+                # 🎨 雲端畫圖與上傳 ImgBB (診斷加強版)
+				try:
+					mc = mpf.make_marketcolors(up='#ef4444', down='#10b981', edge='inherit', wick='inherit', volume='inherit')
+					s = mpf.make_mpf_style(marketcolors=mc, base_mpf_style='nightclouds')
+					buf = io.BytesIO()
+					mpf.plot(df, type='candle', volume=True, mav=(5, 10, 20), style=s, figsize=(8, 5), savefig=buf)
+					buf.seek(0)
+					
+					if IMGBB_API_KEY:
+						img_res = requests.post(
+							"https://api.imgbb.com/1/upload",
+							data={"key": IMGBB_API_KEY},
+							files={"image": ("chart.png", buf, "image/png")},
+							timeout=8
+						).json()
+						if img_res.get("success"):
+							imgbb_url = img_res["data"]["url"]
+							print(f"🖼️ 圖表上傳成功: {imgbb_url}", flush=True)
+						else:
+							print(f"⚠️ ImgBB 上傳失敗/API回應: {img_res}", flush=True)
+					else:
+						print("⚠️ 警告：Render 未設定 IMGBB_API_KEY，無法產出雲端圖床連結！", flush=True)
+				except Exception as chart_err:
+					print(f"❌ 畫圖或上傳過程發生例外: {chart_err}", flush=True)
 
             else: 
                 yahoo_ma = "均線資料庫不足"
