@@ -4432,8 +4432,7 @@ def continuous_radar_loop():
             is_weekend = now.weekday() >= 5
             current_time_num = now.hour * 100 + now.minute
 
-            # 💥 盤中時間才啟動 WebSocket 連線
-            if True: # 💥 盤後強制測試連線專用
+            if True: # 💥 盤後強制測試連線專用，確認燈號後請務必改回 (900 <= current_time_num <= 1324)
                 if not fugle_token:
                     print("⚠️ 尚未設定 FUGLE_API_TOKEN，雷達暫停。", flush=True)
                     time.sleep(30)
@@ -4446,39 +4445,54 @@ def continuous_radar_loop():
                     time.sleep(10)
                     continue
 
-                # 建立台股代號對照表
                 stock_data_map = {}
                 for s in full_stocks:
                     code = str(s.get('code', '')).strip()
                     if code and len(code) == 4 and code.isdigit():
                         stock_data_map[code] = s
 
-                # 定義 WebSocket 行為
                 def on_message(ws, message):
                     try:
                         msg_data = json.loads(message)
-                        if msg_data.get("event") == "data":
+                        event = msg_data.get("event")
+                        
+                        # 💥 破案關鍵：收到機房的「驗證通過」訊號後，才開始大舉發送訂閱請求
+                        if event == "authenticated":
+                            print("✅ 安全驗證通過！開始向機房發送訂閱請求...", flush=True)
+                            symbols = list(stock_data_map.keys())
+                            chunk_size = 30
+                            for i in range(0, len(symbols), chunk_size):
+                                chunk = symbols[i:i+chunk_size]
+                                for sym in chunk:
+                                    subscribe_msg = {
+                                        "event": "subscribe",
+                                        "data": {
+                                            "channel": "trades",
+                                            "symbol": sym
+                                        }
+                                    }
+                                    ws.send(json.dumps(subscribe_msg))
+                                time.sleep(0.5)
+                            print(f"✅ 成功訂閱 {len(symbols)} 檔標的，進入零延遲監聽模式！", flush=True)
+                            return
+
+                        # 接收即時成交報價
+                        if event == "data":
                             quote = msg_data.get("data", {})
                             code = quote.get("symbol", "")
                             
                             if code in stock_data_map:
-                                z = quote.get('closePrice', 0)
-                                y = quote.get('previousClose', z)
-                                o = quote.get('openPrice', z)
-                                h = quote.get('highPrice', z)
-                                l = quote.get('lowPrice', z)
-                                
-                                vol_shares = quote.get('total', {}).get('tradeVolume', 0)
-                                v = vol_shares / 1000.0
-
-                                bids = quote.get('bids', [])
-                                asks = quote.get('asks', [])
-                                bid = bids[0].get('price', 0) if bids else 0
-                                ask = asks[0].get('price', 0) if asks else 0
+                                z = quote.get('price', 0)
+                                vol_shares = quote.get('volume', 0)
+                                v = vol_shares / 1000.0 # 股數轉張數
 
                                 if z > 0 and v > 0:
+                                    bid = quote.get('bid', 0)
+                                    ask = quote.get('ask', 0)
+                                    
+                                    # trades 頻道專注於即時成交，未提供的歷史欄位暫以現價補齊防呆
                                     formatted_data = {
-                                        'c': code, 'z': z, 'y': y, 'o': o, 'h': h, 'l': l, 'v': v, 'bid': bid, 'ask': ask
+                                        'c': code, 'z': z, 'y': z, 'o': z, 'h': z, 'l': z, 'v': v, 'bid': bid, 'ask': ask
                                     }
                                     
                                     stock_data = stock_data_map[code]
@@ -4505,40 +4519,31 @@ def continuous_radar_loop():
                     print("🔴 富果 WebSocket 連線斷開，準備重連...", flush=True)
 
                 def on_open(ws):
-                    print("🟢 富果連線成功！開始向機房訂閱報價...", flush=True)
-                    # 向富果發送訂閱請求 (分批訂閱避免封包過大)
-                    symbols = list(stock_data_map.keys())
-                    chunk_size = 30
-                    for i in range(0, len(symbols), chunk_size):
-                        chunk = symbols[i:i+chunk_size]
-                        for sym in chunk:
-                            subscribe_msg = {
-                                "method": "subscribe",
-                                "channel": "quotes",
-                                "symbol": sym
-                            }
-                            ws.send(json.dumps(subscribe_msg))
-                        time.sleep(0.5)
-                    print(f"✅ 成功訂閱 {len(symbols)} 檔標的，進入零延遲監聽模式！", flush=True)
+                    print("🟢 富果 WebSocket 已連線！正在發送安全驗證...", flush=True)
+                    # 💥 破案關鍵：一接通必須立刻遞交 apikey 進行 Auth 驗證
+                    auth_msg = {
+                        "event": "auth",
+                        "data": {
+                            "apikey": fugle_token
+                        }
+                    }
+                    ws.send(json.dumps(auth_msg))
 
-                # 建立 WebSocket 連線
                 websocket.enableTrace(False)
-                ws_url = f"wss://api.fugle.tw/marketdata/v1.0/stock/streaming/websocket"
                 
-                # 富果 WebSocket 需要把 Token 放在 Header 裡
+                # 更新為最新的 v1.0 串流端點
+                ws_url = "wss://api.fugle.tw/marketdata/v1.0/stock/streaming"
+                
                 ws = websocket.WebSocketApp(
                     ws_url,
-                    header=[f"X-API-KEY: {fugle_token}"],
                     on_open=on_open,
                     on_message=on_message,
                     on_error=on_error,
                     on_close=on_close
                 )
                 
-                # 啟動長連線，程式會停在這裡持續監聽，直到斷線或盤後
                 ws.run_forever(ping_interval=30, ping_timeout=10)
                 
-                # 若斷線跳出，休息 5 秒後外層 while True 會重新連線
                 time.sleep(5)
             else:
                 time.sleep(60) 
