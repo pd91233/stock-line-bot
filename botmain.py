@@ -2916,17 +2916,18 @@ def handle_message(event):
               }
             }
             
-            # 發射 Flex Message
-            from linebot.v3.messaging import FlexMessage, FlexContainer
-            import json
-            flex_obj = FlexMessage(alt_text="今日盤中資金熱力圖", contents=FlexContainer.from_dict(flex_content))
-            
-            # 使用官方 API 回覆 (這裡需依照您的 SDK 版本調整，若您是用 reply_message 則如下)
+            # 🔥 [終極修復] 回歸系統最熟悉的 V2 Flex 字典發送法
             try:
-                line_bot_api.reply_message(event.reply_token, flex_obj)
+                from linebot.models import FlexSendMessage
+                # 直接將字典轉為 FlexSendMessage 實體並發射
+                flex_message_obj = FlexSendMessage(
+                    alt_text="今日盤中資金熱力圖", 
+                    contents=flex_content
+                )
+                line_bot_api.reply_message(event.reply_token, flex_message_obj)
             except Exception as e:
-                # 兼容 V3 寫法
-                pass 
+                print(f"⚠️ Flex Message 發送失敗: {e}", flush=True)
+                smart_reply_with_menu(event, "⚠️ 戰情室回報：熱力圖繪製成功，但裝甲面板發送異常，請確認 LINE SDK 版本。") 
                 
         else:
             smart_reply_with_menu(event, "⚠️ 戰情室回報：熱力圖繪製失敗。")
