@@ -4459,6 +4459,11 @@ def continuous_radar_loop():
                 for market in ["TSE", "OTC"]:
                     try:
                         url = f"https://api.fugle.tw/marketdata/v1.0/stock/snapshot/quotes/{market}"
+                        
+                        # 🛡️ 防呆機制：強制清除金鑰前後不小心複製到的空白鍵或換行符號
+                        clean_token = fugle_token.strip()
+                        headers = {"X-API-KEY": clean_token}
+                        
                         res = requests.get(url, headers=headers, timeout=8)
 
                         if res.status_code == 200:
@@ -4507,10 +4512,12 @@ def continuous_radar_loop():
                                     try:
                                         trigger_air_raid_alarm(f"🔥 {stock_data.get('name', code)} 爆量點火！", alert_msg)
                                     except: pass
+                        else:
+                            # 🚨 破案關鍵：如果被富果拒絕，強制印出死亡原因！
+                            print(f"⚠️ 富果 {market} 拒絕連線！狀態碼: {res.status_code}, 錯誤訊息: {res.text}", flush=True)
 
                     except Exception as e:
-                        # 發生錯誤時保持安靜，不印出擾人訊息
-                        pass
+                        print(f"⚠️ 抓取 {market} 時發生未預期異常: {e}", flush=True)
 
                 now_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
                 print(f"👁️ [{now_str}] 富果光速掃描完畢 (本輪精準抓取 {successful_count} 檔報價)。", flush=True)
