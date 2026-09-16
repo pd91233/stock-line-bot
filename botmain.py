@@ -4564,6 +4564,12 @@ def continuous_radar_loop():
                                     alert_msg = process_tick_data(formatted_data, stock_data, global_true_market_top_ind)
                                     
                                     if alert_msg and alert_msg not in intraday_breakout_cache:
+                                        # 🔥 [擴充戰術 2] 觸發式 EMA 防禦判定
+                                        ema_status = check_dynamic_ema_defense(code, z)
+                                        if ema_status:
+                                            # 將防禦狀態疊加到原本的警報訊息的最下方
+                                            alert_msg += ema_status
+                                            
                                         intraday_breakout_cache.insert(0, alert_msg)
                                         instant_fire_queue.append(alert_msg)
                                         
