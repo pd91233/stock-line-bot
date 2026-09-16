@@ -2979,7 +2979,7 @@ def handle_message(event):
         
         # 3. 無資料防呆（盤後或記憶體無資料時會正確回傳此訊息）
         if not sector_stocks:
-            smart_reply_with_menu(event, f"📭 [戰情室回報]\n未尋獲【{target_sector}】族群的即時個股數據，可能尚未開盤或資料更新中。")
+            smart_reply_with_menu(event, f"📭 [股海系統回報]\n未尋獲【{target_sector}】族群的即時個股數據，可能尚未開盤或資料更新中。")
             return
             
         # 4. 排序：量最大與漲幅最大前 5 名
