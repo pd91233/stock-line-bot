@@ -2505,6 +2505,19 @@ def execute_force_refresh():
                 "intraday_alerts": intraday_breakout_cache[:10] 
             })
 
+            # ==========================================
+            # 💥 [新增裝甲] 每 5 分鐘自動將熱力圖記憶體存入實體硬碟！
+            # ==========================================
+            try:
+                import json, os
+                current_heat = globals().get('global_sector_heat', {})
+                if current_heat:
+                    with open("heat_memory.json", "w", encoding="utf-8") as f:
+                        json.dump(current_heat, f, ensure_ascii=False)
+            except Exception as e:
+                print(f"熱力圖存檔失敗: {e}")
+            # ==========================================
+
             print("✅ [戰術回報] 變數防護版寫入成功，財報數據已同步封裝！")
 
             
@@ -2843,15 +2856,19 @@ def handle_message(event):
     if user_msg in ["!熱力圖", "熱力圖"]:
         heat_data = globals().get('global_sector_heat', {})
         
-        # ==========================================
-    # 5. 族群資金輪動熱力圖 (圖形化升級版)
-    # ==========================================
-    if user_msg in ["!熱力圖", "熱力圖"]:
-        heat_data = globals().get('global_sector_heat', {})
-        
-        # 🔥 [恢復實戰模式] 拔除假數據，改回原本的防呆機制
+        # 💥 [盤後記憶體修復] 如果記憶體是空的，嘗試去實體硬碟找今天的結算備份
         if not heat_data:
-            smart_reply_with_menu(event, "📭 [戰情室回報]\n目前尚無資金流動數據，可能尚未開盤或系統剛啟動監聽中。")
+            try:
+                import json, os
+                if os.path.exists("heat_memory.json"):
+                    with open("heat_memory.json", "r", encoding="utf-8") as f:
+                        heat_data = json.load(f)
+            except:
+                pass
+                
+        # 實戰防線：如果連硬碟都沒有，才回報尚無數據
+        if not heat_data:
+            smart_reply_with_menu(event, "📭 [戰情室回報]\n目前尚無資金流動數據，可能尚未開盤。")
             return
             
         # 1. 呼叫引擎畫圖
