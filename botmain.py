@@ -4420,93 +4420,126 @@ threading.Thread(target=instant_dispatcher_loop, daemon=True).start()
 
 def continuous_radar_loop():
     global instant_fire_queue
-    print("📡 [當沖雷達] 啟動 Yahoo 掃描引擎...", flush=True)
-    import time, datetime, requests
+    print("📡 [當沖雷達] 啟動富果 WebSocket 零延遲串流引擎 (永久免費版)...", flush=True)
+    import time, datetime, json, os, threading
+    import websocket # 需確保 requirements.txt 已加入 websocket-client
 
+    fugle_token = os.environ.get('FUGLE_API_TOKEN', '').strip()
+    
     while True:
         try:
             now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
             is_weekend = now.weekday() >= 5
             current_time_num = now.hour * 100 + now.minute
 
-            # Yahoo 掃描時間包含 13:30 收盤
-            if not is_weekend and (900 <= current_time_num <= 1330):
+            # 💥 盤中時間才啟動 WebSocket 連線
+            if not is_weekend and (900 <= current_time_num <= 1324):
+                if not fugle_token:
+                    print("⚠️ 尚未設定 FUGLE_API_TOKEN，雷達暫停。", flush=True)
+                    time.sleep(30)
+                    continue
+
                 current_cache = read_cache()
                 full_stocks = current_cache.get("fundamental_full", [])
-
+                
                 if not full_stocks:
                     time.sleep(10)
                     continue
 
+                # 建立台股代號對照表
                 stock_data_map = {}
-                yahoo_symbols = []
                 for s in full_stocks:
                     code = str(s.get('code', '')).strip()
                     if code and len(code) == 4 and code.isdigit():
                         stock_data_map[code] = s
-                        # Yahoo 台股代碼需加上 .TW
-                        yahoo_symbols.append(f"{code}.TW")
 
-                successful_count = 0
-                # 破解 Yahoo 防火牆用的偽裝 Headers
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-                }
-
-                # 每次切片 100 檔避免網址過長被擋
-                chunk_size = 100
-                for i in range(0, len(yahoo_symbols), chunk_size):
-                    chunk = yahoo_symbols[i:i+chunk_size]
-                    symbols_str = ",".join(chunk)
-                    url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols_str}"
-                    
+                # 定義 WebSocket 行為
+                def on_message(ws, message):
                     try:
-                        res = requests.get(url, headers=headers, timeout=8)
-                        if res.status_code == 200:
-                            result_list = res.json().get('quoteResponse', {}).get('result', [])
-                            for quote in result_list:
-                                code = quote.get('symbol', '').replace('.TW', '').replace('.TWO', '')
-                                if code not in stock_data_map: continue
-
-                                z = quote.get('regularMarketPrice', 0)
-                                y = quote.get('regularMarketPreviousClose', z)
-                                o = quote.get('regularMarketOpen', z)
-                                h = quote.get('regularMarketDayHigh', z)
-                                l = quote.get('regularMarketDayLow', z)
-                                v = quote.get('regularMarketVolume', 0) / 1000.0
+                        msg_data = json.loads(message)
+                        if msg_data.get("event") == "data":
+                            quote = msg_data.get("data", {})
+                            code = quote.get("symbol", "")
+                            
+                            if code in stock_data_map:
+                                z = quote.get('closePrice', 0)
+                                y = quote.get('previousClose', z)
+                                o = quote.get('openPrice', z)
+                                h = quote.get('highPrice', z)
+                                l = quote.get('lowPrice', z)
                                 
-                                if z == 0 or v == 0: continue
-                                
-                                formatted_data = {
-                                    'c': code, 'z': z, 'y': y, 'o': o, 'h': h, 'l': l, 'v': v, 
-                                    'bid': 0, 'ask': 0
-                                }
+                                vol_shares = quote.get('total', {}).get('tradeVolume', 0)
+                                v = vol_shares / 1000.0
 
-                                stock_data = stock_data_map[code]
-                                alert_msg = process_tick_data(formatted_data, stock_data, global_true_market_top_ind)
-                                successful_count += 1
+                                bids = quote.get('bids', [])
+                                asks = quote.get('asks', [])
+                                bid = bids[0].get('price', 0) if bids else 0
+                                ask = asks[0].get('price', 0) if asks else 0
 
-                                if alert_msg and alert_msg not in intraday_breakout_cache:
-                                    intraday_breakout_cache.insert(0, alert_msg)
-                                    instant_fire_queue.append(alert_msg)
-
-                                    new_cache = read_cache()
-                                    new_cache["intraday_alerts"] = intraday_breakout_cache
-                                    update_cache(new_cache)
-
-                                    try:
-                                        trigger_air_raid_alarm(f"🔥 {stock_data.get('name', code)} 爆量點火！", alert_msg)
-                                    except: pass
-                    except Exception:
+                                if z > 0 and v > 0:
+                                    formatted_data = {
+                                        'c': code, 'z': z, 'y': y, 'o': o, 'h': h, 'l': l, 'v': v, 'bid': bid, 'ask': ask
+                                    }
+                                    
+                                    stock_data = stock_data_map[code]
+                                    alert_msg = process_tick_data(formatted_data, stock_data, global_true_market_top_ind)
+                                    
+                                    if alert_msg and alert_msg not in intraday_breakout_cache:
+                                        intraday_breakout_cache.insert(0, alert_msg)
+                                        instant_fire_queue.append(alert_msg)
+                                        
+                                        new_cache = read_cache()
+                                        new_cache["intraday_alerts"] = intraday_breakout_cache
+                                        update_cache(new_cache)
+                                        
+                                        try:
+                                            trigger_air_raid_alarm(f"🔥 {stock_data.get('name', code)} 爆量點火！", alert_msg)
+                                        except: pass
+                    except:
                         pass
-                    
-                    # 避免密集請求被鎖 IP
-                    time.sleep(1) 
 
-                now_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
-                print(f"👁️ [{now_str}] Yahoo 掃描完畢 (本輪精準抓取 {successful_count} 檔報價)。", flush=True)
+                def on_error(ws, error):
+                    print(f"⚠️ 富果 WebSocket 異常: {error}", flush=True)
 
-                time.sleep(3)
+                def on_close(ws, close_status_code, close_msg):
+                    print("🔴 富果 WebSocket 連線斷開，準備重連...", flush=True)
+
+                def on_open(ws):
+                    print("🟢 富果連線成功！開始向機房訂閱報價...", flush=True)
+                    # 向富果發送訂閱請求 (分批訂閱避免封包過大)
+                    symbols = list(stock_data_map.keys())
+                    chunk_size = 30
+                    for i in range(0, len(symbols), chunk_size):
+                        chunk = symbols[i:i+chunk_size]
+                        for sym in chunk:
+                            subscribe_msg = {
+                                "method": "subscribe",
+                                "channel": "quotes",
+                                "symbol": sym
+                            }
+                            ws.send(json.dumps(subscribe_msg))
+                        time.sleep(0.5)
+                    print(f"✅ 成功訂閱 {len(symbols)} 檔標的，進入零延遲監聽模式！", flush=True)
+
+                # 建立 WebSocket 連線
+                websocket.enableTrace(False)
+                ws_url = f"wss://api.fugle.tw/marketdata/v1.0/stock/streaming/websocket"
+                
+                # 富果 WebSocket 需要把 Token 放在 Header 裡
+                ws = websocket.WebSocketApp(
+                    ws_url,
+                    header=[f"X-API-KEY: {fugle_token}"],
+                    on_open=on_open,
+                    on_message=on_message,
+                    on_error=on_error,
+                    on_close=on_close
+                )
+                
+                # 啟動長連線，程式會停在這裡持續監聽，直到斷線或盤後
+                ws.run_forever(ping_interval=30, ping_timeout=10)
+                
+                # 若斷線跳出，休息 5 秒後外層 while True 會重新連線
+                time.sleep(5)
             else:
                 time.sleep(60) 
         except Exception as e:
