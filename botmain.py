@@ -2929,11 +2929,11 @@ def handle_message(event):
               }
             }
             
-            # 🔥 [終極修復 2.0] 使用 V2 專用的 BubbleContainer 轉換器
+            # 🔥 [終極修復 3.0] 直接借用統帥系統內建的智慧發射管！
             try:
                 from linebot.models import FlexSendMessage, BubbleContainer
                 
-                # 關鍵突破口：必須透過 new_from_json_dict 來轉換原生的字典格式
+                # 將 JSON 字典轉換為 LINE 看得懂的 Flex 裝甲
                 flex_container = BubbleContainer.new_from_json_dict(flex_content)
                 
                 flex_message_obj = FlexSendMessage(
@@ -2941,12 +2941,12 @@ def handle_message(event):
                     contents=flex_container
                 )
                 
-                # 重新發射！
-                line_bot_api.reply_message(event.reply_token, flex_message_obj)
+                # 🚀 關鍵破解：直接把裝甲塞給您的 smart_reply_with_menu 發射！
+                # 它會自動幫我們抓出正確的金鑰並發送，完美破解 Token 衝突
+                smart_reply_with_menu(event, flex_message_obj)
                 
             except Exception as e:
                 print(f"⚠️ Flex Message 發送失敗: {e}", flush=True)
-                # 把真實的錯誤原因印出來，方便我們除錯
                 smart_reply_with_menu(event, f"⚠️ 裝甲面板轉換失敗: {e}")
                 
         else:
