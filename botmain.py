@@ -3129,17 +3129,28 @@ def handle_message(event):
             total_val_yi = sum(val for _, val in sorted_sectors) / 10000
             current_time_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
 
-            # 💡 關鍵修正：幫前 4 大族群加上點擊事件 (action)
+            # 💡 升級：組裝具備「深藍底色 + 白字 + 圓角」的實體按鈕區塊
             clickable_top_4 = []
             for name in top_4_names:
                 if name != "-":
                     clickable_top_4.append({
-                        "type": "text",
-                        "text": f"🔥 {name}",
-                        "size": "xs",
-                        "align": "center",
-                        "color": "#0066cc",
-                        "weight": "bold",
+                        "type": "box",
+                        "layout": "vertical",
+                        "backgroundColor": "#1a5276",  # 質感深藍實體底色
+                        "cornerRadius": "md",          # 圓角邊框
+                        "paddingTop": "sm",
+                        "paddingBottom": "sm",
+                        "margin": "xs",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": f"🔥{name}",
+                                "size": "xs",
+                                "align": "center",
+                                "color": "#ffffff",    # 純白文字
+                                "weight": "bold"
+                            }
+                        ],
                         "action": {
                             "type": "message",
                             "label": name,
@@ -3148,11 +3159,16 @@ def handle_message(event):
                     })
                 else:
                     clickable_top_4.append({
-                        "type": "text",
-                        "text": "-",
-                        "size": "xs",
-                        "align": "center",
-                        "color": "#aaaaaa"
+                        "type": "box",
+                        "layout": "vertical",
+                        "backgroundColor": "#f2f3f4",  # 灰色無效按鈕
+                        "cornerRadius": "md",
+                        "paddingTop": "sm",
+                        "paddingBottom": "sm",
+                        "margin": "xs",
+                        "contents": [
+                            {"type": "text", "text": "-", "size": "xs", "align": "center", "color": "#aaaaaa"}
+                        ]
                     })
 
             # 4. 組裝 Flex Message 裝甲
