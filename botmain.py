@@ -2439,12 +2439,13 @@ def execute_force_refresh():
             if leaderboard:
 
                 # 排序找出真正的資金主攻榜首
-
                 top = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)[0]
-
                 true_market_top_ind = top[0]
-
                 true_market_top_chg = top[1]
+				
+				# 💥 [擴充戰術] 將各族群漲跌幅寫入全域變數，供熱力圖上色使用！
+                globals()['global_sector_change'] = leaderboard
+				
 
         except: pass    
 
@@ -2856,21 +2857,35 @@ def handle_message(event):
     if user_msg in ["!熱力圖", "熱力圖"]:
         heat_data = globals().get('global_sector_heat', {})
         
-        # 💥 [盤後記憶體修復] 如果記憶體是空的，嘗試去實體硬碟找今天的結算備份
+        # ==========================================
+        # 🛠️ [夜間演習模式] 注入模擬戰場數據 (包含資金與漲跌幅)
+        # 明天開盤前記得把這個 if not heat_data 區塊刪除！
+        # ==========================================
         if not heat_data:
-            try:
-                import json, os
-                if os.path.exists("heat_memory.json"):
-                    with open("heat_memory.json", "r", encoding="utf-8") as f:
-                        heat_data = json.load(f)
-            except:
-                pass
-                
-        # 實戰防線：如果連硬碟都沒有，才回報尚無數據
-        if not heat_data:
-            smart_reply_with_menu(event, "📭 [戰情室回報]\n目前尚無資金流動數據，可能尚未開盤。")
-            return
-            
+            heat_data = {
+                "半導體": 456000.0,
+                "電腦及週邊設備業": 234000.0,
+                "電子零組件業": 185000.0,
+                "光電業": 120000.0,
+                "航運業": 95000.0,
+                "金融保險": 88000.0,
+                "電機機械": 65000.0,
+                "通信網路業": 42000.0
+            }
+            # 注入假漲跌幅
+            globals()['global_sector_change'] = {
+                "半導體": 2.5,       # 大漲 (深紅)
+                "電腦週邊": 1.2,     # 小漲 (亮紅)
+                "電子零組件": -0.8,  # 小跌 (亮綠)
+                "光電業": -3.1,      # 大跌 (深綠)
+                "航運業": 4.5,
+                "金融保險": 0.0,     # 平盤 (灰色)
+                "電機機械": -1.5,
+                "通信網路": 0.5
+            }
+            print("⚠️ 啟動夜間演習模式，注入模擬熱力與漲跌幅數據")
+        # ==========================================
+        
         # 1. 呼叫引擎畫圖
         success = generate_treemap_image(heat_data)
         
@@ -4604,9 +4619,12 @@ def check_dynamic_ema_defense(stock_code, current_price):
 
 def generate_treemap_image(heat_data):
     """
-    負責將資金字典轉換為 Treemap 圖片並存檔
+    負責將資金字典轉換為 Treemap 圖片並存檔 (紅綠漲跌幅進化版)
     """
     try:
+        # 💥 抓取全域的漲跌幅資料
+        change_data = globals().get('global_sector_change', {})
+        
         # 抓取前 12 大吸金族群
         sorted_sectors = sorted(heat_data.items(), key=lambda x: x[1], reverse=True)[:12]
         if not sorted_sectors:
@@ -4614,29 +4632,49 @@ def generate_treemap_image(heat_data):
             
         labels = []
         sizes = []
+        colors = []
+        
         for sector, val_wan in sorted_sectors:
             val_yi = val_wan / 10000
-            # 標籤文字：族群名稱 + 換行 + 億元
-            labels.append(f"{sector}\n{val_yi:.1f}億")
+            
+            # 模糊比對找出該族群的漲跌幅 (解決富果與證交所名稱些微不同的問題)
+            chg_pct = 0.0
+            for k, v in change_data.items():
+                if k in sector or sector in k:
+                    chg_pct = v
+                    break
+                    
+            # 決定標籤文字與正負號 (例如: +2.5%)
+            sign = "+" if chg_pct > 0 else ""
+            labels.append(f"{sector}\n{val_yi:.1f}億\n{sign}{chg_pct}%")
             sizes.append(val_wan)
             
-        # 讀取您剛才空投的繁體中文字體！
+            # 💥 台灣股市專屬紅綠上色邏輯
+            if chg_pct >= 2.0:
+                colors.append('#b91c1c') # 深紅 (強勢大漲)
+            elif chg_pct > 0:
+                colors.append('#ef4444') # 亮紅 (一般上漲)
+            elif chg_pct <= -2.0:
+                colors.append('#047857') # 深綠 (弱勢大跌)
+            elif chg_pct < 0:
+                colors.append('#10b981') # 亮綠 (一般下跌)
+            else:
+                colors.append('#64748b') # 灰色 (平盤或無資料)
+            
+        # 讀取繁體中文字體
         font_path = 'custom_font.ttf'
         myfont = FontProperties(fname=font_path)
         
         plt.figure(figsize=(10, 6))
         
-        # 設定顏色 (目前先用紅色漸層代表吸金熱度，越紅代表吸金越多)
-        colors = plt.cm.Reds([0.4 + (i/len(sizes))*0.6 for i in range(len(sizes))][::-1])
-        
-        # 呼叫 squarify 畫出矩形式樹狀圖
-        squarify.plot(sizes=sizes, label=labels, color=colors, alpha=0.8,
-                      text_kwargs={'fontproperties': myfont, 'fontsize': 16, 'color': 'white', 'weight': 'bold'})
+        # 呼叫 squarify 畫出矩形式樹狀圖，套用動態 colors 陣列
+        squarify.plot(sizes=sizes, label=labels, color=colors, alpha=0.85,
+                      text_kwargs={'fontproperties': myfont, 'fontsize': 14, 'color': 'white', 'weight': 'bold'})
         
         plt.axis('off') # 隱藏座標軸
         plt.tight_layout()
         
-        # 將畫好的圖存入雲端母艦硬碟
+        # 將畫好的圖存檔
         plt.savefig('heatmap.png', format='png', dpi=150, bbox_inches='tight')
         plt.close()
         return True
