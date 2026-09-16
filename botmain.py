@@ -4490,9 +4490,23 @@ def continuous_radar_loop():
                                     bid = quote.get('bid', 0)
                                     ask = quote.get('ask', 0)
                                     
+                                    # 🔥 [擴充戰術] 微觀籌碼力道判定
+                                    power_type = "中性"
+                                    if ask > 0 and z >= ask:
+                                        power_type = "🔴外盤強攻"
+                                    elif bid > 0 and z <= bid:
+                                        power_type = "🟢內盤倒貨"
+
+                                    # 🛡️ 實戰防禦網：如果是瞬間大單 (例如單筆大於 50 張)，卻是砸在「內盤」
+                                    # 代表主力正在倒貨割韭菜，系統直接判定為誘多陷阱，阻擋後續發報！
+                                    if v >= 50 and power_type == "🟢內盤倒貨":
+                                        # 悄悄攔截，不驚動戰情室
+                                        continue 
+                                        
                                     # trades 頻道專注於即時成交，未提供的歷史欄位暫以現價補齊防呆
                                     formatted_data = {
-                                        'c': code, 'z': z, 'y': z, 'o': z, 'h': z, 'l': z, 'v': v, 'bid': bid, 'ask': ask
+                                        'c': code, 'z': z, 'y': z, 'o': z, 'h': z, 'l': z, 'v': v, 
+                                        'bid': bid, 'ask': ask, 'power': power_type
                                     }
                                     
                                     stock_data = stock_data_map[code]
@@ -4507,7 +4521,8 @@ def continuous_radar_loop():
                                         update_cache(new_cache)
                                         
                                         try:
-                                            trigger_air_raid_alarm(f"🔥 {stock_data.get('name', code)} 爆量點火！", alert_msg)
+                                            # 發報時一併標示籌碼力道
+                                            trigger_air_raid_alarm(f"🔥 {stock_data.get('name', code)} 爆量點火！[{power_type}]", alert_msg)
                                         except: pass
                     except:
                         pass
