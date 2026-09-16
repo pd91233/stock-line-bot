@@ -13,3 +13,4 @@ python-dotenv
 flask-socketio
 eventlet
 pywebpush
+websocket-client
