@@ -2953,53 +2953,57 @@ def handle_message(event):
     # ==========================================
     # 💥 [下鑽戰術] 按鈕觸發：!族群 <產業名稱>
     # ==========================================
-    def handle_sector_drilldown_command(event, user_msg):
-        if user_msg.startswith("!族群 ") or user_msg.startswith("!板塊 "):
-            target_sector = user_msg.replace("!族群 ", "").replace("!板塊 ", "").strip()
-            
-            # 1. 抓取快取中的個股行情資料
-            stocks_cache = globals().get('global_stocks_cache', {})
-            
-            # 2. 篩選屬於該族群的個股
-            sector_stocks = []
-            for symbol, data in stocks_cache.items():
-                stock_sector = data.get('industry', '') or data.get('category', '')
-                if target_sector in stock_sector or stock_sector in target_sector:
-                    sector_stocks.append({
-                        'code': symbol,
-                        'name': data.get('name', symbol),
-                        'chg_pct': data.get('change_percent', 0.0),
-                        'volume': data.get('volume', 0),
-                        'price': data.get('price', 0.0)
-                    })
-            
-            # 3. 無資料防呆
-            if not sector_stocks:
-                smart_reply_with_menu(event, f"📭 [戰情室回報]\n未尋獲【{target_sector}】族群的即時個股數據，可能尚未開盤或資料更新中。")
-                return
-                
-            # 4. 排序：量最大與漲幅最大前 5 名
-            top_volume = sorted(sector_stocks, key=lambda x: x['volume'], reverse=True)[:5]
-            top_gainers = sorted(sector_stocks, key=lambda x: x['chg_pct'], reverse=True)[:5]
-            
-            # 5. 格式化輸出
-            reply_lines = [f"🔥 【{target_sector}】核心主力個股下鑽戰報\n"]
-            
-            reply_lines.append("📊 成交量前 5 大：")
-            for s in top_volume:
-                sign = "+" if s['chg_pct'] > 0 else ""
-                reply_lines.append(f"• {s['code']} {s['name']}: {s['price']}元 ({sign}{s['chg_pct']}%) ｜ 量 {s['volume']}張")
-                
-            reply_lines.append("\n🚀 領漲強勢股前 5 大：")
-            for s in top_gainers:
-                sign = "+" if s['chg_pct'] > 0 else ""
-                reply_lines.append(f"• {s['code']} {s['name']}: {s['price']}元 ({sign}{s['chg_pct']}%)")
-                
-            reply_lines.append("\n💡 提示：輸入 !個股代號 (如 !2330) 可查看個股詳細技術面與均線。")
-            
-            # 6. 發射戰報
-            smart_reply_with_menu(event, "\n".join(reply_lines))
+    if user_msg.startswith("!族群") or user_msg.startswith("!板塊"):
+        # 自動抹除前綴並清理前後空白，提取目標族群名稱
+        target_sector = user_msg.replace("!族群", "").replace("!板塊", "").strip()
+        
+        if not target_sector:
+            smart_reply_with_menu(event, "⚠️ 請輸入要查詢的族群名稱，例如：!族群 半導體")
             return
+            
+        # 1. 抓取快取中的個股行情資料
+        stocks_cache = globals().get('global_stocks_cache', {})
+        
+        # 2. 篩選屬於該族群的個股
+        sector_stocks = []
+        for symbol, data in stocks_cache.items():
+            stock_sector = data.get('industry', '') or data.get('category', '')
+            if target_sector in stock_sector or stock_sector in target_sector:
+                sector_stocks.append({
+                    'code': symbol,
+                    'name': data.get('name', symbol),
+                    'chg_pct': data.get('change_percent', 0.0),
+                    'volume': data.get('volume', 0),
+                    'price': data.get('price', 0.0)
+                })
+        
+        # 3. 無資料防呆（盤後或記憶體無資料時會正確回傳此訊息）
+        if not sector_stocks:
+            smart_reply_with_menu(event, f"📭 [戰情室回報]\n未尋獲【{target_sector}】族群的即時個股數據，可能尚未開盤或資料更新中。")
+            return
+            
+        # 4. 排序：量最大與漲幅最大前 5 名
+        top_volume = sorted(sector_stocks, key=lambda x: x['volume'], reverse=True)[:5]
+        top_gainers = sorted(sector_stocks, key=lambda x: x['chg_pct'], reverse=True)[:5]
+        
+        # 5. 格式化輸出
+        reply_lines = [f"🔥 【{target_sector}】核心主力個股下鑽戰報\n"]
+        
+        reply_lines.append("📊 成交量前 5 大：")
+        for s in top_volume:
+            sign = "+" if s['chg_pct'] > 0 else ""
+            reply_lines.append(f"• {s['code']} {s['name']}: {s['price']}元 ({sign}{s['chg_pct']}%) ｜ 量 {s['volume']}張")
+            
+        reply_lines.append("\n🚀 領漲強勢股前 5 大：")
+        for s in top_gainers:
+            sign = "+" if s['chg_pct'] > 0 else ""
+            reply_lines.append(f"• {s['code']} {s['name']}: {s['price']}元 ({sign}{s['chg_pct']}%)")
+            
+        reply_lines.append("\n💡 提示：輸入 !個股代號 (如 !2330) 可查看個股詳細技術面與均線。")
+        
+        # 6. 發射戰報
+        smart_reply_with_menu(event, "\n".join(reply_lines))
+        return
     
     
     
