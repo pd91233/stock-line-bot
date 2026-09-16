@@ -2929,18 +2929,25 @@ def handle_message(event):
               }
             }
             
-            # 🔥 [終極修復] 回歸系統最熟悉的 V2 Flex 字典發送法
+            # 🔥 [終極修復 2.0] 使用 V2 專用的 BubbleContainer 轉換器
             try:
-                from linebot.models import FlexSendMessage
-                # 直接將字典轉為 FlexSendMessage 實體並發射
+                from linebot.models import FlexSendMessage, BubbleContainer
+                
+                # 關鍵突破口：必須透過 new_from_json_dict 來轉換原生的字典格式
+                flex_container = BubbleContainer.new_from_json_dict(flex_content)
+                
                 flex_message_obj = FlexSendMessage(
                     alt_text="今日盤中資金熱力圖", 
-                    contents=flex_content
+                    contents=flex_container
                 )
+                
+                # 重新發射！
                 line_bot_api.reply_message(event.reply_token, flex_message_obj)
+                
             except Exception as e:
                 print(f"⚠️ Flex Message 發送失敗: {e}", flush=True)
-                smart_reply_with_menu(event, "⚠️ 戰情室回報：熱力圖繪製成功，但裝甲面板發送異常，請確認 LINE SDK 版本。") 
+                # 把真實的錯誤原因印出來，方便我們除錯
+                smart_reply_with_menu(event, f"⚠️ 裝甲面板轉換失敗: {e}")
                 
         else:
             smart_reply_with_menu(event, "⚠️ 戰情室回報：熱力圖繪製失敗。")
