@@ -4419,234 +4419,107 @@ threading.Thread(target=instant_dispatcher_loop, daemon=True).start()
 
 
 def continuous_radar_loop():
-
     global instant_fire_queue
-
-    print("📡 [當沖雷達] 啟動統帥認證版【極速批次掃描 + 異步秒發引擎】...", flush=True)
-
-    import time, datetime, requests
-
-    
-
-    # 💥 破解 Yahoo 防火牆：建立長效 Session 並取得 Crumb 憑證
-
-    yahoo_session = requests.Session()
-
-    yahoo_session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
-
-    yahoo_crumb = ""
-
-    try:
-
-        # 先去首頁拿 Cookie
-
-        yahoo_session.get("https://fc.yahoo.com", timeout=5)
-
-        # 再用 Cookie 去換 Crumb 護照
-
-        c_res = yahoo_session.get("https://query1.finance.yahoo.com/v1/test/getcrumb", timeout=5)
-
-        yahoo_crumb = c_res.text.strip()
-
-        print(f"✅ [破甲成功] 已取得 Yahoo 核心憑證: {yahoo_crumb}", flush=True)
-
-    except Exception as e:
-
-        print(f"⚠️ [憑證警告] 無法取得 Crumb，嘗試降級連線...", flush=True)
-
-    
-
-    # --- 雷達主迴圈 ---
+    print("📡 [當沖雷達] 啟動富果(Fugle)光速零延遲掃描引擎...", flush=True)
+    import time, datetime, requests, os
 
     while True:
-
         try:
-
             now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
-
             is_weekend = now.weekday() >= 5
-
             current_time_num = now.hour * 100 + now.minute
 
-            
-
             # 💥 強制在 13:24 準時關閉！絕對不掃描 13:25~13:30 的收盤大單！
-
             if not is_weekend and (900 <= current_time_num <= 1324):
-
                 current_cache = read_cache()
-
                 full_stocks = current_cache.get("fundamental_full", [])
 
-                
-
                 if not full_stocks:
-
                     time.sleep(10)
-
                     continue
 
-
-
-                # 整理全市場 2000 檔的代號清單
-
-                valid_symbols = []
-
-                stock_data_map = {} 
-
-                
-
+                # 建立台股代號對照表
+                stock_data_map = {}
                 for s in full_stocks:
-
                     code = str(s.get('code', '')).strip()
-
-                    market = s.get('market', '上市')
-
-                    suffix = ".TW" if market == "上市" else ".TWO"
-
                     if code and len(code) == 4 and code.isdigit():
-
-                        symbol = f"{code}{suffix}"
-
-                        valid_symbols.append(symbol)
-
                         stock_data_map[code] = s
 
+                # 💥 讀取最標準的 FUGLE_API_TOKEN
+                fugle_token = os.environ.get('FUGLE_API_TOKEN', '')
+                if not fugle_token:
+                    print("⚠️ 尚未設定 FUGLE_API_TOKEN，雷達暫停掃描", flush=True)
+                    time.sleep(30)
+                    continue
 
-
-                # 💥 降載護城河：改為每次抓 100 檔，避免 URL 太長被直接踢掉
-
-                chunk_size = 100 
-
+                headers = {"X-API-KEY": fugle_token}
                 successful_count = 0
 
-                
-
-                for i in range(0, len(valid_symbols), chunk_size):
-
-                    chunk_symbols = valid_symbols[i : i + chunk_size]
-
-                    symbols_str = ",".join(chunk_symbols) 
-
-                    
-
+                # 🚀 直接抓取「上市(TSE)」與「上櫃(OTC)」的零延遲全市場快照
+                for market in ["TSE", "OTC"]:
                     try:
-
-                        # 💥 加入 crumb 憑證解鎖，並使用 session 連線！
-
-                        url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols_str}&crumb={yahoo_crumb}"
-
-                        res = yahoo_session.get(url, timeout=5)
-
-                        
+                        url = f"https://api.fugle.tw/marketdata/v1.0/stock/snapshot/quotes/{market}"
+                        res = requests.get(url, headers=headers, timeout=8)
 
                         if res.status_code == 200:
+                            data_list = res.json().get('data', [])
+                            for quote in data_list:
+                                code = quote.get('symbol', '')
+                                if code not in stock_data_map: continue
 
-                            quotes = res.json().get('quoteResponse', {}).get('result', [])
+                                # 💥 解析富果真實零延遲報價
+                                z = quote.get('closePrice', 0)
+                                y = quote.get('previousClose', z)
+                                o = quote.get('openPrice', z)
+                                h = quote.get('highPrice', z)
+                                l = quote.get('lowPrice', z)
 
-                            
+                                # 富果的成交量單位是「股」，除以 1000 轉換為「張」
+                                vol_shares = quote.get('total', {}).get('tradeVolume', 0)
+                                v = vol_shares / 1000.0
 
-                            for quote in quotes:
+                                # 獲取最佳五檔的第一檔（微觀籌碼防禦用）
+                                bids = quote.get('bids', [])
+                                asks = quote.get('asks', [])
+                                bid = bids[0].get('price', 0) if bids else 0
+                                ask = asks[0].get('price', 0) if asks else 0
 
-                                code = quote.get('symbol', '').split('.')[0] 
-
-                                
-
-                                # 萃取官方結算價量與最佳買賣檔位 (機構級微觀籌碼)
-                                z = quote.get('regularMarketPrice', 0)
-                                y = quote.get('regularMarketPreviousClose', z)
-                                v = quote.get('regularMarketVolume', 0) / 1000.0 
-                                
-                                # 💥 新增：擷取五檔最優委買 (bid) 與委賣 (ask) 價格
-                                bid = quote.get('bid', 0.0)
-                                ask = quote.get('ask', 0.0)
-
-                                if z == 0 or v == 0 or code not in stock_data_map: continue
+                                if z == 0 or v == 0: continue
 
                                 formatted_data = {
-                                    'c': code,
-                                    'z': z,
-                                    'y': y,
-                                    'o': quote.get('regularMarketOpen', z),
-                                    'h': quote.get('regularMarketDayHigh', z),
-                                    'l': quote.get('regularMarketDayLow', z),
-                                    'v': v,
-                                    'bid': bid,  # 傳遞委買價給大腦
-                                    'ask': ask   # 傳遞委賣價給大腦
+                                    'c': code, 'z': z, 'y': y, 'o': o, 'h': h, 'l': l, 'v': v, 'bid': bid, 'ask': ask
                                 }
 
-                                
-
                                 stock_data = stock_data_map[code]
-
                                 alert_msg = process_tick_data(formatted_data, stock_data, global_true_market_top_ind)
-
                                 successful_count += 1
 
-                                
-
                                 if alert_msg and alert_msg not in intraday_breakout_cache:
-
                                     intraday_breakout_cache.insert(0, alert_msg)
-
                                     
-
-                                    # 💥 關鍵核心：丟進異步彈匣，由上方的擊發手立刻開槍，達成 0 秒延遲！
-
+                                    # 丟進異步彈匣，瞬間發射！
                                     instant_fire_queue.append(alert_msg)
 
-                                    
-
                                     new_cache = read_cache()
-
                                     new_cache["intraday_alerts"] = intraday_breakout_cache
-
                                     update_cache(new_cache)
 
-                                    
-
                                     try:
-
                                         trigger_air_raid_alarm(f"🔥 {stock_data.get('name', code)} 爆量點火！", alert_msg)
-
                                     except: pass
 
-                                    
-
-                        elif res.status_code == 401:
-
-                            # 萬一憑證過期，系統自動重新索取護照！
-
-                            yahoo_session.get("https://fc.yahoo.com", timeout=5)
-
-                            c_res = yahoo_session.get("https://query1.finance.yahoo.com/v1/test/getcrumb", timeout=5)
-
-                            yahoo_crumb = c_res.text.strip()
-
-                            
-
                     except Exception as e:
-
-                        pass # 保持安靜，不印出擾人的錯誤訊息
-
-
+                        # 發生錯誤時保持安靜，不印出擾人訊息
+                        pass
 
                 now_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
-
-                print(f"👁️ [{now_str}] 全市場批量掃描完畢 (本輪精準抓取 {successful_count} 檔報價)。", flush=True)
-
-                
+                print(f"👁️ [{now_str}] 富果光速掃描完畢 (本輪精準抓取 {successful_count} 檔報價)。", flush=True)
 
                 # 掃完一圈全市場後，休息 3 秒再戰
-
                 time.sleep(3)
-
             else:
-
                 time.sleep(60) 
-
         except Exception as e:
-
             time.sleep(60)
 
 
