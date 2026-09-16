@@ -14,3 +14,4 @@ flask-socketio
 eventlet
 pywebpush
 websocket-client
+squarify
