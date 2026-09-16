@@ -4416,6 +4416,57 @@ threading.Thread(target=instant_dispatcher_loop, daemon=True).start()
 
 
 
+def check_dynamic_ema_defense(stock_code, current_price):
+    """
+    🛡️ 第二階段擴充：高頻 EMA (5, 12) 與動態防禦網 (觸發式呼叫)
+    """
+    import requests, os
+    import pandas as pd
+    
+    fugle_token = os.environ.get('FUGLE_API_TOKEN', '').strip()
+    if not fugle_token:
+        return ""
+        
+    headers = {"X-API-KEY": fugle_token}
+    
+    try:
+        # 呼叫富果 5分K 歷史數據
+        url = f"https://api.fugle.tw/marketdata/v1.0/stock/intraday/candles/{stock_code}?timeframe=5"
+        res = requests.get(url, headers=headers, timeout=5)
+        
+        if res.status_code == 200:
+            data = res.json().get('data', [])
+            if not data or len(data) < 12:
+                return ""
+                
+            df = pd.DataFrame(data)
+            # 富果 K 線由新到舊，將其反轉為由舊到新
+            df = df.iloc[::-1].reset_index(drop=True) 
+            df['close'] = pd.to_numeric(df['close'])
+            
+            # 計算 EMA(5) 與 EMA(12)
+            df['EMA5'] = df['close'].ewm(span=5, adjust=False).mean()
+            df['EMA12'] = df['close'].ewm(span=12, adjust=False).mean()
+            
+            latest_ema5 = df.iloc[-1]['EMA5']
+            latest_ema12 = df.iloc[-1]['EMA12']
+            
+            # Lucid-Flex 動態判定邏輯
+            status_msg = ""
+            if current_price > latest_ema5 and latest_ema5 > latest_ema12:
+                status_msg = f"\n📈 轉折預判: 多頭排列 (5MA:{latest_ema5:.2f} 支撐強勢)"
+            elif current_price < latest_ema5 and current_price > latest_ema12:
+                status_msg = f"\n⚠️ 動能警報: 跌破 5MA (準備防禦/沿線拔檔)"
+            elif current_price < latest_ema12:
+                status_msg = f"\n🛑 趨勢反轉: 跌破 12MA (建議立即撤退)"
+            else:
+                status_msg = f"\n⚖️ 均線糾結: 籌碼換手中"
+                
+            return status_msg
+    except Exception:
+        pass
+    return ""
+
 
 
 def continuous_radar_loop():
@@ -4501,7 +4552,7 @@ def continuous_radar_loop():
                                     # 代表主力正在倒貨割韭菜，系統直接判定為誘多陷阱，阻擋後續發報！
                                     if v >= 50 and power_type == "🟢內盤倒貨":
                                         # 悄悄攔截，不驚動戰情室
-                                        continue 
+                                        return 
                                         
                                     # trades 頻道專注於即時成交，未提供的歷史欄位暫以現價補齊防呆
                                     formatted_data = {
