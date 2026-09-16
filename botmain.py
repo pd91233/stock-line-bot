@@ -3116,7 +3116,7 @@ def handle_message(event):
             # 加上 ?t=時間戳記，確保 LINE 每次都抓最新圖片，不會被快取卡住
             img_url = f"{base_url}/heatmap.png?t={timestamp}"
             
-            # 3. 抓取前 4 名的族群名稱，動態生成捷徑按鈕
+            # 3. 抓取前 4 名的族群名稱，動態生成可點擊按鈕內容
             sorted_sectors = sorted(heat_data.items(), key=lambda x: x[1], reverse=True)
             top_4_names = [s[0] for s in sorted_sectors[:4]]
             while len(top_4_names) < 4:
@@ -3124,6 +3124,32 @@ def handle_message(event):
                 
             total_val_yi = sum(val for _, val in sorted_sectors) / 10000
             current_time_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
+
+            # 💡 關鍵修正：幫前 4 大族群加上點擊事件 (action)
+            clickable_top_4 = []
+            for name in top_4_names:
+                if name != "-":
+                    clickable_top_4.append({
+                        "type": "text",
+                        "text": f"🔥 {name}",
+                        "size": "xs",
+                        "align": "center",
+                        "color": "#0066cc",
+                        "weight": "bold",
+                        "action": {
+                            "type": "message",
+                            "label": name,
+                            "text": f"!族群 {name}"
+                        }
+                    })
+                else:
+                    clickable_top_4.append({
+                        "type": "text",
+                        "text": "-",
+                        "size": "xs",
+                        "align": "center",
+                        "color": "#aaaaaa"
+                    })
 
             # 4. 組裝 Flex Message 裝甲
             flex_content = {
@@ -3153,12 +3179,7 @@ def handle_message(event):
                   {
                     "type": "box",
                     "layout": "horizontal",
-                    "contents": [
-                      {"type": "text", "text": top_4_names[0], "size": "sm", "align": "center", "color": "#555555", "weight": "bold"},
-                      {"type": "text", "text": top_4_names[1], "size": "sm", "align": "center", "color": "#555555", "weight": "bold"},
-                      {"type": "text", "text": top_4_names[2], "size": "sm", "align": "center", "color": "#555555", "weight": "bold"},
-                      {"type": "text", "text": top_4_names[3], "size": "sm", "align": "center", "color": "#555555", "weight": "bold"}
-                    ],
+                    "contents": clickable_top_4,  # 👈 帶入具備點擊功能的按鈕陣列
                     "margin": "md", "paddingTop": "sm", "paddingBottom": "sm", "borderWidth": "light", "borderColor": "#dddddd", "cornerRadius": "sm"
                   },
                   {
