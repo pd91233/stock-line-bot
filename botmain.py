@@ -4432,7 +4432,7 @@ def continuous_radar_loop():
             is_weekend = now.weekday() >= 5
             current_time_num = now.hour * 100 + now.minute
 
-            if True: # 💥 盤後強制測試連線專用，確認燈號後請務必改回 (900 <= current_time_num <= 1324)
+            if not is_weekend and (900 <= current_time_num <= 1324):
                 if not fugle_token:
                     print("⚠️ 尚未設定 FUGLE_API_TOKEN，雷達暫停。", flush=True)
                     time.sleep(30)
@@ -4542,7 +4542,7 @@ def continuous_radar_loop():
                     on_close=on_close
                 )
                 
-                ws.run_forever(ping_interval=30, ping_timeout=10)
+                ws.run_forever(ping_interval=60, ping_timeout=30)
                 
                 time.sleep(5)
             else:
