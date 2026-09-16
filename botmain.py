@@ -4420,8 +4420,8 @@ threading.Thread(target=instant_dispatcher_loop, daemon=True).start()
 
 def continuous_radar_loop():
     global instant_fire_queue
-    print("📡 [當沖雷達] 啟動富果(Fugle)光速零延遲掃描引擎...", flush=True)
-    import time, datetime, requests, os
+    print("📡 [當沖雷達] 啟動 Yahoo 掃描引擎...", flush=True)
+    import time, datetime, requests
 
     while True:
         try:
@@ -4429,8 +4429,8 @@ def continuous_radar_loop():
             is_weekend = now.weekday() >= 5
             current_time_num = now.hour * 100 + now.minute
 
-            # 💥 強制在 13:24 準時關閉！絕對不掃描 13:25~13:30 的收盤大單！
-            if not is_weekend and (900 <= current_time_num <= 1324):
+            # Yahoo 掃描時間包含 13:30 收盤
+            if not is_weekend and (900 <= current_time_num <= 1330):
                 current_cache = read_cache()
                 full_stocks = current_cache.get("fundamental_full", [])
 
@@ -4438,61 +4438,48 @@ def continuous_radar_loop():
                     time.sleep(10)
                     continue
 
-                # 建立台股代號對照表
                 stock_data_map = {}
+                yahoo_symbols = []
                 for s in full_stocks:
                     code = str(s.get('code', '')).strip()
                     if code and len(code) == 4 and code.isdigit():
                         stock_data_map[code] = s
+                        # Yahoo 台股代碼需加上 .TW
+                        yahoo_symbols.append(f"{code}.TW")
 
-                # 💥 讀取最標準的 FUGLE_API_TOKEN
-                fugle_token = os.environ.get('FUGLE_API_TOKEN', '')
-                if not fugle_token:
-                    print("⚠️ 尚未設定 FUGLE_API_TOKEN，雷達暫停掃描", flush=True)
-                    time.sleep(30)
-                    continue
-
-                headers = {"X-API-KEY": fugle_token}
                 successful_count = 0
+                # 破解 Yahoo 防火牆用的偽裝 Headers
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                }
 
-                # 🚀 直接抓取「上市(TSE)」與「上櫃(OTC)」的零延遲全市場快照
-                for market in ["TSE", "OTC"]:
+                # 每次切片 100 檔避免網址過長被擋
+                chunk_size = 100
+                for i in range(0, len(yahoo_symbols), chunk_size):
+                    chunk = yahoo_symbols[i:i+chunk_size]
+                    symbols_str = ",".join(chunk)
+                    url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols_str}"
+                    
                     try:
-                        url = f"https://api.fugle.tw/marketdata/v1.0/stock/snapshot/quotes/{market}"
-                        
-                        # 🛡️ 防呆機制：強制清除金鑰前後不小心複製到的空白鍵或換行符號
-                        clean_token = fugle_token.strip()
-                        headers = {"X-API-KEY": clean_token}
-                        
                         res = requests.get(url, headers=headers, timeout=8)
-
                         if res.status_code == 200:
-                            data_list = res.json().get('data', [])
-                            for quote in data_list:
-                                code = quote.get('symbol', '')
+                            result_list = res.json().get('quoteResponse', {}).get('result', [])
+                            for quote in result_list:
+                                code = quote.get('symbol', '').replace('.TW', '').replace('.TWO', '')
                                 if code not in stock_data_map: continue
 
-                                # 💥 解析富果真實零延遲報價
-                                z = quote.get('closePrice', 0)
-                                y = quote.get('previousClose', z)
-                                o = quote.get('openPrice', z)
-                                h = quote.get('highPrice', z)
-                                l = quote.get('lowPrice', z)
-
-                                # 富果的成交量單位是「股」，除以 1000 轉換為「張」
-                                vol_shares = quote.get('total', {}).get('tradeVolume', 0)
-                                v = vol_shares / 1000.0
-
-                                # 獲取最佳五檔的第一檔（微觀籌碼防禦用）
-                                bids = quote.get('bids', [])
-                                asks = quote.get('asks', [])
-                                bid = bids[0].get('price', 0) if bids else 0
-                                ask = asks[0].get('price', 0) if asks else 0
-
+                                z = quote.get('regularMarketPrice', 0)
+                                y = quote.get('regularMarketPreviousClose', z)
+                                o = quote.get('regularMarketOpen', z)
+                                h = quote.get('regularMarketDayHigh', z)
+                                l = quote.get('regularMarketDayLow', z)
+                                v = quote.get('regularMarketVolume', 0) / 1000.0
+                                
                                 if z == 0 or v == 0: continue
-
+                                
                                 formatted_data = {
-                                    'c': code, 'z': z, 'y': y, 'o': o, 'h': h, 'l': l, 'v': v, 'bid': bid, 'ask': ask
+                                    'c': code, 'z': z, 'y': y, 'o': o, 'h': h, 'l': l, 'v': v, 
+                                    'bid': 0, 'ask': 0
                                 }
 
                                 stock_data = stock_data_map[code]
@@ -4501,8 +4488,6 @@ def continuous_radar_loop():
 
                                 if alert_msg and alert_msg not in intraday_breakout_cache:
                                     intraday_breakout_cache.insert(0, alert_msg)
-                                    
-                                    # 丟進異步彈匣，瞬間發射！
                                     instant_fire_queue.append(alert_msg)
 
                                     new_cache = read_cache()
@@ -4512,17 +4497,15 @@ def continuous_radar_loop():
                                     try:
                                         trigger_air_raid_alarm(f"🔥 {stock_data.get('name', code)} 爆量點火！", alert_msg)
                                     except: pass
-                        else:
-                            # 🚨 破案關鍵：如果被富果拒絕，強制印出死亡原因！
-                            print(f"⚠️ 富果 {market} 拒絕連線！狀態碼: {res.status_code}, 錯誤訊息: {res.text}", flush=True)
-
-                    except Exception as e:
-                        print(f"⚠️ 抓取 {market} 時發生未預期異常: {e}", flush=True)
+                    except Exception:
+                        pass
+                    
+                    # 避免密集請求被鎖 IP
+                    time.sleep(1) 
 
                 now_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
-                print(f"👁️ [{now_str}] 富果光速掃描完畢 (本輪精準抓取 {successful_count} 檔報價)。", flush=True)
+                print(f"👁️ [{now_str}] Yahoo 掃描完畢 (本輪精準抓取 {successful_count} 檔報價)。", flush=True)
 
-                # 掃完一圈全市場後，休息 3 秒再戰
                 time.sleep(3)
             else:
                 time.sleep(60) 
