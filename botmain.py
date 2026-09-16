@@ -4433,7 +4433,7 @@ def continuous_radar_loop():
             current_time_num = now.hour * 100 + now.minute
 
             # 💥 盤中時間才啟動 WebSocket 連線
-            if not is_weekend and (900 <= current_time_num <= 1324):
+            if True: # 💥 盤後強制測試連線專用
                 if not fugle_token:
                     print("⚠️ 尚未設定 FUGLE_API_TOKEN，雷達暫停。", flush=True)
                     time.sleep(30)
