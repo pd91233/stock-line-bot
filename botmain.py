@@ -2857,35 +2857,21 @@ def handle_message(event):
     if user_msg in ["!熱力圖", "熱力圖"]:
         heat_data = globals().get('global_sector_heat', {})
         
-        # ==========================================
-        # 🛠️ [夜間演習模式] 注入模擬戰場數據 (包含資金與漲跌幅)
-        # 明天開盤前記得把這個 if not heat_data 區塊刪除！
-        # ==========================================
+        # 💥 [盤後記憶體修復] 如果記憶體是空的，嘗試去實體硬碟找今天的結算備份
         if not heat_data:
-            heat_data = {
-                "半導體": 456000.0,
-                "電腦及週邊設備業": 234000.0,
-                "電子零組件業": 185000.0,
-                "光電業": 120000.0,
-                "航運業": 95000.0,
-                "金融保險": 88000.0,
-                "電機機械": 65000.0,
-                "通信網路業": 42000.0
-            }
-            # 注入假漲跌幅
-            globals()['global_sector_change'] = {
-                "半導體": 2.5,       # 大漲 (深紅)
-                "電腦週邊": 1.2,     # 小漲 (亮紅)
-                "電子零組件": -0.8,  # 小跌 (亮綠)
-                "光電業": -3.1,      # 大跌 (深綠)
-                "航運業": 4.5,
-                "金融保險": 0.0,     # 平盤 (灰色)
-                "電機機械": -1.5,
-                "通信網路": 0.5
-            }
-            print("⚠️ 啟動夜間演習模式，注入模擬熱力與漲跌幅數據")
-        # ==========================================
-        
+            try:
+                import json, os
+                if os.path.exists("heat_memory.json"):
+                    with open("heat_memory.json", "r", encoding="utf-8") as f:
+                        heat_data = json.load(f)
+            except:
+                pass
+                
+        # 實戰防線：如果連硬碟都沒有，才回報尚無數據
+        if not heat_data:
+            smart_reply_with_menu(event, "📭 [戰情室回報]\n目前尚無資金流動數據，可能尚未開盤。")
+            return
+            
         # 1. 呼叫引擎畫圖
         success = generate_treemap_image(heat_data)
         
