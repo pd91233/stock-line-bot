@@ -4613,22 +4613,21 @@ def process_tick_data(data, meta_info, top_ind):
             stock_tick_memory[code] = []
         stock_tick_memory[code].append((now_ts, z, v, h, l))
 
-		# 改為保留近 90 秒內的 Tick，徹底解除 30 筆筆數限制
-		stock_tick_memory[code] = [t for t in stock_tick_memory[code] if now_ts - t[0] <= 90]
+        # 淨化：保留近 90 秒內的 Tick（純 4 空格縮排）
+        stock_tick_memory[code] = [t for t in stock_tick_memory[code] if now_ts - t[0] <= 90]
 
-		ticks = stock_tick_memory[code]
-		if len(ticks) >= 2:
-			current_ts, current_z, current_v = ticks[-1][0], ticks[-1][1], ticks[-1][2]
-			
-			# 累積時間涵蓋不足 40 秒才跳過
-			if current_ts - ticks[0][0] < 40:
-				return None
+        ticks = stock_tick_memory[code]
+        if len(ticks) >= 2:
+            current_ts, current_z, current_v = ticks[-1][0], ticks[-1][1], ticks[-1][2]
+            
+            if current_ts - ticks[0][0] < 40:
+                return None
 
-			past_tick = ticks[0] 
-			for t in reversed(ticks):
-				if current_ts - t[0] >= 50: 
-					past_tick = t
-					break
+            past_tick = ticks[0] 
+            for t in reversed(ticks):
+                if current_ts - t[0] >= 50: 
+                    past_tick = t
+                    break
 
             z_1m_ago, v_1m_ago = past_tick[1], past_tick[2]
             vol_1m = current_v - v_1m_ago
@@ -4992,29 +4991,29 @@ def continuous_radar_loop():
                         
                         # 💥 破案關鍵：收到機房的「驗證通過」訊號後，才開始大舉發送訂閱請求
                         if event == "authenticated":
-							print("✅ 安全驗證通過！開始向機房發送訂閱請求...", flush=True)
-							symbols = list(stock_data_map.keys())
-							
-							# 用獨立執行緒處理發送訂閱，避免主線程死鎖
-							def async_subscribe():
-								chunk_size = 30
-								for i in range(0, len(symbols), chunk_size):
-									chunk = symbols[i:i+chunk_size]
-									for sym in chunk:
-										subscribe_msg = {
-											"event": "subscribe",
-											"data": {
-												"channel": "trades",
-												"symbol": sym
-											}
-										}
-										try: ws.send(json.dumps(subscribe_msg))
-										except: pass
-									time.sleep(0.5)
-								print(f"✅ 成功訂閱 {len(symbols)} 檔標的，進入零延遲監聽模式！", flush=True)
+                            print("✅ 安全驗證通過！開始向機房發送訂閱請求...", flush=True)
+                            symbols = list(stock_data_map.keys())
+                            
+                            # 用獨立執行緒處理發送訂閱，避免主線程死鎖
+                            def async_subscribe():
+                                chunk_size = 30
+                                for i in range(0, len(symbols), chunk_size):
+                                    chunk = symbols[i:i+chunk_size]
+                                    for sym in chunk:
+                                        subscribe_msg = {
+                                            "event": "subscribe",
+                                            "data": {
+                                                "channel": "trades",
+                                                "symbol": sym
+                                            }
+                                        }
+                                        try: ws.send(json.dumps(subscribe_msg))
+                                        except: pass
+                                    time.sleep(0.5)
+                                print(f"✅ 成功訂閱 {len(symbols)} 檔標的，進入零延遲監聽模式！", flush=True)
 
-							threading.Thread(target=async_subscribe, daemon=True).start()
-							return
+                            threading.Thread(target=async_subscribe, daemon=True).start()
+                            return
 
                         # 接收即時成交報價
                         if event == "data":
@@ -5045,22 +5044,22 @@ def continuous_radar_loop():
                                         
                                     # trades 頻道專注於即時成交，未提供的歷史欄位暫以現價補齊防呆
                                     # 從快取抓取真實昨收與開盤價，避免覆蓋後計算失真
-									stock_data = stock_data_map[code]
-									ref_y = float(stock_data.get('y') or stock_data.get('referencePrice', z))
-									open_o = float(stock_data.get('o') or stock_data.get('openPrice', z))
+                                    stock_data = stock_data_map[code]
+                                    ref_y = float(stock_data.get('y') or stock_data.get('referencePrice', z))
+                                    open_o = float(stock_data.get('o') or stock_data.get('openPrice', z))
 
-									formatted_data = {
-										'c': code, 
-										'z': z, 
-										'y': ref_y,     # 正確帶入真實昨收
-										'o': open_o,    # 正確帶入開盤價
-										'h': z, 
-										'l': z, 
-										'v': v, 
-										'bid': bid, 
-										'ask': ask, 
-										'power': power_type
-									}
+                                    formatted_data = {
+                                        'c': code, 
+                                        'z': z, 
+                                        'y': ref_y,     # 正確帶入真實昨收
+                                        'o': open_o,    # 正確帶入開盤價
+                                        'h': z, 
+                                        'l': z, 
+                                        'v': v, 
+                                        'bid': bid, 
+                                        'ask': ask, 
+                                        'power': power_type
+                                    }
                                     
                                     stock_data = stock_data_map[code]
                                     
@@ -5080,27 +5079,27 @@ def continuous_radar_loop():
                                     
                                     alert_msg = process_tick_data(formatted_data, stock_data, global_true_market_top_ind)
 
-									if alert_msg and alert_msg not in intraday_breakout_cache:
-										intraday_breakout_cache.insert(0, alert_msg)
-										
-										# 將 API 查詢與訊息推播丟入背景 Thread，不卡死 WebSocket
-										def async_alert_task(c_code, c_z, base_msg, p_type, name):
-											ema_status = check_dynamic_ema_defense(c_code, c_z)
-											final_msg = base_msg + ema_status if ema_status else base_msg
-											
-											instant_fire_queue.append(final_msg)
-											try:
-												new_cache = read_cache()
-												new_cache["intraday_alerts"] = intraday_breakout_cache
-												update_cache(new_cache)
-												trigger_air_raid_alarm(f"🔥 {name} 爆量點火！[{p_type}]", final_msg)
-											except: pass
+                                    if alert_msg and alert_msg not in intraday_breakout_cache:
+                                        intraday_breakout_cache.insert(0, alert_msg)
+                                        
+                                        # 將 API 查詢與訊息推播丟入背景 Thread，不卡死 WebSocket
+                                        def async_alert_task(c_code, c_z, base_msg, p_type, name):
+                                            ema_status = check_dynamic_ema_defense(c_code, c_z)
+                                            final_msg = base_msg + ema_status if ema_status else base_msg
+                                            
+                                            instant_fire_queue.append(final_msg)
+                                            try:
+                                                new_cache = read_cache()
+                                                new_cache["intraday_alerts"] = intraday_breakout_cache
+                                                update_cache(new_cache)
+                                                trigger_air_raid_alarm(f"🔥 {name} 爆量點火！[{p_type}]", final_msg)
+                                            except: pass
 
-										threading.Thread(
-											target=async_alert_task, 
-											args=(code, z, alert_msg, power_type, stock_data.get('name', code)),
-											daemon=True
-										).start()
+                                        threading.Thread(
+                                            target=async_alert_task, 
+                                            args=(code, z, alert_msg, power_type, stock_data.get('name', code)),
+                                            daemon=True
+                                        ).start()
                     except:
                         pass
 
