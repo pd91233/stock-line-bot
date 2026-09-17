@@ -4609,8 +4609,9 @@ def process_tick_data(data, meta_info, top_ind):
         elif 1000 <= current_time_num < 1100: time_status = "cooling"
         else: time_status = "dead_water"
 
-        if code not in stock_tick_memory: stock_tick_memory[code] = []
-		stock_tick_memory[code].append((now_ts, z, v, h, l))
+        if code not in stock_tick_memory:
+            stock_tick_memory[code] = []
+        stock_tick_memory[code].append((now_ts, z, v, h, l))
 
 		# 改為保留近 90 秒內的 Tick，徹底解除 30 筆筆數限制
 		stock_tick_memory[code] = [t for t in stock_tick_memory[code] if now_ts - t[0] <= 90]
