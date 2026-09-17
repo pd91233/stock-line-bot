@@ -4566,17 +4566,15 @@ def process_tick_data(data, meta_info, top_ind):
     now_dt = datetime.datetime.now(tz)
     now_date_str = now_dt.strftime("%Y-%m-%d")
     if last_clear_date != now_date_str:
-		filtered_funds_codes.clear()
-		filtered_overheated_codes.clear()
-		intercepted_traps_log.clear()
-		
-		# 補齊漏掉的記憶體清空動作
-		intraday_alerted_codes.clear()
-		stock_tick_memory.clear()
-		if 'global_sector_heat' in globals():
-			globals()['global_sector_heat'].clear()
-			
-		last_clear_date = now_date_str
+        filtered_funds_codes.clear()
+        filtered_overheated_codes.clear()
+        intercepted_traps_log.clear()
+        intraday_alerted_codes.clear()
+        stock_tick_memory.clear()
+        if 'global_sector_heat' in globals():
+            globals()['global_sector_heat'].clear()
+            
+        last_clear_date = now_date_str
 
     if not code or code in intraday_alerted_codes: return None
     
