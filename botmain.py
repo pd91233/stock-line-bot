@@ -6,7 +6,7 @@ eventlet.monkey_patch()
 # 開發代號：botmain.py (雲端守護協定 - 100% 完整解碼不閹割版)
 # =========================================================
 
-from flask import Flask, request, abort, jsonify, make_response
+from flask import Flask, request, abort, jsonify, make_response, send_file  # 👈 新增了 send_file
 from flask_socketio import SocketIO, emit
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -31,6 +31,11 @@ import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import mplfinance as mpf
+
+# 💥 [新增擴充戰術] 熱力圖專用套件
+import matplotlib.pyplot as plt
+import squarify
+from matplotlib.font_manager import FontProperties
 
 
 # ==========================================
@@ -276,8 +281,8 @@ def fetch_taifex_pcr():
     except Exception as e:
         print(f"⚠️ 期交所 PCR 讀取受阻: {e}")
     return "🛡️ 選擇權 PCR: 待更新"
-	
-	
+    
+    
 
 
 
@@ -286,34 +291,35 @@ app = Flask(__name__)
 
 
 # 💥 啟動戰情大廳通訊樞紐
-
 app.config['SECRET_KEY'] = 'shadow_base_secret_999'
-
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+
+# ==========================================================
+# 💥 [擴充戰術] 開通熱力圖對外發送通道 (這裡就是正確位置！)
+# ==========================================================
+@app.route('/heatmap.png')
+def serve_heatmap():
+    # 當 LINE 來要圖片時，把畫好的圖交出去
+    img_path = os.path.join(os.getcwd(), 'heatmap.png')
+    if os.path.exists(img_path):
+        return send_file(img_path, mimetype='image/png')
+    else:
+        return "Image not found", 404
+# ==========================================================
 
 
 
 # 🛡️ 戰術快取配置
-
 CACHE_FILE = "live_data_cache.json"
-
 VIP_CACHE_FILE = "radar_vips.json"  # 💥 新增：特戰隊員點名簿
 
-
-
 def update_cache(data):
-
     try:
-
         with open(CACHE_FILE, 'w', encoding='utf-8') as f:
-
             json.dump(data, f, ensure_ascii=False)
-
     except:
-
         pass
-
-
 
 def read_cache():
 
@@ -2433,12 +2439,13 @@ def execute_force_refresh():
             if leaderboard:
 
                 # 排序找出真正的資金主攻榜首
-
                 top = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)[0]
-
                 true_market_top_ind = top[0]
-
                 true_market_top_chg = top[1]
+                
+                # 💥 [擴充戰術] 將各族群漲跌幅寫入全域變數，供熱力圖上色使用！
+                globals()['global_sector_change'] = leaderboard
+                
 
         except: pass    
 
@@ -2498,6 +2505,19 @@ def execute_force_refresh():
                 "fundamental_full": fundamental_full_cache,
                 "intraday_alerts": intraday_breakout_cache[:10] 
             })
+
+            # ==========================================
+            # 💥 [新增裝甲] 每 5 分鐘自動將熱力圖記憶體存入實體硬碟！
+            # ==========================================
+            try:
+                import json, os
+                current_heat = globals().get('global_sector_heat', {})
+                if current_heat:
+                    with open("heat_memory.json", "w", encoding="utf-8") as f:
+                        json.dump(current_heat, f, ensure_ascii=False)
+            except Exception as e:
+                print(f"熱力圖存檔失敗: {e}")
+            # ==========================================
 
             print("✅ [戰術回報] 變數防護版寫入成功，財報數據已同步封裝！")
 
@@ -2737,9 +2757,9 @@ def handle_join(event):
         
 
         smart_reply_with_menu(
-			event,
-			TextSendMessage(text=welcome_msg)
-		)
+            event,
+            TextSendMessage(text=welcome_msg)
+        )
 
 # ==========================================================
 # LINE群組查詢股票 💡 最完美的智慧過濾邏輯
@@ -2749,8 +2769,245 @@ def handle_message(event):
     user_msg = event.message.text.strip()
     user_id = event.source.user_id
     
-	
-	# ==========================================
+    
+    
+    # ==========================================
+    # 🎨 族群資金輪動熱力圖繪圖引擎 (紅綠漲跌幅進化版)
+    # ==========================================
+    def generate_treemap_image(heat_data):
+        """
+        負責將資金字典轉換為 Treemap 圖片並存檔
+        """
+        try:
+            # 抓取全域的族群漲跌幅資料
+            change_data = globals().get('global_sector_change', {})
+            
+            # 抓取前 12 大吸金族群
+            sorted_sectors = sorted(heat_data.items(), key=lambda x: x[1], reverse=True)[:12]
+            if not sorted_sectors:
+                return False
+                
+            labels = []
+            sizes = []
+            colors = []
+            
+            for sector, val_wan in sorted_sectors:
+                val_yi = val_wan / 10000
+                
+                # 模糊比對找出該族群的漲跌幅
+                chg_pct = 0.0
+                for k, v in change_data.items():
+                    if k in sector or sector in k:
+                        chg_pct = v
+                        break
+                        
+                # 決定標籤文字與正負號 (例如: +2.5%)
+                sign = "+" if chg_pct > 0 else ""
+                labels.append(f"{sector}\n{val_yi:.1f}億\n{sign}{chg_pct}%")
+                sizes.append(val_wan)
+                
+                # 台灣股市專屬紅綠上色邏輯
+                if chg_pct >= 2.0:
+                    colors.append('#b91c1c') # 深紅 (強勢大漲)
+                elif chg_pct > 0:
+                    colors.append('#ef4444') # 亮紅 (一般上漲)
+                elif chg_pct <= -2.0:
+                    colors.append('#047857') # 深綠 (弱勢大跌)
+                elif chg_pct < 0:
+                    colors.append('#10b981') # 亮綠 (一般下跌)
+                else:
+                    colors.append('#64748b') # 灰色 (平盤或無資料)
+                
+            # 讀取繁體中文字體
+            font_path = 'custom_font.ttf'
+            myfont = FontProperties(fname=font_path)
+            
+            plt.figure(figsize=(10, 6))
+            
+            # 呼叫 squarify 畫出矩形式樹狀圖
+            squarify.plot(sizes=sizes, label=labels, color=colors, alpha=0.85,
+                          text_kwargs={'fontproperties': myfont, 'fontsize': 14, 'color': 'white', 'weight': 'bold'})
+            
+            plt.axis('off') # 隱藏座標軸
+            plt.tight_layout()
+            
+            # 將畫好的圖存檔至當前目錄
+            plt.savefig('heatmap.png', format='png', dpi=150, bbox_inches='tight')
+            plt.close()
+            return True
+        except Exception as e:
+            print(f"⚠️ 繪圖引擎異常: {e}", flush=True)
+            return False
+
+
+    # ==========================================
+    # 💥 [熱力圖戰術] 處理 !熱力圖 指令
+    # ==========================================
+    def handle_heatmap_command(event, user_msg):
+        if user_msg in ["!熱力圖", "熱力圖"]:
+            heat_data = globals().get('global_sector_heat', {})
+            
+            # 💥 [盤後記憶體修復] 如果記憶體是空的，嘗試去實體硬碟找今天的結算備份
+            if not heat_data:
+                try:
+                    import json, os
+                    if os.path.exists("heat_memory.json"):
+                        with open("heat_memory.json", "r", encoding="utf-8") as f:
+                            heat_data = json.load(f)
+                except:
+                    pass
+                    
+            # 實戰防線：如果連硬碟都沒有，才回報尚無數據
+            if not heat_data:
+                smart_reply_with_menu(event, "📭 [戰情室回報]\n目前尚無資金流動數據，可能尚未開盤。")
+                return
+
+            # 1. 呼叫引擎畫圖
+            success = generate_treemap_image(heat_data)
+            if not success:
+                smart_reply_with_menu(event, "⚠️ [戰情室回報]\n繪圖引擎產生熱力圖失敗，請稍後再試。")
+                return
+
+            # 2. 自動擷取資金前 4 大族群，並綁定 !族群 觸發指令 (下鑽按鈕)
+            top_4_sectors = [s[0] for s in sorted(heat_data.items(), key=lambda x: x[1], reverse=True)[:4]]
+            
+            action_buttons = []
+            for sector_name in top_4_sectors:
+                action_buttons.append(
+                    ButtonComponent(
+                        style='secondary',
+                        height='sm',
+                        action=MessageAction(
+                            label=sector_name[:6],               # 按鈕顯示文字 (截取前 6 字避免溢出)
+                            text=f"!族群 {sector_name}"          # 💥 關鍵：點擊後自動發送下鑽指令
+                        )
+                    )
+                )
+
+            # 3. 封裝 Flex Message 面板
+            total_funds = sum(heat_data.values()) / 10000
+            tz_tw = datetime.timezone(datetime.timedelta(hours=8))
+            now_str = datetime.datetime.now(tz_tw).strftime("%H:%M:%S")
+
+            flex_content = BubbleContainer(
+                body=BoxComponent(
+                    layout='vertical',
+                    contents=[
+                        # 標題與總額度
+                        BoxComponent(
+                            layout='horizontal',
+                            contents=[
+                                BoxComponent(
+                                    layout='vertical',
+                                    contents=[
+                                        {"type": "text", "text": "台股盤中資金熱力", "weight": "bold", "size": "xl", "color": "#0f172a"},
+                                        {"type": "text", "text": f"指數更新時間: {now_str}", "size": "xs", "color": "#94a3b8", "margin": "xs"}
+                                    ]
+                                ),
+                                BoxComponent(
+                                    layout='vertical',
+                                    contents=[
+                                        {"type": "text", "text": f"{total_funds:.1f} 億", "weight": "bold", "size": "xl", "color": "#b91c1c", "align": "end"}
+                                    ]
+                                )
+                            ]
+                        ),
+                        # 下鑽按鈕列
+                        BoxComponent(
+                            layout='horizontal',
+                            spacing='sm',
+                            margin='md',
+                            contents=action_buttons
+                        ),
+                        # 圖片區塊 (連結至本機 /heatmap.png 路由)
+                        BoxComponent(
+                            layout='vertical',
+                            margin='md',
+                            contents=[
+                                {
+                                    "type": "image",
+                                    "url": "https://stock-line-bot-c8em.onrender.com/heatmap.png",
+                                    "size": "full",
+                                    "aspectRatio": "10:6",
+                                    "aspectMode": "cover"
+                                }
+                            ]
+                        )
+                    ],
+                    padding_all="15px"
+                )
+            )
+
+            # 4. 發射 Flex 裝甲面板
+            try:
+                flex_message_obj = FlexSendMessage(
+                    alt_text="今日盤中資金熱力圖", 
+                    contents=flex_content
+                )
+                smart_reply_with_menu(event, flex_message_obj)
+            except Exception as e:
+                print(f"⚠️ Flex Message 發送失敗: {e}", flush=True)
+                smart_reply_with_menu(event, f"⚠️ 裝甲面板發送失敗: {e}")
+    
+    
+    # ==========================================
+    # 💥 [下鑽戰術] 按鈕觸發：!族群 <產業名稱>
+    # ==========================================
+    if user_msg.startswith("!族群") or user_msg.startswith("!板塊"):
+        # 自動抹除前綴並清理前後空白，提取目標族群名稱
+        target_sector = user_msg.replace("!族群", "").replace("!板塊", "").strip()
+        
+        if not target_sector:
+            smart_reply_with_menu(event, "⚠️ 請輸入要查詢的族群名稱，例如：!族群 半導體")
+            return
+            
+        # 1. 抓取快取中的個股行情資料
+        stocks_cache = globals().get('global_stocks_cache', {})
+        
+        # 2. 篩選屬於該族群的個股
+        sector_stocks = []
+        for symbol, data in stocks_cache.items():
+            stock_sector = data.get('industry', '') or data.get('category', '')
+            if target_sector in stock_sector or stock_sector in target_sector:
+                sector_stocks.append({
+                    'code': symbol,
+                    'name': data.get('name', symbol),
+                    'chg_pct': data.get('change_percent', 0.0),
+                    'volume': data.get('volume', 0),
+                    'price': data.get('price', 0.0)
+                })
+        
+        # 3. 無資料防呆（盤後或記憶體無資料時會正確回傳此訊息）
+        if not sector_stocks:
+            smart_reply_with_menu(event, f"📭 [股海系統回報]\n未尋獲【{target_sector}】族群的即時個股數據，可能尚未開盤或資料更新中。")
+            return
+            
+        # 4. 排序：量最大與漲幅最大前 5 名
+        top_volume = sorted(sector_stocks, key=lambda x: x['volume'], reverse=True)[:5]
+        top_gainers = sorted(sector_stocks, key=lambda x: x['chg_pct'], reverse=True)[:5]
+        
+        # 5. 格式化輸出
+        reply_lines = [f"🔥 【{target_sector}】核心主力個股下鑽戰報\n"]
+        
+        reply_lines.append("📊 成交量前 5 大：")
+        for s in top_volume:
+            sign = "+" if s['chg_pct'] > 0 else ""
+            reply_lines.append(f"• {s['code']} {s['name']}: {s['price']}元 ({sign}{s['chg_pct']}%) ｜ 量 {s['volume']}張")
+            
+        reply_lines.append("\n🚀 領漲強勢股前 5 大：")
+        for s in top_gainers:
+            sign = "+" if s['chg_pct'] > 0 else ""
+            reply_lines.append(f"• {s['code']} {s['name']}: {s['price']}元 ({sign}{s['chg_pct']}%)")
+            
+        reply_lines.append("\n💡 提示：輸入 !個股代號 (如 !2330) 可查看個股詳細技術面與均線。")
+        
+        # 6. 發射戰報
+        smart_reply_with_menu(event, "\n".join(reply_lines))
+        return
+    
+    
+    
+    # ==========================================
     # 🛡️ VIP 自選股防護網指令中心
     # ==========================================
     # 1. 新增自選股 (支援格式：「+2330」或「+台積電」)
@@ -2819,8 +3076,8 @@ def handle_message(event):
             
             smart_reply_with_menu(event, f"🛡️ 【VIP 專屬防禦雷達網】\n報告，系統目前正為您全天候嚴密監控以下標的：\n----------------------\n" + "\n".join(display_list) + "\n----------------------\n💡 輸入「-代號」即可解除監控。")
         return
-	
-	# 4. 按鈕防呆引導教學
+    
+    # 4. 按鈕防呆引導教學
     if user_msg == "如何加自選":
         smart_reply_with_menu(event, "💡 【新增自選股教學】\n請直接在對話框輸入：\n「+股票代號」 或 「+中文名稱」\n\n範例：\n+2330\n+台積電")
         return
@@ -2828,10 +3085,162 @@ def handle_message(event):
     if user_msg == "如何刪自選":
         smart_reply_with_menu(event, "💡 【刪除自選股教學】\n請直接在對話框輸入：\n「-股票代號」 或 「-中文名稱」\n\n範例：\n-2330\n-台積電")
         return
-	
-	
-	
-	
+    
+    
+    
+    # ==========================================
+    # 5. 族群資金輪動熱力圖 (圖形化升級版)
+    # ==========================================
+    if user_msg in ["!熱力圖", "熱力圖"]:
+        heat_data = globals().get('global_sector_heat', {})
+        
+        # 💥 [盤後記憶體修復] 如果記憶體是空的，嘗試去實體硬碟找今天的結算備份
+        if not heat_data:
+            try:
+                import json, os
+                if os.path.exists("heat_memory.json"):
+                    with open("heat_memory.json", "r", encoding="utf-8") as f:
+                        heat_data = json.load(f)
+            except:
+                pass
+                
+        # 實戰防線：如果連硬碟都沒有，才回報尚無數據
+        if not heat_data:
+            smart_reply_with_menu(event, "📭 [戰情室回報]\n目前尚無資金流動數據，可能尚未開盤。")
+            return
+            
+        # 1. 呼叫引擎畫圖
+        success = generate_treemap_image(heat_data)
+        
+        if success:
+            # 2. 準備圖片網址與破除快取陷阱
+            # 請將下方的網址替換成您的 Render 網址 (例如 https://stock-line-bot-c8em.onrender.com)
+            base_url = "https://stock-line-bot-c8em.onrender.com" 
+            timestamp = int(time.time())
+            # 加上 ?t=時間戳記，確保 LINE 每次都抓最新圖片，不會被快取卡住
+            img_url = f"{base_url}/heatmap.png?t={timestamp}"
+            
+            # 3. 抓取前 4 名的族群名稱，動態生成可點擊按鈕內容
+            sorted_sectors = sorted(heat_data.items(), key=lambda x: x[1], reverse=True)
+            top_4_names = [s[0] for s in sorted_sectors[:4]]
+            while len(top_4_names) < 4:
+                top_4_names.append("-") # 防呆填補
+                
+            total_val_yi = sum(val for _, val in sorted_sectors) / 10000
+            current_time_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
+
+            # 💡 升級：組裝具備「深藍底色 + 白字 + 圓角」的實體按鈕區塊
+            clickable_top_4 = []
+            for name in top_4_names:
+                if name != "-":
+                    clickable_top_4.append({
+                        "type": "box",
+                        "layout": "vertical",
+                        "backgroundColor": "#1a5276",  # 質感深藍實體底色
+                        "cornerRadius": "md",          # 圓角邊框
+                        "paddingTop": "sm",
+                        "paddingBottom": "sm",
+                        "margin": "xs",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": f"🔥{name}",
+                                "size": "xs",
+                                "align": "center",
+                                "color": "#ffffff",    # 純白文字
+                                "weight": "bold"
+                            }
+                        ],
+                        "action": {
+                            "type": "message",
+                            "label": name,
+                            "text": f"!族群 {name}"
+                        }
+                    })
+                else:
+                    clickable_top_4.append({
+                        "type": "box",
+                        "layout": "vertical",
+                        "backgroundColor": "#f2f3f4",  # 灰色無效按鈕
+                        "cornerRadius": "md",
+                        "paddingTop": "sm",
+                        "paddingBottom": "sm",
+                        "margin": "xs",
+                        "contents": [
+                            {"type": "text", "text": "-", "size": "xs", "align": "center", "color": "#aaaaaa"}
+                        ]
+                    })
+
+            # 4. 組裝 Flex Message 裝甲
+            flex_content = {
+              "type": "bubble",
+              "size": "giga",
+              "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                  {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "contents": [
+                      {"type": "text", "text": "台股盤中資金熱力", "weight": "bold", "size": "xl", "color": "#333333", "flex": 2},
+                      {"type": "text", "text": f"{total_val_yi:.1f} 億", "weight": "bold", "size": "xl", "color": "#cc0000", "align": "end", "flex": 2}
+                    ],
+                    "alignItems": "center"
+                  },
+                  {"type": "text", "text": f"指數更新時間: {current_time_str}", "size": "xs", "color": "#aaaaaa", "align": "end", "margin": "sm"}
+                ],
+                "paddingBottom": "sm"
+              },
+              "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                  {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "contents": clickable_top_4,  # 👈 帶入具備點擊功能的按鈕陣列
+                    "margin": "md", "paddingTop": "sm", "paddingBottom": "sm", "borderWidth": "light", "borderColor": "#dddddd", "cornerRadius": "sm"
+                  },
+                  {
+                    "type": "image",
+                    "url": img_url,
+                    "size": "full",
+                    "aspectRatio": "4:3",
+                    "aspectMode": "cover",
+                    "margin": "md"
+                  }
+                ],
+                "paddingTop": "xs"
+              }
+            }
+            
+            # 🔥 [終極修復 3.0] 直接借用統帥系統內建的智慧發射管！
+            try:
+                from linebot.models import FlexSendMessage, BubbleContainer
+                
+                # 將 JSON 字典轉換為 LINE 看得懂的 Flex 裝甲
+                flex_container = BubbleContainer.new_from_json_dict(flex_content)
+                
+                flex_message_obj = FlexSendMessage(
+                    alt_text="今日盤中資金熱力圖", 
+                    contents=flex_container
+                )
+                
+                # 🚀 關鍵破解：直接把裝甲塞給您的 smart_reply_with_menu 發射！
+                # 它會自動幫我們抓出正確的金鑰並發送，完美破解 Token 衝突
+                smart_reply_with_menu(event, flex_message_obj)
+                
+            except Exception as e:
+                print(f"⚠️ Flex Message 發送失敗: {e}", flush=True)
+                smart_reply_with_menu(event, f"⚠️ 裝甲面板轉換失敗: {e}")
+                
+        else:
+            smart_reply_with_menu(event, "⚠️ 戰情室回報：熱力圖繪製失敗。")
+        return
+    
+    
+    
 
     # 💥 新增：讓使用者隨時點名查詢當日已被系統鎖定的標的清單
 
@@ -3021,7 +3430,7 @@ def handle_message(event):
         return
 
 
-# ==========================================================
+    # ==========================================================
 
     # 👇 手調收盤戰報指令
 
@@ -4160,6 +4569,11 @@ def process_tick_data(data, meta_info, top_ind):
         filtered_funds_codes.clear()
         filtered_overheated_codes.clear()
         intercepted_traps_log.clear()
+        intraday_alerted_codes.clear()
+        stock_tick_memory.clear()
+        if 'global_sector_heat' in globals():
+            globals()['global_sector_heat'].clear()
+            
         last_clear_date = now_date_str
 
     if not code or code in intraday_alerted_codes: return None
@@ -4195,23 +4609,25 @@ def process_tick_data(data, meta_info, top_ind):
         elif 1000 <= current_time_num < 1100: time_status = "cooling"
         else: time_status = "dead_water"
 
-        if code not in stock_tick_memory: stock_tick_memory[code] = []
+        if code not in stock_tick_memory:
+            stock_tick_memory[code] = []
         stock_tick_memory[code].append((now_ts, z, v, h, l))
-        
-        if len(stock_tick_memory[code]) > 30: stock_tick_memory[code].pop(0)
+
+        # 淨化：保留近 90 秒內的 Tick（純 4 空格縮排）
+        stock_tick_memory[code] = [t for t in stock_tick_memory[code] if now_ts - t[0] <= 90]
 
         ticks = stock_tick_memory[code]
-        if len(ticks) >= 6:
+        if len(ticks) >= 2:
             current_ts, current_z, current_v = ticks[-1][0], ticks[-1][1], ticks[-1][2]
             
+            if current_ts - ticks[0][0] < 40:
+                return None
+
             past_tick = ticks[0] 
             for t in reversed(ticks):
                 if current_ts - t[0] >= 50: 
                     past_tick = t
                     break
-            
-            if current_ts - ticks[0][0] < 40:
-                return None
 
             z_1m_ago, v_1m_ago = past_tick[1], past_tick[2]
             vol_1m = current_v - v_1m_ago
@@ -4245,7 +4661,7 @@ def process_tick_data(data, meta_info, top_ind):
                 if current_z <= best_bid:
                     filtered_overheated_codes.add(code) # 寫入防禦黑盒子
                     return None
-					
+                    
 
             # 💥 機構級核心升級：導入短線 EMA (指數移動平均線) 動能矩陣
             # 賦予近期價格更高權重，對轉折的敏感度遠大於傳統 MA
@@ -4416,6 +4832,123 @@ threading.Thread(target=instant_dispatcher_loop, daemon=True).start()
 
 
 
+def check_dynamic_ema_defense(stock_code, current_price):
+    """
+    🛡️ 第二階段擴充：高頻 EMA (5, 12) 與動態防禦網 (觸發式呼叫)
+    """
+    import requests, os
+    import pandas as pd
+    
+    fugle_token = os.environ.get('FUGLE_API_TOKEN', '').strip()
+    if not fugle_token:
+        return ""
+        
+    headers = {"X-API-KEY": fugle_token}
+    
+    try:
+        # 呼叫富果 5分K 歷史數據
+        url = f"https://api.fugle.tw/marketdata/v1.0/stock/intraday/candles/{stock_code}?timeframe=5"
+        res = requests.get(url, headers=headers, timeout=5)
+        
+        if res.status_code == 200:
+            data = res.json().get('data', [])
+            if not data or len(data) < 12:
+                return ""
+                
+            df = pd.DataFrame(data)
+            # 富果 K 線由新到舊，將其反轉為由舊到新
+            df = df.iloc[::-1].reset_index(drop=True) 
+            df['close'] = pd.to_numeric(df['close'])
+            
+            # 計算 EMA(5) 與 EMA(12)
+            df['EMA5'] = df['close'].ewm(span=5, adjust=False).mean()
+            df['EMA12'] = df['close'].ewm(span=12, adjust=False).mean()
+            
+            latest_ema5 = df.iloc[-1]['EMA5']
+            latest_ema12 = df.iloc[-1]['EMA12']
+            
+            # Lucid-Flex 動態判定邏輯
+            status_msg = ""
+            if current_price > latest_ema5 and latest_ema5 > latest_ema12:
+                status_msg = f"\n📈 轉折預判: 多頭排列 (5MA:{latest_ema5:.2f} 支撐強勢)"
+            elif current_price < latest_ema5 and current_price > latest_ema12:
+                status_msg = f"\n⚠️ 動能警報: 跌破 5MA (準備防禦/沿線拔檔)"
+            elif current_price < latest_ema12:
+                status_msg = f"\n🛑 趨勢反轉: 跌破 12MA (建議立即撤退)"
+            else:
+                status_msg = f"\n⚖️ 均線糾結: 籌碼換手中"
+                
+            return status_msg
+    except Exception:
+        pass
+    return ""
+
+
+def generate_treemap_image(heat_data):
+    """
+    負責將資金字典轉換為 Treemap 圖片並存檔 (紅綠漲跌幅進化版)
+    """
+    try:
+        # 💥 抓取全域的漲跌幅資料
+        change_data = globals().get('global_sector_change', {})
+        
+        # 抓取前 12 大吸金族群
+        sorted_sectors = sorted(heat_data.items(), key=lambda x: x[1], reverse=True)[:12]
+        if not sorted_sectors:
+            return False
+            
+        labels = []
+        sizes = []
+        colors = []
+        
+        for sector, val_wan in sorted_sectors:
+            val_yi = val_wan / 10000
+            
+            # 模糊比對找出該族群的漲跌幅 (解決富果與證交所名稱些微不同的問題)
+            chg_pct = 0.0
+            for k, v in change_data.items():
+                if k in sector or sector in k:
+                    chg_pct = v
+                    break
+                    
+            # 決定標籤文字與正負號 (例如: +2.5%)
+            sign = "+" if chg_pct > 0 else ""
+            labels.append(f"{sector}\n{val_yi:.1f}億\n{sign}{chg_pct}%")
+            sizes.append(val_wan)
+            
+            # 💥 台灣股市專屬紅綠上色邏輯
+            if chg_pct >= 2.0:
+                colors.append('#b91c1c') # 深紅 (強勢大漲)
+            elif chg_pct > 0:
+                colors.append('#ef4444') # 亮紅 (一般上漲)
+            elif chg_pct <= -2.0:
+                colors.append('#047857') # 深綠 (弱勢大跌)
+            elif chg_pct < 0:
+                colors.append('#10b981') # 亮綠 (一般下跌)
+            else:
+                colors.append('#64748b') # 灰色 (平盤或無資料)
+            
+        # 讀取繁體中文字體
+        font_path = 'custom_font.ttf'
+        myfont = FontProperties(fname=font_path)
+        
+        plt.figure(figsize=(10, 6))
+        
+        # 呼叫 squarify 畫出矩形式樹狀圖，套用動態 colors 陣列
+        squarify.plot(sizes=sizes, label=labels, color=colors, alpha=0.85,
+                      text_kwargs={'fontproperties': myfont, 'fontsize': 14, 'color': 'white', 'weight': 'bold'})
+        
+        plt.axis('off') # 隱藏座標軸
+        plt.tight_layout()
+        
+        # 將畫好的圖存檔
+        plt.savefig('heatmap.png', format='png', dpi=150, bbox_inches='tight')
+        plt.close()
+        return True
+    except Exception as e:
+        print(f"⚠️ 繪圖引擎異常: {e}", flush=True)
+        return False
+
 
 
 def continuous_radar_loop():
@@ -4460,20 +4993,26 @@ def continuous_radar_loop():
                         if event == "authenticated":
                             print("✅ 安全驗證通過！開始向機房發送訂閱請求...", flush=True)
                             symbols = list(stock_data_map.keys())
-                            chunk_size = 30
-                            for i in range(0, len(symbols), chunk_size):
-                                chunk = symbols[i:i+chunk_size]
-                                for sym in chunk:
-                                    subscribe_msg = {
-                                        "event": "subscribe",
-                                        "data": {
-                                            "channel": "trades",
-                                            "symbol": sym
+                            
+                            # 用獨立執行緒處理發送訂閱，避免主線程死鎖
+                            def async_subscribe():
+                                chunk_size = 30
+                                for i in range(0, len(symbols), chunk_size):
+                                    chunk = symbols[i:i+chunk_size]
+                                    for sym in chunk:
+                                        subscribe_msg = {
+                                            "event": "subscribe",
+                                            "data": {
+                                                "channel": "trades",
+                                                "symbol": sym
+                                            }
                                         }
-                                    }
-                                    ws.send(json.dumps(subscribe_msg))
-                                time.sleep(0.5)
-                            print(f"✅ 成功訂閱 {len(symbols)} 檔標的，進入零延遲監聽模式！", flush=True)
+                                        try: ws.send(json.dumps(subscribe_msg))
+                                        except: pass
+                                    time.sleep(0.5)
+                                print(f"✅ 成功訂閱 {len(symbols)} 檔標的，進入零延遲監聽模式！", flush=True)
+
+                            threading.Thread(target=async_subscribe, daemon=True).start()
                             return
 
                         # 接收即時成交報價
@@ -4490,25 +5029,77 @@ def continuous_radar_loop():
                                     bid = quote.get('bid', 0)
                                     ask = quote.get('ask', 0)
                                     
+                                    # 🔥 [擴充戰術] 微觀籌碼力道判定
+                                    power_type = "中性"
+                                    if ask > 0 and z >= ask:
+                                        power_type = "🔴外盤強攻"
+                                    elif bid > 0 and z <= bid:
+                                        power_type = "🟢內盤倒貨"
+
+                                    # 🛡️ 實戰防禦網：如果是瞬間大單 (例如單筆大於 50 張)，卻是砸在「內盤」
+                                    # 代表主力正在倒貨割韭菜，系統直接判定為誘多陷阱，阻擋後續發報！
+                                    if v >= 50 and power_type == "🟢內盤倒貨":
+                                        # 悄悄攔截，不驚動戰情室
+                                        return 
+                                        
                                     # trades 頻道專注於即時成交，未提供的歷史欄位暫以現價補齊防呆
+                                    # 從快取抓取真實昨收與開盤價，避免覆蓋後計算失真
+                                    stock_data = stock_data_map[code]
+                                    ref_y = float(stock_data.get('y') or stock_data.get('referencePrice', z))
+                                    open_o = float(stock_data.get('o') or stock_data.get('openPrice', z))
+
                                     formatted_data = {
-                                        'c': code, 'z': z, 'y': z, 'o': z, 'h': z, 'l': z, 'v': v, 'bid': bid, 'ask': ask
+                                        'c': code, 
+                                        'z': z, 
+                                        'y': ref_y,     # 正確帶入真實昨收
+                                        'o': open_o,    # 正確帶入開盤價
+                                        'h': z, 
+                                        'l': z, 
+                                        'v': v, 
+                                        'bid': bid, 
+                                        'ask': ask, 
+                                        'power': power_type
                                     }
                                     
                                     stock_data = stock_data_map[code]
-                                    alert_msg = process_tick_data(formatted_data, stock_data, global_true_market_top_ind)
                                     
+                                    # 🔥 [擴充戰術 3] 族群資金熱力追蹤引擎
+                                    # 動態建立全域變數，避免跨執行緒讀寫問題
+                                    if 'global_sector_heat' not in globals():
+                                        globals()['global_sector_heat'] = {}
+                                        
+                                    # 嘗試抓取該股票的產業類別 (若無則歸類為'未分類')
+                                    industry = stock_data.get('industry', stock_data.get('category', '未分類'))
+                                    
+                                    # 計算單筆成交金額 (單位：萬元)。股價(元) * 張數 * 1000 / 10000 = 股價 * 張數 * 0.1
+                                    trade_value_wan = z * v * 0.1 
+                                    
+                                    if industry and industry != '未分類':
+                                        globals()['global_sector_heat'][industry] = globals()['global_sector_heat'].get(industry, 0) + trade_value_wan
+                                    
+                                    alert_msg = process_tick_data(formatted_data, stock_data, global_true_market_top_ind)
+
                                     if alert_msg and alert_msg not in intraday_breakout_cache:
                                         intraday_breakout_cache.insert(0, alert_msg)
-                                        instant_fire_queue.append(alert_msg)
                                         
-                                        new_cache = read_cache()
-                                        new_cache["intraday_alerts"] = intraday_breakout_cache
-                                        update_cache(new_cache)
-                                        
-                                        try:
-                                            trigger_air_raid_alarm(f"🔥 {stock_data.get('name', code)} 爆量點火！", alert_msg)
-                                        except: pass
+                                        # 將 API 查詢與訊息推播丟入背景 Thread，不卡死 WebSocket
+                                        def async_alert_task(c_code, c_z, base_msg, p_type, name):
+                                            ema_status = check_dynamic_ema_defense(c_code, c_z)
+                                            final_msg = base_msg + ema_status if ema_status else base_msg
+                                            
+                                            instant_fire_queue.append(final_msg)
+                                            try:
+                                                new_cache = read_cache()
+                                                new_cache["intraday_alerts"] = intraday_breakout_cache
+                                                update_cache(new_cache)
+                                                trigger_air_raid_alarm(f"🔥 {name} 爆量點火！[{p_type}]", final_msg)
+                                            except: pass
+
+                                        threading.Thread(
+                                            target=async_alert_task, 
+                                            args=(code, z, alert_msg, power_type, stock_data.get('name', code)),
+                                            daemon=True
+                                        ).start()
                     except:
                         pass
 
