@@ -14,7 +14,6 @@ from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction, ImageSendMessage,
     JoinEvent, SourceGroup, FlexSendMessage, BubbleContainer, BoxComponent, ButtonComponent
 )
-
 from bs4 import BeautifulSoup
 import json
 import requests
@@ -37,16 +36,10 @@ import matplotlib.pyplot as plt
 import squarify
 from matplotlib.font_manager import FontProperties
 
-
 # ==========================================
 # 📊 盤後戰情 CSV 資料庫自動記錄晶片 (不死鳥重生版 - 時差校正修復)
 # ==========================================
 import csv
-import threading
-import datetime
-import time
-import requests
-import os
 
 def get_today_csv_name():
     """💥 動態獲取台灣時間 (UTC+8) 的正確檔名，拒絕被開機時間鎖死"""
@@ -136,117 +129,60 @@ def log_event(data):
 
 init_csv()
 
-
 # ==========================================================
-
 # 📰 情報偵蒐引擎：新聞與市場流向 
-
 # ==========================================================
-
 def fetch_cnyes_news():
-
     headers = {"User-Agent": "Mozilla/5.0"}
-
     try:
-
         url = "https://api.cnyes.com/media/api/v1/newslist/category/tw_stock?limit=3"
-
         res = requests.get(url, headers=headers, timeout=4).json()
-
         items = res.get("items", {}).get("data", [])
-
         news_list = []
-
         for item in items:
-
             title = item.get("title", "").strip()
-
             news_id = item.get("newsId")
-
             if title:
-
                 clean_title = title.replace('"', '').replace("'", "")
-
                 if news_id:
-
                     news_list.append(f"<a href='https://news.cnyes.com/news/id/{news_id}' target='_blank' style='color: #fda4af;'>📰 快訊：{clean_title}</a>")
-
                 else:
-
                     news_list.append(f"<span style='color: #fda4af;'>📰 快訊：{clean_title}</span>")
-
         return " ｜ ".join(news_list) + " ｜ " if news_list else ""
-
     except: return ""
 
-
-
-
-
 def get_market_leader():
-
     try:
-
         # 💥 升級頂級偽裝，徹底欺騙 Yahoo 防火牆
-
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-
         class_res = requests.get("https://tw.stock.yahoo.com/class-quote?sectorId=tw_stock_class", headers=headers, timeout=8)
-
-        soup = BeautifulSoup(class_res.text, 'html.parser')       
-
-
+        soup = BeautifulSoup(class_res.text, 'html.parser')        
 
         target_industries = ["半導體", "電腦及週邊", "電子零組件", "通信網路", "光電業", "生技醫療", "金融保險", "鋼鐵工業", "航運業", "建材營造"]
-
         leaderboard = {}        
 
-
-
         # 💥 終極殺招：把網頁所有可見文字抽出來排成一列！
-
-        texts = list(soup.stripped_strings)       
-
-
+        texts = list(soup.stripped_strings)        
 
         for ind in target_industries:
-
             for i, text in enumerate(texts):
-
                 if ind == text:
-
                     # 找到產業名稱後，直接往下檢查接下來的 15 個文字區塊
-
                     for j in range(1, 15):
-
                         if i + j < len(texts):
-
                             # 揪出包含 % 的漲跌幅數字
-
                             match = re.search(r'([+-]?\d+\.\d+)%', texts[i+j])
-
                             if match:
-
                                 leaderboard[ind] = float(match.group(1))
-
                                 break # 抓到數字就換下一個產業
-
                     if ind in leaderboard: break # 確保只抓一次                    
 
-
-
         if leaderboard:
-
             top = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)[0]
-
             ind_name = "電腦週邊" if "電腦" in top[0] else top[0]
-
             return f"🔥 資金主攻：【{ind_name}】({top[1]}%)"
-
     except: pass
-
     return "🔥 資金主攻：【半導體】(0.0%)"
-
 
 # ==========================================================
 # 🛡️ 戰術二：期交所籌碼防線與選擇權 PCR 掃描 (大盤多空防禦罩)
@@ -281,19 +217,12 @@ def fetch_taifex_pcr():
     except Exception as e:
         print(f"⚠️ 期交所 PCR 讀取受阻: {e}")
     return "🛡️ 選擇權 PCR: 待更新"
-    
-    
-
-
 
 app = Flask(__name__)
-
-
 
 # 💥 啟動戰情大廳通訊樞紐
 app.config['SECRET_KEY'] = 'shadow_base_secret_999'
 socketio = SocketIO(app, cors_allowed_origins="*")
-
 
 # ==========================================================
 # 💥 [擴充戰術] 開通熱力圖對外發送通道 (這裡就是正確位置！)
@@ -308,8 +237,6 @@ def serve_heatmap():
         return "Image not found", 404
 # ==========================================================
 
-
-
 # 🛡️ 戰術快取配置
 CACHE_FILE = "live_data_cache.json"
 VIP_CACHE_FILE = "radar_vips.json"  # 💥 新增：特戰隊員點名簿
@@ -322,52 +249,28 @@ def update_cache(data):
         pass
 
 def read_cache():
-
     if os.path.exists(CACHE_FILE):
-
         try:
-
             with open(CACHE_FILE, 'r', encoding='utf-8') as f:
-
                 return json.load(f)
-
         except:
-
             pass
-
     return {"fundsText": "⏳ 系統剛啟動，等待盤中數據同步...", "stocksText": "⏳ 系統剛啟動，等待盤中數據同步..."}
 
-
-
 # 💥 新增：讀取與寫入點名簿的專屬函數
-
 def read_vips():
-
     if os.path.exists(VIP_CACHE_FILE):
-
         try:
-
             with open(VIP_CACHE_FILE, 'r', encoding='utf-8') as f:
-
                 return json.load(f)
-
         except: pass
-
     return {}
 
-
-
 def update_vips(data):
-
     try:
-
         with open(VIP_CACHE_FILE, 'w', encoding='utf-8') as f:
-
             json.dump(data, f, ensure_ascii=False, indent=4)
-
     except: pass
-
-
 
 # ==========================================================
 # 🛡️ VIP 專屬自選股防護網：記憶晶片與存取模組
@@ -407,8 +310,6 @@ def remove_from_watchlist(user_id, stock_code):
         return True
     return False
 
-
-
 # ==========================================================
 # 🌐 全球跨國動態資金矩陣：24小時全景完全體爬蟲引擎 (含時間與戰報標籤)
 # ==========================================================
@@ -420,48 +321,35 @@ def fetch_global_matrix_data():
         # 🌐 頂級天候儀表板
         "SOX": "^SOX", "IXIC": "^IXIC", "DJI": "^DJI", "INX": "^GSPC",
         "TSM": "TSM", "VIX": "^VIX", "DXY": "DX-Y.NYB", "US10Y": "^TNX",
-
         # ⚙️ 戰區一：半導體與晶片
         "NVDA": "NVDA", "AMD": "AMD", "INTC": "INTC", "QCOM": "QCOM", "AVGO": "AVGO",
         "ARM": "ARM", "TXN": "TXN", "NXPI": "NXPI",
-
         # 🖥️ 戰區二：AI 伺服器
         "SMCI": "SMCI", "DELL": "DELL", "VRT": "VRT", "HPE": "HPE", "ANET": "ANET",
-
         # 📦 戰區三：先進封裝與設備
         "ASML": "ASML", "AMAT": "AMAT", "LRCX": "LRCX", "KLAC": "KLAC", "TER": "TER",
-
         # 📡 戰區四：光通訊與網通
         "MRVL": "MRVL", "LITE": "LITE", "CSCO": "CSCO", "COHR": "COHR",
-
         # 🛰️ 戰區五：低軌衛星
         "ASTS": "ASTS", "IRDM": "IRDM", "LMT": "LMT", "RKLB": "RKLB",
-
         # 💾 戰區六：記憶體
         "MU": "MU", "WDC": "WDC", "STX": "STX",
-
         # ☁️ 戰區七：雲端巨頭與軟體
         "AAPL": "AAPL", "GOOG": "GOOG", "META": "META", "AMZN": "AMZN",
         "MSFT": "MSFT", "NFLX": "NFLX", "ORCL": "ORCL", "CRM": "CRM", "PLTR": "PLTR",
-
         # ⚡ 戰區八：重電與能源
         "GE": "GE", "CAT": "CAT", "NEE": "NEE", "DOW": "DOW", "ETN": "ETN", "PWR": "PWR",
-
         # 🚗 戰區九：汽車與消費
         "TSLA": "TSLA", "GM": "GM", "F": "F", "NIKE": "NKE", "RIVN": "RIVN", "TM": "TM",
-
         # 🚢 戰區十：航運與原物料
         "ZIM": "ZIM", "XOM": "XOM", "CVX": "CVX", "BA": "BA", "UPS": "UPS", "FDX": "FDX",
-
         # 🏦 戰區十一：金融與支付
         "BRK-B": "BRK-B", "GS": "GS", "JPM": "JPM", "BAC": "BAC",
         "C": "C", "AXP": "AXP", "WFC": "WFC", "V": "V", "MA": "MA", "MS": "MS", "XLF": "XLF",
-
         # 🏥 戰區十二：生技與民生防禦
         "NBI": "^NBI", "JNJ": "JNJ", "MRK": "MRK", "PFE": "PFE",
         "UNH": "UNH", "PG": "PG", "WMT": "WMT", "HD": "HD",
         "KO": "KO", "MCD": "MCD", "DIS": "DIS", "MMM": "MMM", "LLY": "LLY", "COST": "COST",
-
         # 📈 期貨與加密貨幣
         "NQ": "NQ=F", "YM": "YM=F", "GC": "MGC=F", "CL": "MCL=F",
         "BTC": "BTC-USD", "ETH": "ETH-USD"
@@ -557,154 +445,78 @@ def get_global_matrix():
     return jsonify({}), 404
 
 # ==========================================================
-
 # 👇 請將這段「pCloud 雲端讀取當沖歷史」貼在這裡 👇
-
 # ==========================================================
-
 PCLOUD_INTRADAY_URL = "https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/intraday_cache.json"
 
-
-
 def read_intraday_cache():
-
     try:
-
         res = requests.get(f"{PCLOUD_INTRADAY_URL}?t={int(time.time())}", timeout=5)
-
         if res.status_code == 200:
-
             data = res.json()
-
             if isinstance(data, list):
-
                 print(f"✅ [pCloud 補給成功] 成功從雲端載入 {len(data)} 筆當沖發報歷史紀錄！", flush=True)
-
                 return data
-
     except Exception as e:
-
         print(f"⚠️ [pCloud 讀取提醒] 目前雲端尚無歷史紀錄或連線中斷: {e}", flush=True)
-
     return []
 
-
-
 # 啟動時從 pCloud 載入今日舊有的發報紀錄
-
 intraday_breakout_cache = read_intraday_cache()
 
-
-
 # ==========================================================
-
 # 🔑 1. API 金鑰與通訊參數設定 (雙彈匣火力升級)
-
 # ==========================================================
-
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN', 'SMvkBhzw64RpFhLGsaDRfzqPVPkxAk8HYLz+Pvy/kiVG/n3XkSNWOcPPyQkSpWrCcAj3+SmAaM1iopF9dz6TJdo6xyQwBv0soAzdn+Wdn3GC2YS+4m16cEzIW5pUTqO12JC6grdw6ktZ4wh3arR5+gdB04t89/1O/w1cDnyilFU=')
-
 LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET', '')
-
 IMGBB_API_KEY = os.environ.get('IMGBB_API_KEY', '') 
 
-
-
 # 💥 裝載二號機彈藥庫
-
 LINE_CHANNEL_ACCESS_TOKEN_2 = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN_2', 'cN+RyHUSVPVjN2E2pf7UZZXdE5Y/vX0fBU7YvOecr1EbEaJpIOn9Z/EVpquq5alZjD5FrCapigoT7Pjm4ibi/Rekp67d+h1NlFqV/okLDWQvhR9bUWp50YaoB0NKNQjUb1w2kt57uig9EGO3YkyLjAdB04t89/1O/w1cDnyilFU=')
-
 LINE_CHANNEL_SECRET_2 = os.environ.get('LINE_CHANNEL_SECRET_2', 'c5bed42c2d36c3f26d15a02e20439953')
 
-
-
 # 初始化兩把通訊槍管
-
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)     # 一號主戰機
-
 line_bot_api_2 = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN_2) # 二號備用機
 
-
-
 # 💥 雙彈匣自動切換發射引擎
-
 def smart_push_message(group_id, message):
-
     try:
-
         # 優先使用一號機發射
-
         line_bot_api.push_message(group_id, message)
-
     except Exception as e:
-
         print(f"⚠️ 一號機發射受阻 ({e})，自動切換二號機發射！", flush=True)
-
         try:
-
             # 一號機沒子彈或發生錯誤時，瞬間切換二號機補槍
-
             line_bot_api_2.push_message(group_id, message)
-
             print("🚀 二號機補槍發射成功！", flush=True)
-
         except Exception as e2:
-
             print(f"❌ 雙機皆發射失敗: {e2}", flush=True)
 
-
-
-
-
 # ==========================================================
-
 # 🌐 雲端動態彈藥庫同步器：從 pCloud 載入最新 tokens.json
-
 # ==========================================================
-
 PCLOUD_TOKENS_URL = "https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/tokens.json"
 
-
-
 def fetch_cloud_tokens():
-
     """讓雲端母艦動態從 pCloud 下載統帥在電腦新增的機器人清單"""
-
     try:
-
         res = requests.get(f"{PCLOUD_TOKENS_URL}?t={int(time.time())}", timeout=5)
-
         if res.status_code == 200:
-
             tokens_data = res.json()
-
             if isinstance(tokens_data, list) and len(tokens_data) > 0:
-
                 print(f"✅ [雲端彈藥庫同步] 成功從 pCloud 載入 {len(tokens_data)} 筆機器人金鑰！", flush=True)
-
                 return tokens_data
-
     except Exception as e:
-
         print(f"⚠️ [雲端彈藥庫警告] 無法從 pCloud 讀取 tokens.json，改用 Render 環境變數備援: {e}", flush=True)
-
     
-
     # 若雲端下載失敗的備援：讀取 Render 原本的環境變數
-
     fallback_tokens = []
-
     t1 = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN', '')
-
     if t1: fallback_tokens.append({"name": "一號機", "token": t1})
-
     t2 = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN_2', '')
-
     if t2: fallback_tokens.append({"name": "二號機", "token": t2})
-
     return fallback_tokens
-
-
 
 # 升級版：支援 pCloud 動態無限擴編與「群組自動偵測 (跨版本相容)」的發射樞紐
 def smart_push_with_menu(group_id, message_text):
@@ -757,107 +569,56 @@ def smart_push_with_menu(group_id, message_text):
         print(f"❌ [發射崩潰] 群組 {group_id} 查無可用的機器人，或所有駐紮機器人彈藥皆已耗盡！", flush=True)
 
 # ==========================================================
-
 # 💎 升級版：雙排高質感戰情快捷面板 (通用的 Flex 產生器)
-
 # ==========================================================
-
 def create_flex_menu_message(message_text):
-
     flex_content = BubbleContainer(
-
         body=BoxComponent(
-
             layout='vertical',
-
             contents=[
-
                 # 訊息本文
-
                 BoxComponent(
-
                     layout='vertical',
-
                     contents=[{
-
                         "type": "text",
-
                         "text": str(message_text)[:3000],
-
                         "wrap": True,
-
                         "size": "sm",
-
                         "color": "#f8fafc"
-
                     }],
-
                     padding_bottom="12px"
-
                 ),
-
                 # 第一排按鈕 (國際夜盤、尋找買點)
-
                 BoxComponent(
-
                     layout='horizontal',
-
                     spacing='sm',
-
                     contents=[
-
                         ButtonComponent(
-
                             action=MessageAction(label="🌍 國際夜盤", text="夜盤"),
-
                             style="secondary",
-
                             height="sm"
-
                         ),
-
                         ButtonComponent(
-
                             action=MessageAction(label="🎯 尋找買點", text="尋找買點"),
-
                             style="secondary",
-
                             height="sm"
-
                         )
-
                     ]
-
                 ),
-
                 # 第二排按鈕 (AI盤勢講評、盤後選股)
-
                 BoxComponent(
-
                     layout='horizontal',
-
                     spacing='sm',
-
                     margin="sm",
-
                     contents=[
-
                         ButtonComponent(
-
                             action=MessageAction(label="🧠 AI 盤勢講評", text="今日盤勢"),
-
                             style="secondary",
-
                             height="sm"
-
                         ),
-
                         ButtonComponent(
-
                             action=MessageAction(label="📊 盤後選股", text="盤後選股"),
-
                             style="secondary",
-
                             height="sm"
                         )
                     ]
@@ -906,8 +667,6 @@ def create_flex_menu_message(message_text):
     )
     return FlexSendMessage(alt_text="📊 股海觀浪戰情選單", contents=flex_content)
 
-
-
 # 🛡️ 統一回覆中繼站 (支援動態切換槍管)
 from flask import g
 
@@ -926,583 +685,279 @@ def smart_reply_with_menu(event, message_text):
     except Exception as e:
         print(f"⚠️ 回覆發送受阻: {e}", flush=True)
 
-        
-
-        
-
-
-
-
-
 gemini_keys = []
-
 if os.environ.get('GEMINI_API_KEY'): 
-
     gemini_keys.append(os.environ.get('GEMINI_API_KEY'))
-
 for i in range(1, 6):
-
     k = os.environ.get(f'GEMINI_API_KEY_{i}')
-
     if k: 
-
         gemini_keys.append(k)
-
 if gemini_keys: 
-
     key_cycle = itertools.cycle(gemini_keys)
 
 # ==========================================================
-
 # 📚 2. 台股資料庫初始化 (本地 JSON 優先版)
-
 # ==========================================================
-
 global_stock_dict = {}
-
 global_full_stock_list = []
 
-
-
 def get_stock_dict():
-
     global global_stock_dict, global_full_stock_list
-
     if len(global_stock_dict) > 0: 
-
         return global_stock_dict, global_full_stock_list
-
     
-
     # 1. 優先讀取與 botmain.py 同目錄的 all_stocks.json 檔案
-
     if os.path.exists("all_stocks.json"):
-
         try:
-
             with open("all_stocks.json", "r", encoding="utf-8") as f:
-
                 all_list = json.load(f)
-
                 for item in all_list:
-
                     sid = str(item.get("code", "")).strip()
-
                     name = str(item.get("name", "")).strip()
-
                     if sid and name:
-
                         global_stock_dict[name] = sid
-
                         global_stock_dict[sid] = sid
-
                         global_full_stock_list.append({"code": sid, "name": name})
-
                 print(f"✅ 成功從本地 JSON 載入全市場股票共 {len(global_full_stock_list)} 筆", flush=True)
-
                 return global_stock_dict, global_full_stock_list
-
         except Exception as e:
-
             print(f"⚠️ 讀取本地 all_stocks.json 失敗: {e}", flush=True)
 
-
-
     # 2. 如果本地檔案讀取失敗的備用防呆
-
     if len(global_stock_dict) == 0:
-
         backup_data = {
-
             "台積電": "2330", "鴻海": "2317", "聯發科": "2454", "群創": "3481",
-
             "台肥": "1722", "聯合再生": "3576", "友達": "2409", "長榮": "2603",
-
             "陽明": "2609", "萬海": "2615", "中鋼": "2002", "聯電": "2303"
-
         }
-
         for name, sid in backup_data.items():
-
             global_stock_dict[name] = sid
-
             global_stock_dict[sid] = sid
-
             global_full_stock_list.append({"code": sid, "name": name})
-
             
-
     return global_stock_dict, global_full_stock_list
 
-
-
 # 啟動時在背景預先載入全市場
-
 threading.Thread(target=get_stock_dict, daemon=True).start()
 
-
-
 # ==========================================================
-
 # 📈 3. [新增] 全市場基本面動能掃描引擎 (階段一核心)
-
 # ==========================================================
-
 revenue_history_cache = {}  # 記憶體：負責存放每檔股票上一期的期別
-
 fundamental_focus_cache = [] # 戰術狙擊區快取 (48小時內有變更)
-
 fundamental_full_cache = []  # 全域戰略區快取 (全市場 2000 檔)
 
-
-
-
-
-
-
 # ==========================================================
-
 # 🧠 [終極防空版] 重大訊息解碼獵犬 (金鑰與模型智慧防錯安全對接)
-
 # ==========================================================
-
 self_assessed_cache = []
 
-
-
 # 💥 設定 Gemini API (確保抓取 Render 環境變數)
-
 gemini_key = os.environ.get("GEMINI_API_KEY", "")
-
 if not gemini_key or "請將您的" in gemini_key:
-
     print("⚠️ [致命警告] Render 環境變數中的 GEMINI_API_KEY 似乎為空或未正確設定！", flush=True)
-
 else:
-
     genai.configure(api_key=gemini_key)
 
-
-
 def init_strategic_ai():
-
     """💥 智慧型模型掛載引擎：多波段嘗試，全面封殺 404 錯誤"""
-
     # 按照 2026 最新標準、相容性、歷史穩健度排序的代號陣列
-
     model_candidates = [
-
         'gemini-1.5-flash',       # 優先順位 1：目前最高效、最廣泛支援的 Flash 模型
-
         'gemini-1.5-pro',         # 優先順位 2：高階分析模型
-
         'gemini-2.5-flash',       # 優先順位 3：新世代 Flash 規格
-
         'gemini-pro'              # 優先順位 4：經典款相容模型
-
     ]
-
     
-
     # 戰術偵察：嘗試列出所有官方授權給這把金鑰的武器清單
-
     try:
-
         print("🔍 [AI 兵器庫掃描] 正在盤點當前金鑰可用模型...", flush=True)
-
         available_list = []
-
         for m in genai.list_models():
-
             if 'generateContent' in getattr(m, 'supported_generation_methods', []):
-
                 clean_name = m.name.replace('models/', '')
-
                 available_list.append(clean_name)
-
                 print(f"  ✅ 官方授權武器: {clean_name}", flush=True)
-
         
-
         # 如果官方清單有東西，直接用清單裡最匹配的
-
         for candidate in model_candidates:
-
             if candidate in available_list:
-
                 print(f"🎯 [自動尋標成功] 優先匹配到授權清單中的引擎: {candidate}", flush=True)
-
                 return genai.GenerativeModel(candidate)
-
     except Exception as e:
-
         print(f"⚠️ [兵器庫掃描受阻] 無法讀取官方清單 ({e})，轉入強制暴力掛載程序...", flush=True)
 
-
-
     # 暴力掛載程序：如果清單讀不到，就由程式碼一個一個去敲門，直到成功為止
-
     for model_name in model_candidates:
-
         try:
-
             print(f"🚀 正在嘗試強行掛載型號: {model_name} ...", flush=True)
-
             test_model = genai.GenerativeModel(model_name)
-
             # 發射一發極短的空包彈，測試 Google 伺服器會不會報 404
-
             test_model.generate_content("ping", generation_config={"max_output_tokens": 1})
-
             print(f"🔥 [強行掛載成功] 引擎 {model_name} 通訊測試完全正常！", flush=True)
-
             return test_model
-
         except Exception as e:
-
-            print(f"  ❌ 型號 {model_name} 宣告失敗或不支援: {e}", flush=True)
-
-            
+            print(f"  ❌ 型號 {model_name} 宣告失敗或不支援: {e}", flush=True)            
 
     # 最終防線：如果全部慘遭拒絕，預設掛載最基礎的 flash，避免後續程式碼死機
-
     print("🚨 [嚴重警報] 所有候選模型皆無法通過通訊測試！強制掛載預設防護裝甲。", flush=True)
-
     return genai.GenerativeModel('gemini-1.5-flash')
 
-
-
 # 💥 執行智慧掛載，並將結果交付給戰情室主要 AI 大腦
-
 ai_model = init_strategic_ai()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def fetch_material_info():
-
     global self_assessed_cache, ai_model  # 💥 修正：允許函數內部重新組裝 AI 槍管
-
     print("🕵️‍♂️ [AI 獵犬] 開始掃描全市場重大訊息...", flush=True)
-
     try:
-
         headers = {"User-Agent": "Mozilla/5.0"}
-
         urls = [
-
             "https://openapi.twse.com.tw/v1/opendata/t187ap04_L", 
-
             "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap04_O" 
-
         ]
-
         
-
         raw_data = []
-
         for url in urls:
-
             try:
-
                 res = requests.get(url, headers=headers, timeout=10)
-
                 if res.status_code == 200:
-
                     raw_data.extend(res.json())
-
             except: pass
 
-
-
         news_list = []
-
         for item in raw_data:
-
             # 無塵室淨化欄位
-
             clean_item = {str(k).strip(): v for k, v in item.items()}
-
             
-
             subject = str(clean_item.get("主旨", clean_item.get("Subject", clean_item.get("SPOKE_TITLE", ""))))
-
             desc = str(clean_item.get("說明", clean_item.get("Description", clean_item.get("CONTENT", ""))))
-
             code = str(clean_item.get("公司代號", clean_item.get("Code", clean_item.get("CO_ID", ""))))
-
             name = str(clean_item.get("公司名稱", clean_item.get("Name", clean_item.get("CO_NAME", ""))))
-
             date_str = str(clean_item.get('發言日期', clean_item.get('SpkDate', clean_item.get('SPOKE_DATE', ''))))
-
             time_str = str(clean_item.get('發言時間', clean_item.get('SpkTime', clean_item.get('SPOKE_TIME', ''))))
-
             full_date = f"{date_str} {time_str}".strip()
-
             
-
             # 🛡️ 戰術過濾：精準鎖定「注意股」與「自結財報」
-
             if "注意" in subject or "自結" in subject or "EPS" in subject or "盈餘" in subject:
-
                 eps_match = re.search(r'(?:每股盈餘|EPS|每股虧損|每股盈餘\(虧損\)).*?([+-]?\d+\.\d+)', desc, re.IGNORECASE)
-
                 eps_val = float(eps_match.group(1)) if eps_match else 0.0
 
-
-
-                
-
                 # 💥 新增：防空攔截網，如果股票代碼是空白的，直接跳過不浪費子彈！
-
                 if not code.strip():
-
                     continue
 
-
-
                 # 只要符合條件，立刻呼叫 Gemini 進行深度解析！
-
                 if eps_val != 0.0 or "注意" in subject:
-
-                    
-
                     print(f"🤖 [AI 啟動] 正在分析 {code} {name} 的重大訊息...", flush=True)
-
                     
-
                     ai_rating = "⚪ 中性看待"
-
                     ai_analysis = "系統正在讀取原始公告..."
-
                     last_year_eps = "-"
-
                     yoy_eps = "-"
-
                     turnaround = "-"
-
                     est_yearly = "-"
-
                     
-
                     # 💥 這裡開始是全新的：重試機制與自動換彈匣系統
-
                     max_retries = 3
-
                     for attempt in range(max_retries):
-
                         try:
-
                             import time
-
                             # 將基礎冷卻時間稍微拉長至 6 秒，穩定射速
-
                             time.sleep(6) 
-
                             
-
                             # 💥 對 Gemini 下達戰術萃取指令
-
                             prompt = f"""
-
                             你是一位頂尖台股分析師。請閱讀以下重大訊息，並以 JSON 格式輸出萃取結果。
-
                             如果內文中找不到對應數字，請填 "-"。務必只輸出 JSON 格式，不要其他廢話。
-
                             格式要求：
-
                             {{
-
                               "last_year_eps": "去年同月或同期EPS(數字)",
-
                               "yoy_eps_growth": "EPS年增率(字串，包含%)",
-
                               "turnaround": "是否轉虧為盈(是/否/持續虧損/持續獲利)",
-
                               "est_yearly_eps": "預估全年EPS(數字或字串)",
-
                               "ai_rating": "評級(🔴 強烈買進 / 🟡 值得觀察 / 🟢 需要小心 / ⚪ 中性看待)",
-
                               "ai_analysis": "用四個段落(營運現況、獲利分析、產業風險、綜合評估)撰寫約200字白話文解析"
-
                             }}
-
                             重大訊息內容：{desc}
-
                             """
-
                             response = ai_model.generate_content(prompt)
-
                             
-
                             # 嘗試解析 AI 回傳的 JSON (去除可能的 markdown 標記)
-
                             res_text = response.text.replace('```json', '').replace('```', '').strip()
-
                             ai_data = json.loads(res_text)
-
                             
-
                             ai_rating = ai_data.get("ai_rating", ai_rating)
-
                             ai_analysis = ai_data.get("ai_analysis", ai_analysis)
-
                             last_year_eps = ai_data.get("last_year_eps", "-")
-
                             yoy_eps = ai_data.get("yoy_eps_growth", "-")
-
                             turnaround = ai_data.get("turnaround", "-")
-
                             est_yearly = ai_data.get("est_yearly_eps", "-")
-
                             print(f"✅ [AI 成功] {code} 財報數據萃取完畢！", flush=True)
-
                             
-
                             break # 💥 成功萃取，跳出重試迴圈
-
                             
-
                         except Exception as e:
-
                             err_str = str(e)
-
                             if "429" in err_str:
-
                                 print(f"⚠️ [429 資源耗盡] 第 {attempt+1} 次嘗試失敗。自動切換備用金鑰...", flush=True)
-
                                 try:
-
                                     # 抓取下一把備用金鑰並重新配置
-
                                     next_key = next(key_cycle)
-
                                     genai.configure(api_key=next_key)
-
                                     
-
                                     # 📍 統帥，就是這一行！重新上膛！拿新的金鑰重新組裝槍管！
-
                                     ai_model = genai.GenerativeModel('gemini-2.5-flash')
-
                                     
-
                                     time.sleep(2) # 換彈匣稍等 2 秒
-
                                 except:
-
                                     print("⚠️ [彈匣警告] 無法切換，請確保 Render 已設定 GEMINI_API_KEY_1~5", flush=True)
-
                                     time.sleep(5) # 沒子彈只能硬等冷卻
-
                             else:
-
                                 print(f"⚠️ [AI 解析失敗] {e}", flush=True)
-
                                 break # 若非 429 錯誤，直接放棄這檔標的
 
-
-
                     news_list.append({
-
                         "date": full_date,
-
                         "code": code,
-
                         "name": name,
-
                         "subject": subject,
-
                         "eps": eps_val,
-
                         "desc": desc[:300],
-
                         # 💥 把 AI 算出來的精華數據包裝進去！
-
                         "ai_rating": ai_rating,
-
                         "ai_analysis": ai_analysis,
-
                         "last_year_eps": last_year_eps,
-
                         "yoy_eps": yoy_eps,
-
                         "turnaround": turnaround,
-
                         "est_yearly": est_yearly
-
                     })
-
                     
-
         # 歷史記憶裝甲
-
         existing_subjects = [item["subject"] for item in self_assessed_cache]
-
         for new_item in news_list:
-
             if new_item["subject"] not in existing_subjects:
-
                 self_assessed_cache.insert(0, new_item)
-
                 
-
         self_assessed_cache = self_assessed_cache[:60]
-
         
-
     except Exception as e:
-
         print(f"⚠️ [解碼獵犬] 執行異常: {e}", flush=True)
 
-
-
-
-
 def fetch_fundamental_data():
-
     global revenue_history_cache, fundamental_focus_cache, fundamental_full_cache
-
     import sys
-
     import time
-
     try:
-
         print("📡 [基本面引擎] 啟動全市場財報與估值掃描 (終極雙向逆向演算版)...", flush=True) 
-
         
-
         headers = {
-
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-
             "Accept": "application/json",
-
             "Connection": "keep-alive"
-
         }
 
-
-
-
-
-# 🛡️ 將您剛剛複製的 Google Apps Script 網址貼在下方引號內
-
+        # 🛡️ 將您剛剛複製的 Google Apps Script 網址貼在下方引號內
         GAS_URL = "https://script.google.com/macros/s/AKfycbxaWJMbteJXq-rOwT7r6dlXq1rDSPgL6hoO2djKoregMZZIWx8WZjadMI9fnTKjTDOCXg/exec"
-
-
 
         def fetch_api_list(url):
             import time
@@ -1522,7 +977,6 @@ def fetch_fundamental_data():
                 try:
                     # 🚀 終極戰術：不分上市上櫃，全部透過 Google 星鏈跳板 (GAS) 進行全域代理！
                     request_url = f"{GAS_URL}?url={url}"
-
                     res = requests.get(request_url, headers=safe_headers, timeout=45, verify=False)
                     
                     if res.status_code == 200:
@@ -1538,513 +992,250 @@ def fetch_fundamental_data():
             # 如果 3 次衝鋒都失敗，才宣告撤退
             return []
 
-
-
-
-
         # 1. 抓取營收
-
         twse_data = fetch_api_list("https://openapi.twse.com.tw/v1/opendata/t187ap05_L")
-
         for d in twse_data: d["市場別"] = "上市"
-
         time.sleep(0.5)
-
-
 
         tpex_data = fetch_api_list("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O")
-
         for d in tpex_data: d["市場別"] = "上櫃"
-
         time.sleep(0.5)
-
         
-
         all_data = twse_data + tpex_data
-
         
-
         # 2. 抓取 EPS、季營收、EPS期別 (💥 加入萬能模糊掃描)
-
         eps_map = {}
-
         eps_period_map = {}
-
         q_rev_map = {}
-
         
-
         def extract_eps_info(e):
-
             c = ""
-
             for k in ["公司代號", "SecuritiesCompanyCode", "Code", "code"]:
-
                 if k in e: c = str(e[k]).strip(); break
-
             if not c: return
-
             
-
             eps = "-"
-
             for k in ["基本每股盈餘（元）", "基本每股盈餘(元)", "基本每股盈餘", "EPS", "eps"]:
-
                 if k in e: eps = str(e[k]).strip(); break
-
                     
-
             y = ""; q = ""
-
             for k in ["年度", "year", "Year"]:
-
                 if k in e: y = str(e[k]).strip(); break
-
             for k in ["季別", "quarter", "Quarter", "Q"]:
-
                 if k in e: q = str(e[k]).strip(); break
-
                 
-
             period = f"{y}Q{q}" if y and q else "-"
-
             
-
             q_rev = "-"
-
             for k in ["營業收入", "Revenue", "revenue"]:
-
                 if k in e: q_rev = str(e[k]).strip(); break
-
             
-
             if eps != "-": eps_map[c] = eps
-
             if period != "-": eps_period_map[c] = period
-
             if q_rev != "-": q_rev_map[c] = q_rev
 
-
-
         for e in fetch_api_list("https://openapi.twse.com.tw/v1/opendata/t187ap14_L"): extract_eps_info(e)
-
         time.sleep(0.5)
-
         for e in fetch_api_list("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap14_O"): extract_eps_info(e)
-
         time.sleep(0.5)
-
-
 
         # 3. 抓取本益比 (💥 加入萬能大小寫相容)
-
         pe_map = {}
-
         for p in fetch_api_list("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_d"):
-
             c = str(p.get("Code", "")).strip()
-
             for k in ["PEratio", "PERatio", "PeRatio", "本益比"]:
-
                 if k in p: pe_map[c] = str(p[k]).strip(); break
-
         time.sleep(0.5)
-
         
-
         for p in fetch_api_list("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis"):
-
             c = ""
-
             for k in ["SecuritiesCompanyCode", "公司代號", "Code"]:
-
                 if k in p: c = str(p[k]).strip(); break
-
             if c:
-
                 for k in ["PERatio", "PEratio", "PeRatio", "本益比"]:
-
                     if k in p: pe_map[c] = str(p[k]).strip(); break
-
         time.sleep(0.5)
-
-
 
         # 4. 抓取全市場今日收盤價與起漲價
-
         price_map = {}
-
         chg_pct_map = {}
-
         open_map = {}
-
         
-
         for p in fetch_api_list("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"):
-
             c = str(p.get("Code", "")).strip()
-
             try:
-
                 cp = float(p.get("ClosingPrice", 0))
-
                 cv = float(p.get("Change", 0))
-
                 op = str(p.get("OpeningPrice", "-"))
-
                 prev = cp - cv
-
                 pct = round((cv / prev) * 100, 2) if prev > 0 else 0
-
                 price_map[c] = f"{cp:.2f}"
-
                 chg_pct_map[c] = f"{pct}"
-
                 open_map[c] = op if op.strip() != "" else "-"
-
             except: pass
-
         time.sleep(0.5)
-
                 
-
         for p in fetch_api_list("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes"):
-
             c = ""
-
             for k in ["SecuritiesCompanyCode", "公司代號", "Code"]:
-
                 if k in p: c = str(p[k]).strip(); break
-
             if c:
-
                 try:
-
                     cp = float(p.get("Close", 0))
-
                     cv = float(p.get("Change", 0))
-
                     op = str(p.get("Open", "-"))
-
                     prev = cp - cv
-
                     pct = round((cv / prev) * 100, 2) if prev > 0 else 0
-
                     price_map[c] = f"{cp:.2f}"
-
                     chg_pct_map[c] = f"{pct}"
-
                     open_map[c] = op if op.strip() != "" else "-"
-
                 except: pass
 
-
-
-
-
         # ==========================================================
-
         # 👇 動作 1 (修正版)：抓取證交所官方月均價 (20MA近似值)
-
         # ==========================================================
-
         ma20_map = {}
-
         for p in fetch_api_list("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL"):
-
             c = str(p.get("Code", "")).strip()
-
             # 官方正確的月均價欄位名稱為 MonthlyAveragePrice
-
             ma20_map[c] = str(p.get("MonthlyAveragePrice", "-")).strip()
-
         time.sleep(0.5)
-
-
-
         # ==========================================================
-
         # 👆 👆 👆 動作 1：插入結束 👆 👆 👆
-
         # ==========================================================
 
-
-
-
-
-
-
         # ==========================================================
-
         # 💥 動作 1.5 (本機算力流)：讀取統帥從本機送上來的 pCloud 上櫃均線補給包
-
         # ==========================================================
-
         try:
-
             # 加入時間戳防止雲端快取抓到舊檔
-
             pcloud_ma20_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/ma20_cache.json?t={int(time.time())}"
-
             res_ma20 = requests.get(pcloud_ma20_url, headers=headers, timeout=5)
-
             if res_ma20.status_code == 200:
-
                 local_ma20_data = res_ma20.json()
-
                 # 將本機算出來的數值，融合進字典中 (不覆蓋已有的上市準確資料)
-
                 for code, val in local_ma20_data.items():
-
                     if code not in ma20_map or ma20_map[code] == "-":
-
                         ma20_map[code] = val
-
                 print(f"✅ [本機支援成功] 成功從 pCloud 讀取並融合了 {len(local_ma20_data)} 筆均線資料！", flush=True)
-
         except Exception as e:
-
             print(f"⚠️ [本機支援未連線] 無法讀取 pCloud 均線補給包: {e}", flush=True)
-
         # ==========================================================
-
-
-
-
 
         temp_focus = []
-
         temp_full = []
-
         
-
         for item in all_data:
-
             code = str(item.get("公司代號", "")).strip()
-
             if not code: continue
-
             
-
             period = item.get("資料年月", "") 
-
             raw_date = item.get("出表日期", "-") 
-
             
-
             # 強制將分頁六的資料日期，更新為系統最新掃描的今天日期
-
             import datetime
-
             data_date = datetime.datetime.now().strftime("%Y-%m-%d")
 
-
-
             rev_current = item.get("營業收入-當月營收", item.get("當月營收", "0"))
-
             mom = item.get("營業收入-上月比較增減(%)", item.get("上月比較增減(%)", "0"))
-
             yoy = item.get("營業收入-去年同月增減(%)", item.get("去年同月增減(%)", "0"))
-
             
-
             is_new_release = False
-
             if revenue_history_cache.get(code) is not None and revenue_history_cache.get(code) != period:
-
                 is_new_release = True
-
             revenue_history_cache[code] = period
-
             
-
             pe_str = pe_map.get(code, "-")
-
             eps_str = eps_map.get(code, "-")
-
             eps_period_str = eps_period_map.get(code, "-")
-
             close_str = price_map.get(code, "-")
 
-
-
-
-
             # 👇 動作 2：在這裡補上演算法 👇
-
             # 💥 神級虧轉盈判定演算法 (本季賺錢，但四季總和為負無本益比)
-
             is_turnaround = False
-
             try:
-
                 if eps_str != "-" and float(eps_str) > 0 and pe_str == "-":
-
                     is_turnaround = True
-
             except:
-
                 pass
-
             
-
             ma20_str = ma20_map.get(code, "-")
-
             # 👆 動作 2 結束 👆
 
-
-
-
-
             # 💥 終極雙向逆向演算：你沒給資料，我系統自己算！
-
             # 1. 政府沒給 EPS，用「收盤價 ÷ 本益比」硬算！
-
             if eps_str == "-" and pe_str != "-" and close_str != "-":
-
                 try:
-
                     pe_val = float(pe_str)
-
                     close_val = float(close_str)
-
                     if pe_val > 0:
-
                         eps_str = f"{(close_val / pe_val):.2f}"
-
                 except: pass
-
                 
-
             # 💥 2. 政府沒給本益比，用「收盤價 ÷ EPS」硬算！
-
             if pe_str == "-" and eps_str != "-" and close_str != "-":
-
                 try:
-
                     eps_val = float(eps_str)
-
                     close_val = float(close_str)
-
                     if eps_val > 0:
-
                         pe_str = f"{(close_val / eps_val):.2f}"
-
                 except: pass
-
-
 
             # 💥 3. 容錯填補：如果算出了 EPS 但期別漏了，補上文字
-
             if eps_period_str == "-" and eps_str != "-":
-
                 eps_period_str = "最新財報"
 
-
-
             stock_info = {
-
                 "code": code,
-
                 "name": item.get("公司名稱", ""),
-
                 "ind": item.get("產業別", "未知產業"),
-
                 "market": item.get("市場別", "未知"),
-
                 "period": period,
-
                 "data_date": data_date,             
-
                 "revenue": rev_current,
-
                 "q_rev": q_rev_map.get(code, "-"),  
-
                 "mom": mom,
-
                 "yoy": yoy,
-
                 "eps": eps_str,
-
-                "eps_period": eps_period_str,       
-
+                "eps_period": eps_period_str,        
                 "pe": pe_str,
-
                 "close": close_str,
-
                 "open": open_map.get(code, "-"),
-
                 "chg": chg_pct_map.get(code, "-"),
-
                 "is_new": is_new_release,
-
                 # 👇 動作 3：補上這兩行 👇
-
                 "turnaround": is_turnaround,  # 💥 新增虧轉盈標記
-
                 "ma20": ma20_str              # 💥 新增 20MA 數值
-
             }
-
             
-
             temp_full.append(stock_info)
-
             if is_new_release: temp_focus.append(stock_info)
-
                 
-
         fundamental_full_cache.clear()
-
         fundamental_full_cache.extend(temp_full)
-
         if len(temp_focus) > 0: fundamental_focus_cache = temp_focus
 
-
-
         current_cache = read_cache()
-
         current_cache["fundamental_focus"] = fundamental_focus_cache
-
         current_cache["fundamental_full"] = fundamental_full_cache
-
         update_cache(current_cache)
-
         print("✅ [基本面引擎] 財報與股價數據已成功寫入！", flush=True)
-
         
-
     except Exception as e:
-
         print(f"❌ [基本面引擎] 發生嚴重錯誤: {e}", flush=True)
 
-
-
 # 每 60 分鐘掃描一次政府資料庫
-
 def fundamental_patrol_loop():
-
     while True:
-
         fetch_fundamental_data()
-
         fetch_material_info() # 💥 放狗咬人！抓取重大訊息
-
         
-
         # 💥 將獵犬抓到的資料，寫入 live_data_cache.json 給前端讀取
-
         current_cache = read_cache()
-
         current_cache["self_assessed_news"] = self_assessed_cache
-
         update_cache(current_cache)
-
         
-
         time.sleep(3600)
-
-
 
 # ==========================================================
 # 📊 4. 雙通道個股即時行情分析中心 (含扣抵推演與雲端 K 線繪圖)
@@ -2154,290 +1345,140 @@ def fetch_realtime_data(stock_code):
     # 現在回傳 tuple (文字報告, 圖片網址)
     return f"{yahoo_price}\n{yahoo_ma}", imgbb_url
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ==========================================================
-
 # ⚖️LINE群組 回應股票查詢 多維度動態計分（趨勢結構、籌碼量價、風險評估）與操盤手戰略方針的核心邏輯
-
 # ==========================================================
-
-
 
 def generate_professional_analysis(stock_name, stock_code, realtime_str, current_price, ma5, ma20, volume, chip_status):
-
     score = 50 
-
     signals = []
-
     
-
     # 追蹤各項目的得分/扣分明細以供顯示
-
     trend_score_text = "0 分（均線糾結 / 震盪整理）"
-
     chip_score_text = "0 分（籌碼結構相對平穩）"
-
     volume_score_text = "0 分（量能相對沉寂）"
 
-
-
     # 1. 均線與趨勢結構判斷
-
     if current_price > ma5 and ma5 > ma20:
-
         score += 20
-
         trend_text = "🟢 多頭排列（短中均線向上，強勢格局）"
-
         trend_score_text = "+20 分（多頭排列）"
-
     elif current_price < ma5 and ma5 < ma20:
-
         score -= 20
-
         trend_text = "🔴 空頭排列（均線下彎，短線弱勢）"
-
         trend_score_text = "-20 分（空頭排列）"
-
     else:
-
         trend_text = "🟡 均線糾結 / 震盪整理格局"
-
         
-
     # 2. 籌碼與主力意圖判斷
-
     if "大戶放量攻擊" in chip_status or "強勢" in chip_status:
-
         score += 25
-
         signals.append("🔥 主力大戶積極進駐，具備上攻動能")
-
         chip_score_text = "+25 分（大戶放量攻擊）"
-
     elif "鬆動" in chip_status:
-
         score -= 15
-
         signals.append("⚠️ 籌碼有鬆動跡象，留意短線賣壓")
-
         chip_score_text = "-15 分（籌碼鬆動）"
-
     else:
-
         signals.append("⚖️ 籌碼結構相對平穩，多空拔河中")
-
         
-
     # 3. 量價結構評估
-
     if volume > 100000: 
-
         signals.append("📊 量能顯著放大，市場關注度高")
-
         volume_score_text = "+15 分（量能顯著放大）"
-
         score += 15 
-
     else:
-
         signals.append("💤 量能相對沉寂，處於等待變盤階段")
-
-
 
     score = max(0, min(100, score))
 
-
-
     # 4. 智慧支撐壓力計算
-
     if current_price > 0:
-
         pivot = current_price
-
         resistance_1 = round(pivot * 1.015, 2)  # 上檔壓力 (+1.5%)
-
         support_1 = round(pivot * 0.985, 2)     # 下檔支撐 (-1.5%)
-
     else:
-
         resistance_1, support_1 = 0, 0
 
-
-
     # 5. 綜合操盤手建議產出
-
     if score >= 75:
-
         action_advice = "🔥 【操盤手戰略：偏多狙擊】多方結構扎實，可沿關鍵支撐分批佈局，嚴守停損。"
-
     elif score <= 40:
-
         action_advice = "🛑 【操盤手戰略：保守觀望】短線趨勢偏弱，切勿盲目接刀，建議等帶量突破再說。"
-
     else:
-
         action_advice = "⚖️ 【操盤手戰略：區間應對】目前多空不明、處於橫盤整理，適合在上下檔支撐壓力間操作。"
 
-
-
     report = (
-
         f"🎯 【專業操盤手立體戰情室】\n"
-
         f"📌 標的：{stock_name} ({stock_code})\n"
-
         f"--------------------------\n"
-
         f"{realtime_str}\n"
-
         f"--------------------------\n"
-
         f"🔍 【多維度深度審查與計分明細】\n"
-
         f"• 趨勢結構：{trend_text} ｜ {trend_score_text}\n"
-
         f"• 籌碼動向：{chip_score_text}\n"
-
         f"• 量能狀態：{volume_score_text}\n"
-
         f"• 籌碼量價細節：{' ｜ '.join(signals)}\n"
-
         f"• 實戰攻防：上檔壓力約 {resistance_1} ｜ 下檔支撐約 {support_1}\n"
-
         f"• 綜合評分：{score} 分（基準 50 分 ｜ 中立區）\n"
-
         f"--------------------------\n"
-
         f"💡 【評分說明】：本系統以 50 分為多空分水嶺（>75分偏多狙擊，<40分保守觀望）。50 分代表當下多空膠著、處於平衡或整理期，非系統故障。\n"
-
         f"--------------------------\n"
-
         f"{action_advice}"
-
     )
-
     return report
 
-
-
-
-
 # ==========================================================
-
 # 🚀 5. 全市場真實資金流向排行與精選戰報交集過濾引擎
-
 # ==========================================================
-
 # 新增一個全域變數來儲存今日資金主攻族群
-
 global_true_market_top_ind = ""
 
-
-
 def execute_force_refresh():
-
     global global_true_market_top_ind # 宣告使用全域變數
-
     headers = {"User-Agent": "Mozilla/5.0"}
-
     # 💥 預先定義所有變數，防止 NameError
-
     twii_chg = 0.0
-
     true_market_top_ind = "半導體"
-
     true_market_top_chg = 0.0
-
     ai_payload = [] # 確保它永遠存在，即使後面出錯也不會崩潰
-
     
-
     try:
-
         # 1. 大盤偵蒐
-
         try:
-
             yh_res = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?range=1d&interval=1d", headers=headers, timeout=5).json()
-
             meta = yh_res['chart']['result'][0]['meta']
-
             twii_chg = ((meta['regularMarketPrice'] - meta['chartPreviousClose']) / meta['chartPreviousClose']) * 100
-
         except: pass
 
-
-
         # 2. 資金流向排行 (💥 升級：台灣證交所官方 API 直連引擎)
-
         try:
-
             # 官方各類股指數代碼對照表
-
             target_indices = {
-
                 "t24": "半導體", "t25": "電腦週邊", "t28": "電子零組件", "t27": "通信網路",
-
                 "t26": "光電業", "t22": "生技醫療", "t17": "金融保險", "t10": "鋼鐵工業",
-
                 "t21": "航運業", "t20": "建材營造"
-
             }
-
             # 組合雷達頻道
-
             channels = "|".join([f"tse_{code}.tw" for code in target_indices.keys()])
-
             api_url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={channels}&_={int(time.time() * 1000)}"
-
             
-
             res = requests.get(api_url, timeout=5).json()
-
             leaderboard = {}
-
             
-
             if 'msgArray' in res:
-
                 for data in res['msgArray']:
-
                     code = data.get('c') # 取得官方代號
-
                     name = target_indices.get(code)
-
                     z_str, y_str = data.get('z', '-'), data.get('y', '-')
-
                     
-
                     if name and z_str != '-' and y_str != '-':
-
                         z, y = float(z_str), float(y_str)
-
                         if y > 0:
-
                             # 精準計算漲跌幅
-
                             leaderboard[name] = round(((z - y) / y) * 100, 2)
-
                             
-
             if leaderboard:
-
                 # 排序找出真正的資金主攻榜首
                 top = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)[0]
                 true_market_top_ind = top[0]
@@ -2446,51 +1487,28 @@ def execute_force_refresh():
                 # 💥 [擴充戰術] 將各族群漲跌幅寫入全域變數，供熱力圖上色使用！
                 globals()['global_sector_change'] = leaderboard
                 
-
         except: pass    
 
-
-
         # 3. 戰報對齊與快取寫入 (技術面監控名單保持運作)
-
         json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={time.time()}"
-
         res_json = requests.get(json_url, headers=headers, timeout=10)
-
         
-
         if res_json.status_code == 200:
-
             raw_data = res_json.json()
-
             if isinstance(raw_data, list):
-
                 # 💥 修正：進行「資金主攻族群」與「監控名單」的交集篩選
-
                 matched_items = []
-
                 for item in raw_data:
-
                     if "代碼" not in item: continue
-
                     # 抓取該股票的產業別 (相容 'ind' 或 '產業' 欄位)
-
                     stock_ind = str(item.get("ind", item.get("產業", "")))
-
                     if true_market_top_ind in stock_ind:
-
                         matched_items.append(item)
-
                 
-
                 # 如果交集成功，跑馬燈只顯示主攻部隊；若無交集，為避免空窗，顯示前 15 檔
-
                 target_list = matched_items if len(matched_items) > 0 else raw_data[:15]
-
                 ai_payload = [{"name": item.get("商品", item.get("代碼")), "code": item.get("代碼"), "z": 0.0, "chg": 0.0} for item in target_list]
-
             
-
             flow_text = f"🔥 資金主攻：【{true_market_top_ind}】({true_market_top_chg}%)"
             news_headline = fetch_cnyes_news()
             pcr_defense_text = fetch_taifex_pcr() # 💥 呼叫期交所 PCR 解碼晶片
@@ -2518,32 +1536,18 @@ def execute_force_refresh():
             except Exception as e:
                 print(f"熱力圖存檔失敗: {e}")
             # ==========================================
-
             print("✅ [戰術回報] 變數防護版寫入成功，財報數據已同步封裝！")
-
-            
-
     except Exception as e:
-
         print(f"❌ 致命錯誤: {e}")
 
-
-
 # ==========================================================
-
 # 📡 6. Webhook 通道與戰情接口
-
 # ==========================================================
-
 @app.route("/", methods=['GET'])
-
 def home(): 
-
     return "前線看盤伺服器：交易連線狀態正常，常駐清醒中！"
 
-
-
-from flask import g  # 👈 第一行引入 Flask 的全域變數字典
+from flask import g 
 import hmac
 import hashlib
 import base64
@@ -2555,10 +1559,8 @@ handler = WebhookHandler('dummy_secret_for_init')
 def callback():
     signature = request.headers['X-Line-Signature']
     body = request.get_data(as_text=True)
-    
     all_secrets = []
-    secret_token_map = {} # 👈 新增：暗號與槍管的對應表
-    
+    secret_token_map = {} 
     try:
         tokens_data = fetch_cloud_tokens()
         for item in tokens_data:
@@ -2566,7 +1568,7 @@ def callback():
             tok = item.get("token", "").strip()
             if sec and sec not in all_secrets:
                 all_secrets.append(sec)
-                secret_token_map[sec] = tok  # 將暗號與 Token 配對
+                secret_token_map[sec] = tok 
     except: pass
 
     if not all_secrets:
@@ -2576,29 +1578,21 @@ def callback():
         if LINE_CHANNEL_SECRET_2: 
             all_secrets.append(LINE_CHANNEL_SECRET_2)
             secret_token_map[LINE_CHANNEL_SECRET_2] = LINE_CHANNEL_ACCESS_TOKEN_2
-            
     matched_secret = None
     for secret in all_secrets:
         hash_val = hmac.new(secret.encode('utf-8'), body.encode('utf-8'), hashlib.sha256).digest()
         if base64.b64encode(hash_val).decode('utf-8') == signature:
             matched_secret = secret
             break
-            
     if not matched_secret:
         abort(400)
-        
-    # 💡 終極魔法：把對應的 Token 存進這回合的記憶庫 (g) 裡！
     g.active_token = secret_token_map.get(matched_secret, LINE_CHANNEL_ACCESS_TOKEN)
-    
     handler.parser.signature_validator.channel_secret = matched_secret.encode('utf-8')
     try: 
         handler.handle(body, signature)
     except InvalidSignatureError: 
         abort(400)
-        
     return 'OK'
-
-
 
 # 🎯 建立全域記憶體快取，對抗 Render 洗檔機制
 war_room_memory_cache = {}
@@ -2606,11 +1600,8 @@ war_room_memory_cache = {}
 @app.route("/war_room_<date_str>.html", methods=['GET'])
 def serve_war_room(date_str):
     import os
-    # 1. 優先從記憶體直接提取（最快，絕對不會被系統洗掉）
     if date_str in war_room_memory_cache:
         return war_room_memory_cache[date_str]
-    
-    # 2. 備用方案：如果記憶體沒有，再去硬碟找實體檔案
     file_path = f"war_room_{date_str}.html"
     if os.path.exists(file_path):
         try:
@@ -2618,144 +1609,58 @@ def serve_war_room(date_str):
                 return f.read()
         except:
             return "檔案讀取錯誤", 500
-            
     return "戰情室尚未生成，或已被雲端主機休眠重置洗除", 404
 
-
 @app.route("/live_data.json", methods=['GET'])
-
 def get_live_data():
-
     global self_assessed_cache
-
-    
-
-    # 💥 偵測：記憶體是空的，絕對不能卡死網頁！派背景線程去處理！
-
     if not self_assessed_cache or len(self_assessed_cache) == 0:
-
         print("⚠️ [緊急戰略] 派遣背景 AI 獵犬出動，避免網頁卡死...", flush=True)
-
-        
-
-        # 1. 先塞入一筆暫時的公告，安撫網頁端，這樣網頁就能瞬間載入成功！
-
         self_assessed_cache = [{
-
             "date": "剛剛", "code": "SYS", "name": "戰情室", 
-
             "subject": "📡 AI 獵犬剛甦醒，正在後台排隊解讀中...", 
-
             "desc": "", "eps": 0.0, "ai_rating": "⚪ 系統載入中", 
-
             "ai_analysis": "為了規避 Google 防火牆，AI 需要慢慢排隊讀取財報。請統帥先看別的數據，約 1~2 分鐘後重新整理網頁即可看到最新情報！",
-
             "last_year_eps": "-", "yoy_eps": "-", "turnaround": "-", "est_yearly": "-"
-
         }]
-
-        
-
-        # 2. 啟動背景獨立執行！獵犬在後台慢慢跑，完全不影響網頁運作！
-
         import threading
-
         threading.Thread(target=fetch_material_info, daemon=True).start()
-
-        
-
-    # 讀取現有快取，並將獵犬的情資寫入
-
     current_cache = read_cache()
-
     current_cache["self_assessed_news"] = self_assessed_cache
-
-    
-
-    # 順便存檔更新 (確保母艦內部資料同步)
-
     update_cache(current_cache)
-
-    
-
-    # 💥 建立回應，並保留統帥原本的 CORS 與反快取防護盾
-
     response = make_response(jsonify(current_cache))
-
     response.headers['Access-Control-Allow-Origin'] = '*'
-
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-
-    
-
     return response
 
-
-
-
-
 # ==========================================================
-
 # 📡 中控台 VIP 權限管理通道 (供 main.py 讀寫與打勾)
-
 # ==========================================================
-
 @app.route("/vips", methods=['GET', 'POST'])
-
 def manage_vips():
-
     if request.method == 'GET':
-
         return jsonify(read_vips())
-
     elif request.method == 'POST':
-
         data = request.json
-
         if data is not None:
-
             update_vips(data)
-
             return jsonify({"status": "success", "msg": "✅ 統帥權限已成功同步至雲端母艦！"})
-
         return jsonify({"status": "error"}), 400
 
-
-
-
-
 # ==========================================================
-
 # 🛡️ 專屬群組進駐雷達：自動捕捉並綁定 Group ID
-
 # ==========================================================
-
 @handler.add(JoinEvent)
-
 def handle_join(event):
-
     if isinstance(event.source, SourceGroup):
-
         group_id = event.source.group_id
-
         print(f"✅ 成功潛入群組！群組 ID 為: {group_id}", flush=True)
-
-        
-
         welcome_msg = (
-
             "🫡 報告統帥！股海觀浪戰情雷達已成功進駐本群組！\n\n"
-
             "🎯 本群組的專屬通訊代號為：\n"
-
             f"{group_id}\n\n"
-
             "請將此代號複製並記錄下來，日後只要統帥將此代號寫入中控台程式碼的發射目標中，每日戰報與緊急軍令就會全自動空投至此群組！"
-
         )
-
-        
-
         smart_reply_with_menu(
             event,
             TextSendMessage(text=welcome_msg)
@@ -2768,9 +1673,7 @@ def handle_join(event):
 def handle_message(event):
     user_msg = event.message.text.strip()
     user_id = event.source.user_id
-    
-    
-    
+
     # ==========================================
     # 🎨 族群資金輪動熱力圖繪圖引擎 (紅綠漲跌幅進化版)
     # ==========================================
@@ -2779,59 +1682,40 @@ def handle_message(event):
         負責將資金字典轉換為 Treemap 圖片並存檔
         """
         try:
-            # 抓取全域的族群漲跌幅資料
             change_data = globals().get('global_sector_change', {})
-            
-            # 抓取前 12 大吸金族群
             sorted_sectors = sorted(heat_data.items(), key=lambda x: x[1], reverse=True)[:12]
             if not sorted_sectors:
                 return False
-                
             labels = []
             sizes = []
             colors = []
-            
             for sector, val_wan in sorted_sectors:
                 val_yi = val_wan / 10000
-                
-                # 模糊比對找出該族群的漲跌幅
                 chg_pct = 0.0
                 for k, v in change_data.items():
                     if k in sector or sector in k:
                         chg_pct = v
                         break
-                        
-                # 決定標籤文字與正負號 (例如: +2.5%)
                 sign = "+" if chg_pct > 0 else ""
                 labels.append(f"{sector}\n{val_yi:.1f}億\n{sign}{chg_pct}%")
                 sizes.append(val_wan)
-                
-                # 台灣股市專屬紅綠上色邏輯
                 if chg_pct >= 2.0:
-                    colors.append('#b91c1c') # 深紅 (強勢大漲)
+                    colors.append('#b91c1c')
                 elif chg_pct > 0:
-                    colors.append('#ef4444') # 亮紅 (一般上漲)
+                    colors.append('#ef4444')
                 elif chg_pct <= -2.0:
-                    colors.append('#047857') # 深綠 (弱勢大跌)
+                    colors.append('#047857')
                 elif chg_pct < 0:
-                    colors.append('#10b981') # 亮綠 (一般下跌)
+                    colors.append('#10b981')
                 else:
-                    colors.append('#64748b') # 灰色 (平盤或無資料)
-                
-            # 讀取繁體中文字體
+                    colors.append('#64748b')
             font_path = 'custom_font.ttf'
             myfont = FontProperties(fname=font_path)
-            
             plt.figure(figsize=(10, 6))
-            
-            # 呼叫 squarify 畫出矩形式樹狀圖
             squarify.plot(sizes=sizes, label=labels, color=colors, alpha=0.85,
                           text_kwargs={'fontproperties': myfont, 'fontsize': 14, 'color': 'white', 'weight': 'bold'})
-            
-            plt.axis('off') # 隱藏座標軸
+            plt.axis('off')
             plt.tight_layout()
-            
-            # 將畫好的圖存檔至當前目錄
             plt.savefig('heatmap.png', format='png', dpi=150, bbox_inches='tight')
             plt.close()
             return True
@@ -2839,15 +1723,12 @@ def handle_message(event):
             print(f"⚠️ 繪圖引擎異常: {e}", flush=True)
             return False
 
-
     # ==========================================
     # 💥 [熱力圖戰術] 處理 !熱力圖 指令
     # ==========================================
     def handle_heatmap_command(event, user_msg):
         if user_msg in ["!熱力圖", "熱力圖"]:
             heat_data = globals().get('global_sector_heat', {})
-            
-            # 💥 [盤後記憶體修復] 如果記憶體是空的，嘗試去實體硬碟找今天的結算備份
             if not heat_data:
                 try:
                     import json, os
@@ -2856,21 +1737,14 @@ def handle_message(event):
                             heat_data = json.load(f)
                 except:
                     pass
-                    
-            # 實戰防線：如果連硬碟都沒有，才回報尚無數據
             if not heat_data:
                 smart_reply_with_menu(event, "📭 [戰情室回報]\n目前尚無資金流動數據，可能尚未開盤。")
                 return
-
-            # 1. 呼叫引擎畫圖
             success = generate_treemap_image(heat_data)
             if not success:
                 smart_reply_with_menu(event, "⚠️ [戰情室回報]\n繪圖引擎產生熱力圖失敗，請稍後再試。")
                 return
-
-            # 2. 自動擷取資金前 4 大族群，並綁定 !族群 觸發指令 (下鑽按鈕)
             top_4_sectors = [s[0] for s in sorted(heat_data.items(), key=lambda x: x[1], reverse=True)[:4]]
-            
             action_buttons = []
             for sector_name in top_4_sectors:
                 action_buttons.append(
@@ -2878,22 +1752,18 @@ def handle_message(event):
                         style='secondary',
                         height='sm',
                         action=MessageAction(
-                            label=sector_name[:6],               # 按鈕顯示文字 (截取前 6 字避免溢出)
-                            text=f"!族群 {sector_name}"          # 💥 關鍵：點擊後自動發送下鑽指令
+                            label=sector_name[:6],
+                            text=f"!族群 {sector_name}"
                         )
                     )
                 )
-
-            # 3. 封裝 Flex Message 面板
             total_funds = sum(heat_data.values()) / 10000
             tz_tw = datetime.timezone(datetime.timedelta(hours=8))
             now_str = datetime.datetime.now(tz_tw).strftime("%H:%M:%S")
-
             flex_content = BubbleContainer(
                 body=BoxComponent(
                     layout='vertical',
                     contents=[
-                        # 標題與總額度
                         BoxComponent(
                             layout='horizontal',
                             contents=[
@@ -2909,17 +1779,15 @@ def handle_message(event):
                                     contents=[
                                         {"type": "text", "text": f"{total_funds:.1f} 億", "weight": "bold", "size": "xl", "color": "#b91c1c", "align": "end"}
                                     ]
-                                )
+                                ]
                             ]
                         ),
-                        # 下鑽按鈕列
                         BoxComponent(
                             layout='horizontal',
                             spacing='sm',
                             margin='md',
                             contents=action_buttons
                         ),
-                        # 圖片區塊 (連結至本機 /heatmap.png 路由)
                         BoxComponent(
                             layout='vertical',
                             margin='md',
@@ -2937,8 +1805,6 @@ def handle_message(event):
                     padding_all="15px"
                 )
             )
-
-            # 4. 發射 Flex 裝甲面板
             try:
                 flex_message_obj = FlexSendMessage(
                     alt_text="今日盤中資金熱力圖", 
@@ -2948,23 +1814,16 @@ def handle_message(event):
             except Exception as e:
                 print(f"⚠️ Flex Message 發送失敗: {e}", flush=True)
                 smart_reply_with_menu(event, f"⚠️ 裝甲面板發送失敗: {e}")
-    
-    
+
     # ==========================================
     # 💥 [下鑽戰術] 按鈕觸發：!族群 <產業名稱>
     # ==========================================
     if user_msg.startswith("!族群") or user_msg.startswith("!板塊"):
-        # 自動抹除前綴並清理前後空白，提取目標族群名稱
         target_sector = user_msg.replace("!族群", "").replace("!板塊", "").strip()
-        
         if not target_sector:
             smart_reply_with_menu(event, "⚠️ 請輸入要查詢的族群名稱，例如：!族群 半導體")
             return
-            
-        # 1. 抓取快取中的個股行情資料
         stocks_cache = globals().get('global_stocks_cache', {})
-        
-        # 2. 篩選屬於該族群的個股
         sector_stocks = []
         for symbol, data in stocks_cache.items():
             stock_sector = data.get('industry', '') or data.get('category', '')
@@ -2976,60 +1835,40 @@ def handle_message(event):
                     'volume': data.get('volume', 0),
                     'price': data.get('price', 0.0)
                 })
-        
-        # 3. 無資料防呆（盤後或記憶體無資料時會正確回傳此訊息）
         if not sector_stocks:
             smart_reply_with_menu(event, f"📭 [股海系統回報]\n未尋獲【{target_sector}】族群的即時個股數據，可能尚未開盤或資料更新中。")
             return
-            
-        # 4. 排序：量最大與漲幅最大前 5 名
         top_volume = sorted(sector_stocks, key=lambda x: x['volume'], reverse=True)[:5]
         top_gainers = sorted(sector_stocks, key=lambda x: x['chg_pct'], reverse=True)[:5]
-        
-        # 5. 格式化輸出
         reply_lines = [f"🔥 【{target_sector}】核心主力個股下鑽戰報\n"]
-        
         reply_lines.append("📊 成交量前 5 大：")
         for s in top_volume:
             sign = "+" if s['chg_pct'] > 0 else ""
             reply_lines.append(f"• {s['code']} {s['name']}: {s['price']}元 ({sign}{s['chg_pct']}%) ｜ 量 {s['volume']}張")
-            
         reply_lines.append("\n🚀 領漲強勢股前 5 大：")
         for s in top_gainers:
             sign = "+" if s['chg_pct'] > 0 else ""
             reply_lines.append(f"• {s['code']} {s['name']}: {s['price']}元 ({sign}{s['chg_pct']}%)")
-            
         reply_lines.append("\n💡 提示：輸入 !個股代號 (如 !2330) 可查看個股詳細技術面與均線。")
-        
-        # 6. 發射戰報
         smart_reply_with_menu(event, "\n".join(reply_lines))
         return
-    
-    
-    
+
     # ==========================================
     # 🛡️ VIP 自選股防護網指令中心
     # ==========================================
-    # 1. 新增自選股 (支援格式：「+2330」或「+台積電」)
     if user_msg.startswith("新增自選") or user_msg.startswith("+"):
         input_val = user_msg.replace("新增自選", "").replace("+", "").strip()
         target_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
-        
-        # 呼叫資料庫進行中文與代號雙向反查
         res_data = get_stock_dict()
         stock_dict = res_data[0] if isinstance(res_data, tuple) else {}
         full_list = res_data[1] if isinstance(res_data, tuple) else []
-        
-        # 💥 智慧反查：輸入中文會自動變代號，輸入代號就維持代號
         stock_code = stock_dict.get(input_val, input_val)
-        
         if stock_code.isdigit() and len(stock_code) <= 6:
             stock_name = stock_code
             for item in full_list:
                 if str(item.get("code", "")).strip() == stock_code:
                     stock_name = str(item.get("name", "")).strip()
                     break
-            
             if add_to_watchlist(target_id, stock_code):
                 smart_reply_with_menu(event, f"✅ 已成功將 【{stock_name} ({stock_code})】 加入您的專屬防禦雷達網！\n當該標的出現盤中爆量或重大訊息時，系統將第一時間為您警戒。")
             else:
@@ -3038,28 +1877,22 @@ def handle_message(event):
             smart_reply_with_menu(event, "❌ 找不到該標的，請確認股票代號或完整中文名稱是否正確，例如：「+2330」或「+台積電」")
         return
 
-    # 2. 刪除自選股 (支援格式：「-2330」或「-台積電」)
     if user_msg.startswith("刪除自選") or user_msg.startswith("-"):
         input_val = user_msg.replace("刪除自選", "").replace("-", "").strip()
         target_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
-        
-        # 呼叫資料庫進行中文反查
         res_data = get_stock_dict()
         stock_dict = res_data[0] if isinstance(res_data, tuple) else {}
         stock_code = stock_dict.get(input_val, input_val)
-        
         if remove_from_watchlist(target_id, stock_code):
             smart_reply_with_menu(event, f"🗑️ 已成功將 【{input_val}】 移出您的雷達網。")
         else:
             smart_reply_with_menu(event, f"⚠️ 您的雷達網中找不到 【{input_val}】。")
         return
 
-    # 3. 查詢我的自選清單
     if user_msg in ["我的自選", "自選清單", "防禦網"]:
         target_id = event.source.group_id if hasattr(event.source, 'group_id') else user_id
         data = read_watchlists()
         my_list = data.get(target_id, [])
-        
         if not my_list:
             smart_reply_with_menu(event, "📋 報告！您目前尚未設定任何自選股。\n請使用「+股票代號」來建立您的專屬防禦網！")
         else:
@@ -3073,11 +1906,9 @@ def handle_message(event):
                         name = str(item.get("name", "")).strip()
                         break
                 display_list.append(f"• {name} ({code})")
-            
             smart_reply_with_menu(event, f"🛡️ 【VIP 專屬防禦雷達網】\n報告，系統目前正為您全天候嚴密監控以下標的：\n----------------------\n" + "\n".join(display_list) + "\n----------------------\n💡 輸入「-代號」即可解除監控。")
         return
-    
-    # 4. 按鈕防呆引導教學
+
     if user_msg == "如何加自選":
         smart_reply_with_menu(event, "💡 【新增自選股教學】\n請直接在對話框輸入：\n「+股票代號」 或 「+中文名稱」\n\n範例：\n+2330\n+台積電")
         return
@@ -3085,16 +1916,12 @@ def handle_message(event):
     if user_msg == "如何刪自選":
         smart_reply_with_menu(event, "💡 【刪除自選股教學】\n請直接在對話框輸入：\n「-股票代號」 或 「-中文名稱」\n\n範例：\n-2330\n-台積電")
         return
-    
-    
-    
+
     # ==========================================
     # 5. 族群資金輪動熱力圖 (圖形化升級版)
     # ==========================================
     if user_msg in ["!熱力圖", "熱力圖"]:
         heat_data = globals().get('global_sector_heat', {})
-        
-        # 💥 [盤後記憶體修復] 如果記憶體是空的，嘗試去實體硬碟找今天的結算備份
         if not heat_data:
             try:
                 import json, os
@@ -3103,41 +1930,28 @@ def handle_message(event):
                         heat_data = json.load(f)
             except:
                 pass
-                
-        # 實戰防線：如果連硬碟都沒有，才回報尚無數據
         if not heat_data:
             smart_reply_with_menu(event, "📭 [戰情室回報]\n目前尚無資金流動數據，可能尚未開盤。")
             return
-            
-        # 1. 呼叫引擎畫圖
         success = generate_treemap_image(heat_data)
-        
         if success:
-            # 2. 準備圖片網址與破除快取陷阱
-            # 請將下方的網址替換成您的 Render 網址 (例如 https://stock-line-bot-c8em.onrender.com)
             base_url = "https://stock-line-bot-c8em.onrender.com" 
             timestamp = int(time.time())
-            # 加上 ?t=時間戳記，確保 LINE 每次都抓最新圖片，不會被快取卡住
             img_url = f"{base_url}/heatmap.png?t={timestamp}"
-            
-            # 3. 抓取前 4 名的族群名稱，動態生成可點擊按鈕內容
             sorted_sectors = sorted(heat_data.items(), key=lambda x: x[1], reverse=True)
             top_4_names = [s[0] for s in sorted_sectors[:4]]
             while len(top_4_names) < 4:
-                top_4_names.append("-") # 防呆填補
-                
+                top_4_names.append("-")
             total_val_yi = sum(val for _, val in sorted_sectors) / 10000
             current_time_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
-
-            # 💡 升級：組裝具備「深藍底色 + 白字 + 圓角」的實體按鈕區塊
             clickable_top_4 = []
             for name in top_4_names:
                 if name != "-":
                     clickable_top_4.append({
                         "type": "box",
                         "layout": "vertical",
-                        "backgroundColor": "#1a5276",  # 質感深藍實體底色
-                        "cornerRadius": "md",          # 圓角邊框
+                        "backgroundColor": "#1a5276",
+                        "cornerRadius": "md",
                         "paddingTop": "sm",
                         "paddingBottom": "sm",
                         "margin": "xs",
@@ -3147,7 +1961,7 @@ def handle_message(event):
                                 "text": f"🔥{name}",
                                 "size": "xs",
                                 "align": "center",
-                                "color": "#ffffff",    # 純白文字
+                                "color": "#ffffff",
                                 "weight": "bold"
                             }
                         ],
@@ -3161,7 +1975,7 @@ def handle_message(event):
                     clickable_top_4.append({
                         "type": "box",
                         "layout": "vertical",
-                        "backgroundColor": "#f2f3f4",  # 灰色無效按鈕
+                        "backgroundColor": "#f2f3f4",
                         "cornerRadius": "md",
                         "paddingTop": "sm",
                         "paddingBottom": "sm",
@@ -3170,8 +1984,6 @@ def handle_message(event):
                             {"type": "text", "text": "-", "size": "xs", "align": "center", "color": "#aaaaaa"}
                         ]
                     })
-
-            # 4. 組裝 Flex Message 裝甲
             flex_content = {
               "type": "bubble",
               "size": "giga",
@@ -3199,7 +2011,7 @@ def handle_message(event):
                   {
                     "type": "box",
                     "layout": "horizontal",
-                    "contents": clickable_top_4,  # 👈 帶入具備點擊功能的按鈕陣列
+                    "contents": clickable_top_4,
                     "margin": "md", "paddingTop": "sm", "paddingBottom": "sm", "borderWidth": "light", "borderColor": "#dddddd", "cornerRadius": "sm"
                   },
                   {
@@ -3214,133 +2026,67 @@ def handle_message(event):
                 "paddingTop": "xs"
               }
             }
-            
-            # 🔥 [終極修復 3.0] 直接借用統帥系統內建的智慧發射管！
             try:
                 from linebot.models import FlexSendMessage, BubbleContainer
-                
-                # 將 JSON 字典轉換為 LINE 看得懂的 Flex 裝甲
                 flex_container = BubbleContainer.new_from_json_dict(flex_content)
-                
                 flex_message_obj = FlexSendMessage(
                     alt_text="今日盤中資金熱力圖", 
                     contents=flex_container
                 )
-                
-                # 🚀 關鍵破解：直接把裝甲塞給您的 smart_reply_with_menu 發射！
-                # 它會自動幫我們抓出正確的金鑰並發送，完美破解 Token 衝突
                 smart_reply_with_menu(event, flex_message_obj)
-                
             except Exception as e:
                 print(f"⚠️ Flex Message 發送失敗: {e}", flush=True)
                 smart_reply_with_menu(event, f"⚠️ 裝甲面板轉換失敗: {e}")
-                
         else:
             smart_reply_with_menu(event, "⚠️ 戰情室回報：熱力圖繪製失敗。")
         return
-    
-    
-    
-
-    # 💥 新增：讓使用者隨時點名查詢當日已被系統鎖定的標的清單
 
     if user_msg in ["今日雷達", "今日飆股", "雷達清單"]:
-
         try:
-
             try:
-
                 profile = line_bot_api.get_profile(user_id)
-
                 user_name = profile.display_name
-
             except:
-
                 user_name = "戰友"
-
-
-
             if intraday_breakout_cache and len(intraday_breakout_cache) > 0:
-
                 recent_alerts = intraday_breakout_cache[:5]
-
                 reply_lines = [
-
                     f"📈 【盤中選股雷達・今日飆股追蹤紀錄】",
-
                     f"報告 {user_name}，以下為今日盤中已被系統鎖定的完整實戰紀錄：\n",
-
                     "======================"
-
                 ]
-
                 for alert in recent_alerts:
-
                     clean_alert = alert.replace("群組同步跟單急報", "實戰發報通知").replace("小白當沖實戰指令", "操作指引")
-
                     reply_lines.append(clean_alert)
-
                     reply_lines.append("----------------------")
-
-                
-
                 reply_lines.append("💡 提示：以上為今日發報之歷史軌跡，實際進出場請依當下盤勢與風險控制為準！")
-
                 reply_msg = "\n".join(reply_lines)
-
             else:
-
                 reply_msg = f"🔍 報告 {user_name}，今日盤中目前尚無符合條件的標的。系統正嚴格過濾盤勢、避開假突破中，請耐心等候主流資金表態！"
-
         except Exception as e:
-
             reply_msg = f"⚠️ 查詢今日雷達清單異常：{e}"
-
-
-
         smart_reply_with_menu(event, reply_msg[:4000])
-
         return
-
-
-
-    # 支援大盤、雷達或戰報的即時行情查詢
 
     if user_msg in ["大盤", "雷達", "戰報"]:
-
         cache_data = read_cache()
-
         reply_text = f"{cache_data.get('fundsText', '')}\n\n精選標的流向：\n{cache_data.get('stocksText', '')}"
-
         smart_reply_with_menu(event, reply_text[:4000])
-
         return
 
-
-
-
-
-# 💥 新增模組：AI 總結今日盤勢與收盤講評
-
     if user_msg in ["今日盤勢", "AI講評", "盤勢分析", "收盤講評"]:
-        # 1. 光速秒回，破解 5 秒死線 (升級動態槍管)
         smart_reply_with_menu(event, TextSendMessage(text="🧠 收到指令！AI 正在彙整今日大盤與主流資金流向，約需 5 秒鐘，請稍候..."))
-        
-        # 2. 建立背景分身
         def process_ai_summary():
             try:
                 target_id = event.source.group_id if hasattr(event.source, 'group_id') else event.source.user_id
-                
                 try:
                     profile = line_bot_api.get_profile(event.source.user_id)
                     user_name = profile.display_name
                 except:
                     user_name = "戰友"
-
                 cache_data = read_cache()
                 funds_summary = cache_data.get('fundsText', '目前無大盤數據')
                 stocks_summary = cache_data.get('stocksText', '目前無主流數據')
-
                 prompt = f"""
                 你是一位頂尖的台股操盤手與總體經濟分析師。請根據以下今日的盤勢數據與資金流向，為戰友寫一篇精簡有力、專業且具備前瞻性的「今日盤勢總結與明日觀盤重點」（大約150-200字，分段清晰，帶有股市實戰風格）：
                 - 大盤與資金流向摘要：{funds_summary}
@@ -3348,7 +2094,6 @@ def handle_message(event):
                 """
                 response = ai_model.generate_content(prompt)
                 ai_commentary = response.text.strip() if response and response.text else "目前 AI 大腦正在冷卻中，請稍後再試。"
-
                 reply_msg = (
                     f"🧠 【股海觀浪・AI 每日盤勢總結】\n"
                     f"報告 {user_name}，今日戰情剖析如下：\n"
@@ -3357,50 +2102,25 @@ def handle_message(event):
                     f"----------------------\n"
                     f"💡 提醒：盤勢瞬息萬變，操作請嚴格執行資金控管與停損紀律！"
                 )
-                # 算完後，用原本的雙排面板主動推播回群組！
                 smart_push_with_menu(target_id, reply_msg[:4000])
             except Exception as e:
                 print(f"AI盤勢背景處理失敗: {e}")
-
-        # 3. 發射分身！
         import eventlet
         eventlet.spawn(process_ai_summary)
         return
 
-
-
-
-
-    # 💥 盤後選股 (雙彈齊發版)
     if user_msg in ["盤後選股", "選股策略", "最新選股"]:
         report_url = "https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/latest_report.html"
         reply_msg = "📊 【股海觀浪】最新盤後選股策略：\n系統已為您產出最新報告，請點擊下方專屬連結前往觀看！"
-        
-        # 1. 第一發：帶有按鈕的深色面板
         flex_msg = create_flex_menu_message(reply_msg)
-        # 2. 第二發：純文字網址 (LINE會自動轉成可點擊連結)
         link_msg = TextSendMessage(text=report_url)
-        
-        # 3. 包裝成陣列 [ ] 一次發射兩發！
         smart_reply_with_menu(event, [flex_msg, link_msg])
         return
 
-
-
-
-
-    # ==========================================
-
-    # 🛡️ 新增模組：戰情室盤後結算與防禦覆盤
-
-    # ==========================================
-
-    # 💥 盤後覆盤 (雙彈齊發版)
     if user_msg in ["防禦報告", "盤後覆盤", "攔截清單"]:
         try:
             today_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime('%Y%m%d')
             render_url = f"https://stock-line-bot-c8em.onrender.com/war_room_{today_str}.html"
-            
             if not intercepted_traps_log:
                 reply_msg = f"🛡️ 【盤後覆盤】\n今日雷達未偵測到符合爆量門檻的主力陷阱。\n\n📊 今日 13:40 盤後覆盤網頁已結算，請點擊下方專屬連結查看："
             else:
@@ -3410,48 +2130,24 @@ def handle_message(event):
                 ]
                 for trap in intercepted_traps_log:
                     reply_lines.append(trap)
-                
                 reply_lines.append("----------------------")
                 reply_lines.append(f"🎯 總計擋下 {len(intercepted_traps_log)} 次主力割韭菜陷阱！")
                 reply_lines.append(f"\n📊 今日 13:40 盤後覆盤網頁已結算，請點擊下方專屬連結查看：")
-                
                 reply_msg = "\n".join(reply_lines)
-            
-            # 1. 第一發：帶有按鈕的深色面板
             flex_msg = create_flex_menu_message(reply_msg[:3000])
-            # 2. 第二發：純文字網址
             link_msg = TextSendMessage(text=render_url)
-            
-            # 3. 雙彈齊發！
             smart_reply_with_menu(event, [flex_msg, link_msg])
-            
         except Exception as e:
             smart_reply_with_menu(event, f"⚠️ 查詢防禦報告異常：{e}")
         return
 
-
-    # ==========================================================
-
-    # 👇 手調收盤戰報指令
-
-    # ==========================================================
-
     if user_msg in ["收盤戰報", "收盤結算", "今日結算"]:
-
         try:
-
             try:
-
                 profile = line_bot_api.get_profile(user_id)
-
                 user_name = profile.display_name
-
             except Exception:
-
                 user_name = "戰友"
-
-
-
             review_lines = [f"📊 【股海觀浪・全方位戰場鑑識與分頁驗證】\n報告 {user_name}，為您即時調閱今日結算戰報：\n----------------------"]
 
             
@@ -3459,448 +2155,219 @@ def handle_message(event):
             # ==========================================
 
             # 🛠️ 區塊一：盤中 1分/5分爆量雷達標的驗證結算
-
             # ==========================================
-
             if intraday_breakout_cache:
-
                 stock_records = {}
-
                 for alert in intraday_breakout_cache:
-
                     try:
-
                         time_match = re.search(r'\[(\d{2}:\d{2}:\d{2})\]', alert)
-
                         code_match = re.search(r'\((\d{4})\)', alert)
-
                         name_match = re.search(r'⚡\s*([^(]+)\(', alert)
-
                         price_match = re.search(r'現價\s*[:：]\s*([\d\.]+)', alert)
-
                         
-
                         if code_match:
-
                             alert_time = time_match.group(1) if time_match else "09:00"
-
                             code = code_match.group(1)
-
                             name = name_match.group(1).strip() if name_match else code
-
                             alert_price = float(price_match.group(1)) if price_match else 0.0
-
                             
-
                             if code not in stock_records:
-
                                 stock_records[code] = {
-
                                     "name": name,
-
                                     "alert_time": alert_time,
-
                                     "alert_price": alert_price
-
                                 }
-
                     except:
-
                         pass
-
                 
-
                 settle_count = 0
-
                 win_count = 0
-
                 
-
                 for code, data in stock_records.items():
-
                     try:
-
                         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=1d"
-
                         res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
-
                         meta = res['chart']['result'][0]['meta']
-
                         indicators = res['chart']['result'][0]['indicators']['quote'][0]
-
                         
-
                         close_p = meta.get('regularMarketPrice', 0)
-
                         highs = [h for h in indicators.get('high', []) if h is not None]
-
                         lows = [l for l in indicators.get('low', []) if l is not None]
-
                         
-
                         day_high = max(highs) if highs else close_p
-
                         day_low = min(lows) if lows else close_p
-
                         
-
                         ap = data["alert_price"]
-
                         if ap > 0 and close_p > 0:
-
                             max_surge = round(((day_high - ap) / ap) * 100, 2)
-
                             after_chg = round(((close_p - ap) / ap) * 100, 2)
-
                             
-
                             if after_chg > 0: win_count += 1
-
                             settle_count += 1
-
                             
-
                             status_tag = "🔥 主升續強" if after_chg > 1.0 else ("⚠️ 沖高壓回" if max_surge > 2.0 and after_chg <= 0 else "💤 區間震盪")
-
                             
-
                             review_lines.append(
-
                                 f"• {data['name']}({code}) ｜ 發報@{ap} [{data['alert_time']}]\n"
-
                                 f"  ╰ 收盤:{close_p} ({after_chg:+.2f}%) ｜ 盤中最高衝刺: +{max_surge}%\n"
-
                                 f"  ╰ 戰術判定：{status_tag}"
-
                             )
-
                     except:
-
                         pass
-
                 
-
                 if settle_count > 0:
-
                     win_rate = round((win_count / settle_count) * 100, 1)
-
                     review_lines.append(f"🎯 【盤中爆量雷達】鑑識標的：{settle_count} 檔 ｜ 收盤收紅：{win_count} 檔 (勝率 {win_rate}%)")
-
                 else:
-
                     review_lines.append("🎯 【盤中爆量雷達】今日無有效發報標的。")
-
             else:
-
                 review_lines.append("🎯 【盤中爆量雷達】今日無發報紀錄。")
-
             
-
             review_lines.append("----------------------")
 
-
-
             # ==========================================
-
             # 🛠️ 區塊二：各策略分頁選股戰報績效與明細驗證
-
             # ==========================================
-
             try:
-
                 res_json = requests.get("https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json", timeout=5).json()
-
             except:
-
                 res_json = {}
 
-
-
             strat_groups = {
-
                 "🎯 MTS 完美共振區": [],
-
                 "🎖️ S級肥羊特戰區": [],
-
                 "👑 S級核心波段區": [],
-
                 "⚡ 當沖/隔日游擊區": []
-
             }
-
             
-
             items_to_process = []
-
             if isinstance(res_json, dict):
-
                 for k, v in res_json.items():
-
                     if isinstance(v, dict):
-
                         v["code"] = k
-
                         items_to_process.append(v)
-
             elif isinstance(res_json, list):
-
                 items_to_process = res_json
 
-
-
             for info in items_to_process:
-
                 try:
-
                     code = str(info.get("代碼", info.get("code", ""))).strip()
-
                     name = info.get("name", info.get("商品", code))
-
                     stype = str(info.get("type", "general"))
-
                     
-
                     if not code: continue
 
-
-
                     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=1d"
-
                     res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
-
                     if not res.get('chart', {}).get('result'):
-
                         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TWO?range=1d&interval=1d"
-
                         res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
 
-
-
                     meta = res['chart']['result'][0]['meta']
-
                     close_p = meta.get('regularMarketPrice', 0)
-
                     prev_close = meta.get('chartPreviousClose', close_p)
-
                     
-
                     if close_p > 0 and prev_close > 0:
-
                         chg_pct = round(((close_p - prev_close) / prev_close) * 100, 2)
-
                         item_data = {"name": name, "code": code, "close": close_p, "chg": chg_pct, "is_win": chg_pct > 0}
-
                         
-
                         if stype == "mts":
-
                             strat_groups["🎯 MTS 完美共振區"].append(item_data)
-
                         elif stype == "b":
-
                             strat_groups["🎖️ S級肥羊特戰區"].append(item_data)
-
                         elif stype == "s":
-
                             strat_groups["👑 S級核心波段區"].append(item_data)
-
                         else:
-
                             strat_groups["⚡ 當沖/隔日游擊區"].append(item_data)
-
                 except:
-
                     pass
-
             
-
             review_lines.append("📊 【選股策略各分頁獨立績效與明細驗證】")
-
             for group_name, stocks in strat_groups.items():
-
                 if not stocks:
-
                     continue
-
                 count = len(stocks)
-
                 wins = sum(1 for s in stocks if s["is_win"])
-
                 win_rate = round((wins / count) * 100, 1)
-
                 avg_chg = round(sum(s["chg"] for s in stocks) / count, 2)
-
                 
-
                 review_lines.append(f"• {group_name} (追蹤 {count} 檔 ｜ 勝率 {win_rate}% ｜ 平均 {avg_chg:+.2f}%)")
-
                 
-
                 for s in stocks:
-
                     sign = "📈 +" if s["chg"] > 0 else ("📉 " if s["chg"] < 0 else "➖ ")
-
-                    review_lines.append(f"   - {s['name']}({s['code']}) ｜ 收盤:{s['close']} ({sign}{s['chg']:+.2f}%)")
-
+                    review_lines.append(f"    - {s['name']}({s['code']}) ｜ 收盤:{s['close']} ({sign}{s['chg']:+.2f}%)")
                 
-
                 review_lines.append("----------------------")
-
             
-
             review_lines.append("💡 參謀總結：完整記錄盤中爆量衝刺與各策略分頁表現，作為優化次日選股模型的黃金依據。")
-
             
-
             reply_msg = "\n".join(review_lines)
-
         except Exception as e:
-
             reply_msg = f"⚠️ 手調收盤戰報異常：{e}"
 
-
-
         smart_reply_with_menu(event, reply_msg[:4000])
-
         return
 
-
-
-
-
     # ==========================================================
-
     # 🧮 💥 升級模組：LINE 當月發射次數動態查詢 (支援無限彈藥庫)
-
     # ==========================================================
-
     if user_msg in ["次數", "額度", "剩餘發數", "子彈"]:
-
         try:
-
-            # 🎯 直接向 pCloud 呼叫最新擴編的機器人清單
-
             tokens_data = fetch_cloud_tokens()
-
             
-
             reply_lines = ["📊 【股海觀浪・彈藥庫實時庫存】", "----------------------"]
-
             active_gun = "無 (彈藥全部耗盡)"
-
             
-
-            # 動態巡航：有幾隻就查幾隻！
-
             for idx, item in enumerate(tokens_data, start=1):
-
                 name = item.get("name", f"第 {idx} 號機")
-
                 token = item.get("token", "").strip()
-
                 if not token: continue
-
                 
-
                 try:
-
                     temp_api = LineBotApi(token)
-
                     used = temp_api.get_message_quota_consumption().total_usage
-
                     remain = 200 - used
-
                     reply_lines.append(f"🔫 {name}：已用 {used}/200 則 (剩 {remain} 則)")
-
                     
-
-                    # 抓出第一隻還有子彈的機器人當作主力火線
-
                     if remain > 0 and active_gun == "無 (彈藥全部耗盡)":
-
                         active_gun = f"{name} (發射中)"
-
                 except Exception as api_err:
-
                     reply_lines.append(f"🔫 {name}：連線讀取失敗")
-
                     
-
             reply_lines.append("----------------------")
-
             reply_lines.append(f"🎯 目前主力火線：{active_gun}")
-
             reply_lines.append("💡 備註：每月 1 號系統將自動重置免費發射額度。")
-
             
-
             reply_msg = "\n".join(reply_lines)
-
             
-
         except Exception as e:
-
             reply_msg = f"⚠️ 彈藥庫數據連線受阻: {e}"
-
             
-
         smart_reply_with_menu(event, reply_msg)
-
         return
-
-
-
-
-
-
 
     # 1. 取得股票資料庫
-
     res_data = get_stock_dict()
-
     if isinstance(res_data, tuple):
-
         stock_dict, full_list = res_data
-
     else:
-
         stock_dict = res_data
-
         full_list = [{"code": c, "name": n} for n, c in stock_dict.items()]
 
-
-
     target_code = ""
-
-    target_name = user_msg  # 預設名稱
-
-
+    target_name = user_msg
 
     if user_msg.isdigit() and len(user_msg) <= 6:
-
         target_code = user_msg
-
-        # 如果輸入的是代號，自動反查對應的中文名稱
-
         for item in full_list:
-
             if str(item.get("code", "")).strip() == target_code:
-
                 target_name = str(item.get("name", "")).strip()
-
                 break
-
     elif user_msg in stock_dict:
-
         target_code = stock_dict[user_msg]
+        target_name = user_msg
 
-        target_name = user_msg  # 輸入的就是中文名稱
-
-
-
-    # 2. 如果直接命中代號或精確名稱，直接回傳專業操盤手級別的立體戰情
     if target_code:
-        # 光速秒回安撫，破解 5 秒死線
         smart_reply_with_menu(
             event, 
             TextSendMessage(text=f"📊 收到指令！正在調閱 {target_name} 的即時數據、未來扣抵推演並繪製雲端 K 線圖，請稍候...")
@@ -3910,10 +2377,8 @@ def handle_message(event):
             try:
                 target_id = event.source.group_id if hasattr(event.source, 'group_id') else event.source.user_id
                 
-                # 接收新版函數的 tuple (文字, 圖片網址)
                 realtime_info, img_url = fetch_realtime_data(target_code)
                 
-                # 🛡️ 智慧解析即時數據以供操盤手評分函數使用
                 current_price = 0.0
                 ma5 = 0.0
                 ma20 = 0.0
@@ -3927,7 +2392,7 @@ def handle_message(event):
                             if p_match: current_price = float(p_match.group(1))
                             v_match = re.search(r'總量:\s*([0-9,]+)張', line)
                             if v_match: volume = int(v_match.group(1).replace(',', ''))
-                        elif "均線(五/十/廿)" in line:  # 對應新版防干擾字眼
+                        elif "均線(五/十/廿)" in line:
                             m_match = re.findall(r'([0-9.]+)', line)
                             if len(m_match) >= 3:
                                 ma5 = float(m_match[0])
@@ -3937,483 +2402,237 @@ def handle_message(event):
                 except:
                     pass
 
-                # 呼叫專業操盤手動態分析引擎
                 reply_msg = generate_professional_analysis(
                     target_name, target_code, realtime_info, current_price, ma5, ma20, volume, chip_status
                 )
                 
-                # 包裝原本的面板訊息
                 flex_msg = create_flex_menu_message(reply_msg[:4000])
                 
-                # 如果畫圖並上傳成功，就圖片+面板「雙彈齊發」！
                 if img_url:
                     img_msg = ImageSendMessage(original_content_url=img_url, preview_image_url=img_url)
                     smart_push_with_menu(target_id, [img_msg, flex_msg])
                 else:
-                    # 如果畫圖失敗，仍送出純面板報告
                     smart_push_with_menu(target_id, flex_msg)
                     
             except Exception as e:
                 print(f"個股查詢背景處理失敗: {e}", flush=True)
 
-        # 啟動背景推演分身
         import eventlet
         eventlet.spawn(process_stock_query)
         return
 
-
-
-    # 3. 模糊比對：檢查這段文字是不是在股票名稱中出現過
-
     matched_stocks = []
-
     for item in full_list:
-
         c = str(item.get("code", "")).strip()
-
         n = str(item.get("name", "")).strip()
-
         if user_msg in n or user_msg in c:
-
             matched_stocks.append(f"{n}({c})")
 
-
-
-    # 4. 關鍵防護罩：如果有找到相關股票，才回傳清單；如果是日常對話（找不到任何股票），直接靜默 pass！
-
     if matched_stocks:
-
         display_list = matched_stocks[:30]
-
         more_text = f"\n...(還有 {len(matched_stocks) - 30} 筆)" if len(matched_stocks) > 30 else ""
-
         reply_msg = f"🔍 找到包含「{user_msg}」的股票共 {len(matched_stocks)} 筆：\n" + " | ".join(display_list) + more_text
-
         smart_reply_with_menu(event, reply_msg[:4000])
-
     else:
-
-        # 找不到股票（代表這是一般聊天對話，如「謝謝」、「好」、「該吃飯囉」），直接安靜不回應！
-
         pass
 
-
-
-
-
     # ==========================================================
-
     # 💥 新增模組 1：國際夜盤與期貨速報
-
     # 💥 新增模組 2：均線扣抵轉折預告
-
     # ==========================================================
-
     if user_msg in ["夜盤", "國際局勢", "期貨", "虛擬貨幣"]:
-
         try:
-
             tickers = {
-        # 🌐 頂級天候儀表板
-        "SOX": "^SOX", "IXIC": "^IXIC", "DJI": "^DJI", "INX": "^GSPC",
-        "TSM": "TSM", "VIX": "^VIX", "DXY": "DX-Y.NYB", "US10Y": "^TNX",
-
-        # ⚙️ 戰區一：半導體與晶片
-        "NVDA": "NVDA", "AMD": "AMD", "INTC": "INTC", "QCOM": "QCOM", "AVGO": "AVGO",
-
-        # 🖥️ 戰區二：AI 伺服器
-        "SMCI": "SMCI", "DELL": "DELL", "VRT": "VRT",
-
-        # 📦 戰區三：先進封裝與設備
-        "ASML": "ASML", "AMAT": "AMAT",
-
-        # 📡 戰區四：光通訊與網通
-        "MRVL": "MRVL", "LITE": "LITE", "CSCO": "CSCO",
-
-        # 🛰️ 戰區五：低軌衛星
-        "ASTS": "ASTS", "IRDM": "IRDM",
-
-        # 💾 戰區六：記憶體
-        "MU": "MU",
-
-        # ☁️ 戰區七：雲端巨頭與軟體
-        "AAPL": "AAPL", "GOOG": "GOOG", "META": "META", "AMZN": "AMZN",
-        "MSFT": "MSFT", "NFLX": "NFLX", "ORCL": "ORCL",
-
-        # 🔮 戰區八：次世代封裝與玻璃基板 (新增 GLW 與 ONTO)
-        "GLW": "GLW", "ONTO": "ONTO",
-        # (註：INTC, AMAT, LRCX, KLAC, COHR 等巨頭已在前方戰區，系統會自動共用報價)
-
-        # ⚡ 戰區九：重電與能源
-        "GE": "GE", "CAT": "CAT", "NEE": "NEE", "DOW": "DOW",
-
-        # 🚗 戰區十：汽車與消費
-        "TSLA": "TSLA", "GM": "GM", "F": "F", "NIKE": "NKE",
-
-        # 🚢 戰區十一：航運與原物料
-        "ZIM": "ZIM", "XOM": "XOM", "CVX": "CVX", "BA": "BA",
-
-        # 🏦 戰區十二：金融與支付
-        "BRK-B": "BRK-B", "GS": "GS", "JPM": "JPM", "BAC": "BAC",
-        "C": "C", "AXP": "AXP", "WFC": "WFC", "V": "V", "MA": "MA", "XLF": "XLF",
-
-        # 🏥 戰區十三：生技與民生防禦
-        "NBI": "^NBI", "JNJ": "JNJ", "MRK": "MRK", "PFE": "PFE",
-        "UNH": "UNH", "PG": "PG", "WMT": "WMT", "HD": "HD",
-        "KO": "KO", "MCD": "MCD", "DIS": "DIS", "MMM": "MMM", "LLY": "LLY", "COST": "COST",
-
-        # 📈 期貨與加密貨幣
-        "NQ": "NQ=F", "YM": "YM=F", "GC": "MGC=F", "CL": "MCL=F",
-        "BTC": "BTC-USD", "ETH": "ETH-USD"
-    }
+                "SOX": "^SOX", "IXIC": "^IXIC", "DJI": "^DJI", "INX": "^GSPC",
+                "TSM": "TSM", "VIX": "^VIX", "DXY": "DX-Y.NYB", "US10Y": "^TNX",
+                "NVDA": "NVDA", "AMD": "AMD", "INTC": "INTC", "QCOM": "QCOM", "AVGO": "AVGO",
+                "SMCI": "SMCI", "DELL": "DELL", "VRT": "VRT",
+                "ASML": "ASML", "AMAT": "AMAT",
+                "MRVL": "MRVL", "LITE": "LITE", "CSCO": "CSCO",
+                "ASTS": "ASTS", "IRDM": "IRDM",
+                "MU": "MU",
+                "AAPL": "AAPL", "GOOG": "GOOG", "META": "META", "AMZN": "AMZN",
+                "MSFT": "MSFT", "NFLX": "NFLX", "ORCL": "ORCL",
+                "GLW": "GLW", "ONTO": "ONTO",
+                "GE": "GE", "CAT": "CAT", "NEE": "NEE", "DOW": "DOW",
+                "TSLA": "TSLA", "GM": "GM", "F": "F", "NIKE": "NKE",
+                "ZIM": "ZIM", "XOM": "XOM", "CVX": "CVX", "BA": "BA",
+                "BRK-B": "BRK-B", "GS": "GS", "JPM": "JPM", "BAC": "BAC",
+                "C": "C", "AXP": "AXP", "WFC": "WFC", "V": "V", "MA": "MA", "XLF": "XLF",
+                "NBI": "^NBI", "JNJ": "JNJ", "MRK": "MRK", "PFE": "PFE",
+                "UNH": "UNH", "PG": "PG", "WMT": "WMT", "HD": "HD",
+                "KO": "KO", "MCD": "MCD", "DIS": "DIS", "MMM": "MMM", "LLY": "LLY", "COST": "COST",
+                "NQ": "NQ=F", "YM": "YM=F", "GC": "MGC=F", "CL": "MCL=F",
+                "BTC": "BTC-USD", "ETH": "ETH-USD"
+            }
 
             reply_lines = ["🌍 【股海觀浪・全球資金與科技領頭羊速報】\n"]
-
             summary_data_for_ai = []
-
             
-
             for name, ticker in tickers.items():
-
                 url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=20d&includePrePost=true"
-
                 res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
-
                 
-
                 if not res.get('chart', {}).get('result'):
-
                     reply_lines.append(f"⚠️ {name}：訊號中斷")
-
                     continue
-
                     
-
                 meta = res['chart']['result'][0]['meta']
-
                 indicators = res['chart']['result'][0]['indicators']['quote'][0]
-
                 closes = indicators.get('close', [])
-
                 valid_closes = [c for c in closes if c is not None]
-
                 
-
                 curr_p = meta.get('postMarketPrice', meta.get('regularMarketPrice'))
-
                 curr_p = round(curr_p, 2) if curr_p else 0.0
-
                 
-
                 prev_p = meta.get('chartPreviousClose', 0.0)
-
                 
-
                 if prev_p > 0:
-
                     chg_pct = round(((curr_p - prev_p) / prev_p) * 100, 2)
-
                 else:
-
                     chg_pct = 0.0
-
                 
-
                 ema5 = round(sum(valid_closes[-5:]) / 5, 2) if len(valid_closes) >= 5 else curr_p
-
                 
-
                 sign = "📈 +" if chg_pct > 0 else "📉 "
-
                 reply_lines.append(f"• {name} ｜ {sign}{chg_pct}%")
-
                 reply_lines.append(f"    現價: {curr_p} (短線支撐/壓力: {ema5})")
-
                 
-
                 summary_data_for_ai.append(f"{name}: {chg_pct:+.2f}%")
 
-
-
-            # 🧠 AI 動態生成：採用專業台股期貨操盤用語
-
             ai_insight = "市場多空拔河，操作宜嚴守停損紀律。"
-
             try:
-
                 prompt = f"""
-
                 你是一位頂尖台股與期貨實戰操盤手。以下是今日全球主要期貨指數、日韓股市、加密貨幣與美股 AI 巨頭的最新漲跌幅數據：
-
                 {", ".join(summary_data_for_ai)}
-
                 
-
                 請根據以上數據，寫一段道地的「實戰操盤點評」（大約 40-60 字），必須使用如：提款、撐盤力道、拔河格局、追高搶短、低基期、資金控管等股市期貨用語，直接給出結論與對次日台股的啟示，絕對不要有任何廢話或稱呼。
-
                 """
-
                 response = ai_model.generate_content(prompt)
-
                 if response and response.text:
-
                     ai_insight = response.text.strip()
-
             except:
-
                 pass
 
-
-
             reply_lines.append(f"\n🎯 操盤手點評：{ai_insight}")
-
             reply_msg = "\n".join(reply_lines)
-
             
-
         except Exception as e:
-
             reply_msg = f"⚠️ 全球雷達連線異常：{e}"
-
             
-
         smart_reply_with_menu(event, reply_msg)
-
         return
-
-
-
-
-
-
-
-    # 💥 優化版：盤中技術面轉折與買點即時篩選（與爆量通知互補）
 
     if any(keyword in user_msg for keyword in ["轉折", "起漲", "發動", "轉強", "找買點", "尋找買點", "扣抵"]):
-
         try:
-
             try:
-
                 profile = line_bot_api.get_profile(user_id)
-
                 user_name = profile.display_name
-
             except Exception:
-
                 user_name = "戰友"
 
-
-
             json_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?v={int(time.time())}"
-
             res_json = requests.get(json_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
 
-
-
             qualified_picks = []
-
             target_dict = {}
-
             if isinstance(res_json, list):
-
                 for item in res_json:
-
                     code = str(item.get("代碼", item.get("code", "")))
-
                     if code:
-
                         target_dict[code] = item
-
             else:
-
                 target_dict = res_json
 
-
-
             for code, info in target_dict.items():
-
                 name = info.get('name', info.get('商品', '未知'))
-
                 ind = info.get('ind', info.get('產業', ''))
-
                 y_close = float(info.get("y_close", 0))
-
                 ma5 = float(info.get("ma5", 0))
 
-
-
                 if y_close > 0 and ma5 > 0 and y_close >= ma5:
-
                     qualified_picks.append({
-
                         "id": code,
-
                         "name": name,
-
                         "ind": ind,
-
                         "price": y_close,
-
                         "ma5": ma5,
-
                         "reason": "均線之上穩健排列，多方主導中"
-
                     })
 
-
-
             if qualified_picks and len(qualified_picks) > 0:
-
                 top_picks = qualified_picks[:5]
-
                 reply_lines = [
-
                     "📊 【盤中技術面即時篩選・買點雷達】",
-
                     f"報告 {user_name}，系統已完成盤中多維度技術篩選，目前符合轉折與穩健排列的標的如下：\n",
-
                     "======================"
-
                 ]
-
                 for p in top_picks:
-
                     reply_lines.append(f"🔹 {p['name']}({p['id']}) ｜ {p['ind']}\n現價：{p['price']} (5MA: {p['ma5']})\n💡 狀態：{p['reason']}")
-
                     reply_lines.append("----------------------")
-
                 
-
                 reply_lines.append("📌 提示：此清單為技術面即時篩選結果，請搭配當下大盤走勢與個人風險承受度評估進出！")
-
                 reply_msg = "\n".join(reply_lines)
-
             else:
-
                 reply_msg = f"🔍 報告 {user_name}，目前盤中多空拉鋸，系統暫未篩選出符合嚴格均線轉折條件的標的。建議先觀望、等待主流資金明確表態！"
-
         except Exception as e:
-
             reply_msg = f"⚠️ 盤中技術篩選異常：{e}"
 
-
-
         smart_reply_with_menu(event, reply_msg[:4000])
-
         return
 
-
-
-
-
-    # ==========================================================
-
-# 💎 升級版：雙排高質感戰情快捷面板 (通用的 Flex 產生器)
-
 # ==========================================================
-
+# 💎 升級版：雙排高質感戰情快捷面板 (通用的 Flex 產生器)
+# ==========================================================
 def create_flex_menu_message(message_text):
-
     flex_content = BubbleContainer(
-
         body=BoxComponent(
-
             layout='vertical',
-
             contents=[
-
-                # 訊息本文
-
                 BoxComponent(
-
                     layout='vertical',
-
                     contents=[{
-
                         "type": "text",
-
                         "text": str(message_text)[:3000],
-
                         "wrap": True,
-
                         "size": "sm",
-
                         "color": "#f8fafc"
-
                     }],
-
                     padding_bottom="12px"
-
                 ),
-
-                # 第一排按鈕 (國際夜盤、尋找買點)
-
                 BoxComponent(
-
                     layout='horizontal',
-
                     spacing='sm',
-
                     contents=[
-
                         ButtonComponent(
-
                             action=MessageAction(label="🌍 國際夜盤", text="夜盤"),
-
                             style="secondary",
-
                             height="sm"
-
                         ),
-
                         ButtonComponent(
-
                             action=MessageAction(label="🎯 尋找買點", text="尋找買點"),
-
                             style="secondary",
-
                             height="sm"
-
                         )
-
                     ]
-
                 ),
-
-                # 第二排按鈕 (AI盤勢講評、盤後選股)
-
                 BoxComponent(
-
                     layout='horizontal',
-
                     spacing='sm',
-
                     margin="sm",
-
                     contents=[
-
                         ButtonComponent(
-
                             action=MessageAction(label="🧠 AI 盤勢講評", text="今日盤勢"),
-
                             style="secondary",
-
                             height="sm"
-
                         ),
-
                         ButtonComponent(
-
                             action=MessageAction(label="📊 盤後選股", text="盤後選股"),
-
                             style="secondary",
-
                             height="sm"
                         )
                     ]
                 ),
-                # 💥 新增第三排按鈕 (專屬盤後覆盤通道)
                 BoxComponent(
                     layout='horizontal',
                     spacing='sm',
@@ -4427,7 +2646,6 @@ def create_flex_menu_message(message_text):
                         )
                     ]
                 ),
-                # 💥 新增第四排按鈕 (VIP 防禦網專區)
                 BoxComponent(
                     layout='horizontal',
                     spacing='sm',
@@ -4457,99 +2675,47 @@ def create_flex_menu_message(message_text):
     )
     return FlexSendMessage(alt_text="📊 股海觀浪戰情選單", contents=flex_content)
 
-
-
 # ==========================================================
-
 # 🌟 7. 🚀 雲端全時相決策中心 (全自動 5 分鐘循環更新)
-
 # ==========================================================
-
 def market_patrol_loop():
-
     import time
-
     import threading
 
-
-
     print("📡 [總部軍令] 全自動資金矩陣與大盤偵蒐迴圈已啟動...", flush=True)
-
     
-
-    # 開機時強制立即執行一次
-
     try:
-
         execute_force_refresh()
-
     except Exception as e:
-
         print(f"⚠️ 開機大盤偵蒐初次執行異常: {e}", flush=True)
-
         
-
     try:
-
         fetch_global_matrix_data()
-
     except Exception as e:
-
         print(f"⚠️ 開機全球矩陣初次執行異常: {e}", flush=True)
 
-
-
     while True:
-
         try:
-
-            # 每 300 秒 (5 分鐘) 自動在背景執行一次，更新資料與最新時間戳記
-
             time.sleep(300)  
-
             
-
             print("🔄 [自動化排程] 正在背景自動更新大盤資金流向...", flush=True)
-
             execute_force_refresh()
-
             
-
             print("🔄 [自動化排程] 正在背景自動更新全球跨國資金矩陣與即時時間...", flush=True)
-
             fetch_global_matrix_data()
-
             
-
         except Exception as e:
-
             print(f"⚠️ 自動化巡邏循環異常: {e}", flush=True)
-
             time.sleep(30)
 
-
-
-
-
-
-
-
-
 # ==========================================================
-
 # ⚡ 8. 專屬當沖連續掃描引擎 (全市場 2000 檔批次陣列雷達)
-
 # ==========================================================
-
-
-
-# 🛡️ 戰情室防禦黑盒子：記錄被攔截的主力陷阱
 intercepted_traps_log = []
 
 stock_tick_memory = {}
 intraday_alerted_codes = set()
 
-# 💥 新增：用來記錄「盤中真實被系統攔截過濾」的股票集合
 filtered_funds_codes = set()
 filtered_overheated_codes = set()
 last_clear_date = ""
@@ -4561,7 +2727,6 @@ def process_tick_data(data, meta_info, top_ind):
     
     code = data.get('c')
     
-    # 換日自動清空昨天的過濾紀錄
     tz = datetime.timezone(datetime.timedelta(hours=8))
     now_dt = datetime.datetime.now(tz)
     now_date_str = now_dt.strftime("%Y-%m-%d")
@@ -4613,7 +2778,6 @@ def process_tick_data(data, meta_info, top_ind):
             stock_tick_memory[code] = []
         stock_tick_memory[code].append((now_ts, z, v, h, l))
 
-        # 淨化：保留近 90 秒內的 Tick（純 4 空格縮排）
         stock_tick_memory[code] = [t for t in stock_tick_memory[code] if now_ts - t[0] <= 90]
 
         ticks = stock_tick_memory[code]
@@ -4636,7 +2800,6 @@ def process_tick_data(data, meta_info, top_ind):
             is_real_attack = current_z >= z_1m_ago
             is_volume_surge = False
 
-            # 💥 [統帥校準] 嚴格把關主力真實點火資金
             if time_status == "golden":
                 if vol_1m >= 50 and ignite_value >= 50000000: is_volume_surge = True
             elif time_status == "cooling":
@@ -4644,27 +2807,20 @@ def process_tick_data(data, meta_info, top_ind):
             elif time_status == "dead_water":
                 if vol_1m >= 150 and ignite_value >= 100000000: is_volume_surge = True
 
-            # 🛡️ 數據採集 1：資金不足過濾 (有一分鐘爆量>50張，但資金/張數未達嚴格標準)
             if vol_1m >= 50 and current_z >= z_1m_ago and not is_volume_surge:
                 filtered_funds_codes.add(code)
                 return None
 
             if not (is_volume_surge and is_real_attack): return None
 
-            # 💥 機構級微觀籌碼過濾：內外盤失衡判定
             best_bid = float(data.get('bid', 0.0))
             best_ask = float(data.get('ask', 0.0))
             
             if best_bid > 0 and best_ask > 0:
-                # 若現價小於等於委買價(Bid)，代表是賣方急於變現「主動倒貨（內盤成交）」
-                # 這種爆量屬於「主力假突破 / 出貨」，系統將強制攔截！
                 if current_z <= best_bid:
-                    filtered_overheated_codes.add(code) # 寫入防禦黑盒子
+                    filtered_overheated_codes.add(code)
                     return None
-                    
 
-            # 💥 機構級核心升級：導入短線 EMA (指數移動平均線) 動能矩陣
-            # 賦予近期價格更高權重，對轉折的敏感度遠大於傳統 MA
             prices = [t[1] for t in ticks]
             
             def calc_ema(data_list, period):
@@ -4675,28 +2831,22 @@ def process_tick_data(data, meta_info, top_ind):
                     ema = (price * k) + (ema * (1 - k))
                 return ema
 
-            # 運算高頻 EMA 矩陣
             ema5_now = calc_ema(prices, 5)
             ema5_prev = calc_ema(prices[:-1], 5) if len(prices) > 1 else ema5_now
-            ema12_now = calc_ema(prices, 12) # 增加 12EMA 作為趨勢護城河
+            ema12_now = calc_ema(prices, 12)
 
             is_ema_up = ema5_now > ema5_prev
             is_cross_vwap = (z_1m_ago < vwap_est and current_z >= vwap_est)
             
             # 戰術一：破底翻 (剛站上均價線，且短線 EMA 準備黃金交叉)
             is_bottom_reversal = is_cross_vwap and (current_z > ema5_now)
-            
             # 戰術二：主升段 (高頻多頭排列：EMA5 > EMA12 > 均價線，且現價創高)
             is_main_trend = is_ema_up and (ema5_now > ema12_now) and (current_z >= vwap_est)
-            
             if not is_bottom_reversal and not is_main_trend: return None
-
             is_below_20ma = (ma20 > 0 and current_z < ma20)
             if is_below_20ma: return None
-            
             alert_type = ""
             action_guide = ""
-            
             if is_bottom_reversal and not is_main_trend:
                 alert_type = "💥 【破底翻突襲】爆量貫穿均價與EMA！"
                 action_guide = f"🎯 【實戰戰術：低檔 V 轉搶短】\n👉 戰況解讀：主力瞬間爆量強攻，現價已站上 {vwap_est} 均價與 EMA5 雙重防禦！\n🛡️ 生死防線：以均價線為絕對底線，跌破立刻撤退！"
@@ -4704,41 +2854,20 @@ def process_tick_data(data, meta_info, top_ind):
                 alert_type = "🚀 【EMA 主升段】高頻多頭動能強勢推升！"
                 action_guide = f"🎯 【實戰戰術：右側順勢加碼】\n👉 戰況解讀：高頻 EMA(5,12) 呈現黃金多頭排列，趨勢極度強勢！\n🛡️ 移動防線：沿著 EMA5 ({round(ema5_now, 2)}) 操作，跌破則拔檔！"
             else:
-                return None 
-
-
-
+                return None
             bias = ((current_z - vwap_est) / vwap_est) * 100 if vwap_est > 0 else 0
             if bias >= 2.5:
                 # 🛡️ 數據採集 2：將過熱標的記錄進真實數據庫
                 filtered_overheated_codes.add(code)
-                
                 alert_type = "⚠️ 【高檔爆量・極端過熱】"
-
                 action_guide = f"🎯 【操盤手強制指令：嚴禁追高】\n👉 戰況解讀：正乖離達 {bias:+.1f}%，瞬間漲幅過大！\n🔪 動作：切勿市價追高！靜待量縮拉回測試。"
-
-
-
-
-
-
-
-
-
-
-
             is_resonance = (top_ind != "" and top_ind in ind)
-
             hot_tag = f"🌟 [主流資金共振：{ind}]" if is_resonance else f"🏷️ [{ind}]"
-
             resonance_text = " (🔥主攻部隊)" if is_resonance else ""
-
             intraday_alerted_codes.add(code)
-                
             # 🎯 [統帥加裝] 計算無腦進場價 (+2檔) 並寫入 CSV 資料庫
             tick_size = 0.05 if current_z < 50 else (0.1 if current_z < 100 else (0.5 if current_z < 500 else 1.0))
             suggested_entry = round(current_z + (tick_size * 2), 2)
-            
             csv_payload = {
                 "time": time_str,
                 "id": code,
@@ -4752,7 +2881,6 @@ def process_tick_data(data, meta_info, top_ind):
                 "stop_loss": vwap_est
             }
             log_event(csv_payload)
-
             # 💡 請保留您原本這段完整、豐富的回傳字串，一絲一毫都不少！
             return (
                 f"[{time_str}] ⚡ {name}({code}) {alert_type}\n"
@@ -4766,71 +2894,33 @@ def process_tick_data(data, meta_info, top_ind):
         pass
     return None
 
-
-
 # 🎯 獨立異步擊發彈匣
-
 instant_fire_queue = []
 
-
-
 def instant_dispatcher_loop():
-
     """背景擊發手：每 3.5 秒巡視一次彈匣，確保雷達掃完一輪後完美打包擊發！"""
-
     import time
-
     while True:
-
         time.sleep(3.5)  # 💥 這裡改為 3.5 秒
-
         if len(instant_fire_queue) > 0:
-
             # 瞬間抽出彈匣裡所有的飆股情報
-
             bullets = instant_fire_queue[:]
-
             instant_fire_queue.clear()
-
-            
-
             # 打包發射
-
             combined_msg = "🚨 【全市場同步跟單急報】\n\n" + "\n\n======================\n\n".join(bullets)
-
             TARGET_GROUP_IDS = [
-
                 "C0481b44935888bb1dc20dfd52a675e8a", 
-
                 "C47bfa8e16a7216bd54dceb3b5e90cfa0"  
-
             ]
-
             for group_id in TARGET_GROUP_IDS:
-
                 try:
-
                     smart_push_with_menu(group_id, combined_msg[:4500])
-
                 except: pass
-
             print(f"🚀 [異步擊發手] 已將 {len(bullets)} 檔飆股零時差空投至前線！", flush=True)
 
-
-
-
-
-
-
-
-
 # 啟動背景擊發手
-
 import threading
-
 threading.Thread(target=instant_dispatcher_loop, daemon=True).start()
-
-
 
 def check_dynamic_ema_defense(stock_code, current_price):
     """
@@ -4838,35 +2928,27 @@ def check_dynamic_ema_defense(stock_code, current_price):
     """
     import requests, os
     import pandas as pd
-    
     fugle_token = os.environ.get('FUGLE_API_TOKEN', '').strip()
     if not fugle_token:
         return ""
-        
     headers = {"X-API-KEY": fugle_token}
-    
     try:
         # 呼叫富果 5分K 歷史數據
         url = f"https://api.fugle.tw/marketdata/v1.0/stock/intraday/candles/{stock_code}?timeframe=5"
         res = requests.get(url, headers=headers, timeout=5)
-        
         if res.status_code == 200:
             data = res.json().get('data', [])
             if not data or len(data) < 12:
                 return ""
-                
             df = pd.DataFrame(data)
             # 富果 K 線由新到舊，將其反轉為由舊到新
             df = df.iloc[::-1].reset_index(drop=True) 
             df['close'] = pd.to_numeric(df['close'])
-            
             # 計算 EMA(5) 與 EMA(12)
             df['EMA5'] = df['close'].ewm(span=5, adjust=False).mean()
             df['EMA12'] = df['close'].ewm(span=12, adjust=False).mean()
-            
             latest_ema5 = df.iloc[-1]['EMA5']
             latest_ema12 = df.iloc[-1]['EMA12']
-            
             # Lucid-Flex 動態判定邏輯
             status_msg = ""
             if current_price > latest_ema5 and latest_ema5 > latest_ema12:
@@ -4877,12 +2959,10 @@ def check_dynamic_ema_defense(stock_code, current_price):
                 status_msg = f"\n🛑 趨勢反轉: 跌破 12MA (建議立即撤退)"
             else:
                 status_msg = f"\n⚖️ 均線糾結: 籌碼換手中"
-                
             return status_msg
     except Exception:
         pass
     return ""
-
 
 def generate_treemap_image(heat_data):
     """
@@ -4891,31 +2971,25 @@ def generate_treemap_image(heat_data):
     try:
         # 💥 抓取全域的漲跌幅資料
         change_data = globals().get('global_sector_change', {})
-        
         # 抓取前 12 大吸金族群
         sorted_sectors = sorted(heat_data.items(), key=lambda x: x[1], reverse=True)[:12]
         if not sorted_sectors:
             return False
-            
         labels = []
         sizes = []
         colors = []
-        
         for sector, val_wan in sorted_sectors:
             val_yi = val_wan / 10000
-            
             # 模糊比對找出該族群的漲跌幅 (解決富果與證交所名稱些微不同的問題)
             chg_pct = 0.0
             for k, v in change_data.items():
                 if k in sector or sector in k:
                     chg_pct = v
                     break
-                    
             # 決定標籤文字與正負號 (例如: +2.5%)
             sign = "+" if chg_pct > 0 else ""
             labels.append(f"{sector}\n{val_yi:.1f}億\n{sign}{chg_pct}%")
             sizes.append(val_wan)
-            
             # 💥 台灣股市專屬紅綠上色邏輯
             if chg_pct >= 2.0:
                 colors.append('#b91c1c') # 深紅 (強勢大漲)
@@ -4927,20 +3001,15 @@ def generate_treemap_image(heat_data):
                 colors.append('#10b981') # 亮綠 (一般下跌)
             else:
                 colors.append('#64748b') # 灰色 (平盤或無資料)
-            
         # 讀取繁體中文字體
         font_path = 'custom_font.ttf'
         myfont = FontProperties(fname=font_path)
-        
         plt.figure(figsize=(10, 6))
-        
         # 呼叫 squarify 畫出矩形式樹狀圖，套用動態 colors 陣列
         squarify.plot(sizes=sizes, label=labels, color=colors, alpha=0.85,
                       text_kwargs={'fontproperties': myfont, 'fontsize': 14, 'color': 'white', 'weight': 'bold'})
-        
         plt.axis('off') # 隱藏座標軸
         plt.tight_layout()
-        
         # 將畫好的圖存檔
         plt.savefig('heatmap.png', format='png', dpi=150, bbox_inches='tight')
         plt.close()
@@ -4949,51 +3018,40 @@ def generate_treemap_image(heat_data):
         print(f"⚠️ 繪圖引擎異常: {e}", flush=True)
         return False
 
-
-
 def continuous_radar_loop():
     global instant_fire_queue
     print("📡 [當沖雷達] 啟動富果 WebSocket 零延遲串流引擎 (永久免費版)...", flush=True)
     import time, datetime, json, os, threading
     import websocket # 需確保 requirements.txt 已加入 websocket-client
-
     fugle_token = os.environ.get('FUGLE_API_TOKEN', '').strip()
-    
     while True:
         try:
             now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
             is_weekend = now.weekday() >= 5
             current_time_num = now.hour * 100 + now.minute
-
             if not is_weekend and (900 <= current_time_num <= 1324):
                 if not fugle_token:
                     print("⚠️ 尚未設定 FUGLE_API_TOKEN，雷達暫停。", flush=True)
                     time.sleep(30)
                     continue
-
                 current_cache = read_cache()
                 full_stocks = current_cache.get("fundamental_full", [])
-                
                 if not full_stocks:
                     time.sleep(10)
                     continue
-
                 stock_data_map = {}
                 for s in full_stocks:
                     code = str(s.get('code', '')).strip()
                     if code and len(code) == 4 and code.isdigit():
                         stock_data_map[code] = s
-
                 def on_message(ws, message):
                     try:
                         msg_data = json.loads(message)
                         event = msg_data.get("event")
-                        
                         # 💥 破案關鍵：收到機房的「驗證通過」訊號後，才開始大舉發送訂閱請求
                         if event == "authenticated":
                             print("✅ 安全驗證通過！開始向機房發送訂閱請求...", flush=True)
                             symbols = list(stock_data_map.keys())
-                            
                             # 用獨立執行緒處理發送訂閱，避免主線程死鎖
                             def async_subscribe():
                                 chunk_size = 30
@@ -5011,47 +3069,53 @@ def continuous_radar_loop():
                                         except: pass
                                     time.sleep(0.5)
                                 print(f"✅ 成功訂閱 {len(symbols)} 檔標的，進入零延遲監聽模式！", flush=True)
-
                             threading.Thread(target=async_subscribe, daemon=True).start()
                             return
-
                         # 接收即時成交報價
                         if event == "data":
                             quote = msg_data.get("data", {})
                             code = quote.get("symbol", "")
-                            
                             if code in stock_data_map:
                                 z = quote.get('price', 0)
+
+                                # 📊 volume = 當日累積成交量，用來計算 1 分鐘爆量
                                 vol_shares = quote.get('volume', 0)
-                                v = vol_shares / 1000.0 # 股數轉張數
+                                v = vol_shares / 1000.0  # 股數轉張數
+
+                                # 💥 size = 單筆成交量，專門用來判斷是否為 50 張以上的大單
+                                single_size_shares = quote.get('size', 0)
+                                try:
+                                    single_trade_lots = float(single_size_shares) / 1000.0
+                                except:
+                                    single_trade_lots = 0.0
 
                                 if z > 0 and v > 0:
                                     bid = quote.get('bid', 0)
                                     ask = quote.get('ask', 0)
-                                    
+
                                     # 🔥 [擴充戰術] 微觀籌碼力道判定
                                     power_type = "中性"
+
                                     if ask > 0 and z >= ask:
                                         power_type = "🔴外盤強攻"
                                     elif bid > 0 and z <= bid:
                                         power_type = "🟢內盤倒貨"
 
-                                    # 🛡️ 實戰防禦網：如果是瞬間大單 (例如單筆大於 50 張)，卻是砸在「內盤」
-                                    # 代表主力正在倒貨割韭菜，系統直接判定為誘多陷阱，阻擋後續發報！
-                                    if v >= 50 and power_type == "🟢內盤倒貨":
+                                    # 🛡️ 實戰防禦網：
+                                    # 只有「單筆成交」真的 >= 50 張，
+                                    # 且成交在內盤時，才判定為大單倒貨並攔截。
+                                    if single_trade_lots >= 50 and power_type == "🟢內盤倒貨":
                                         # 悄悄攔截，不驚動戰情室
-                                        return 
-                                        
+                                        return
                                     # trades 頻道專注於即時成交，未提供的歷史欄位暫以現價補齊防呆
                                     # 從快取抓取真實昨收與開盤價，避免覆蓋後計算失真
                                     stock_data = stock_data_map[code]
                                     ref_y = float(stock_data.get('y') or stock_data.get('referencePrice', z))
                                     open_o = float(stock_data.get('o') or stock_data.get('openPrice', z))
-
                                     formatted_data = {
                                         'c': code, 
                                         'z': z, 
-                                        'y': ref_y,     # 正確帶入真實昨收
+                                        'y': ref_y,   # 正確帶入真實昨收
                                         'o': open_o,    # 正確帶入開盤價
                                         'h': z, 
                                         'l': z, 
@@ -5060,33 +3124,24 @@ def continuous_radar_loop():
                                         'ask': ask, 
                                         'power': power_type
                                     }
-                                    
                                     stock_data = stock_data_map[code]
-                                    
                                     # 🔥 [擴充戰術 3] 族群資金熱力追蹤引擎
                                     # 動態建立全域變數，避免跨執行緒讀寫問題
                                     if 'global_sector_heat' not in globals():
                                         globals()['global_sector_heat'] = {}
-                                        
                                     # 嘗試抓取該股票的產業類別 (若無則歸類為'未分類')
                                     industry = stock_data.get('industry', stock_data.get('category', '未分類'))
-                                    
                                     # 計算單筆成交金額 (單位：萬元)。股價(元) * 張數 * 1000 / 10000 = 股價 * 張數 * 0.1
                                     trade_value_wan = z * v * 0.1 
-                                    
                                     if industry and industry != '未分類':
                                         globals()['global_sector_heat'][industry] = globals()['global_sector_heat'].get(industry, 0) + trade_value_wan
-                                    
                                     alert_msg = process_tick_data(formatted_data, stock_data, global_true_market_top_ind)
-
                                     if alert_msg and alert_msg not in intraday_breakout_cache:
                                         intraday_breakout_cache.insert(0, alert_msg)
-                                        
                                         # 將 API 查詢與訊息推播丟入背景 Thread，不卡死 WebSocket
                                         def async_alert_task(c_code, c_z, base_msg, p_type, name):
                                             ema_status = check_dynamic_ema_defense(c_code, c_z)
                                             final_msg = base_msg + ema_status if ema_status else base_msg
-                                            
                                             instant_fire_queue.append(final_msg)
                                             try:
                                                 new_cache = read_cache()
@@ -5094,7 +3149,6 @@ def continuous_radar_loop():
                                                 update_cache(new_cache)
                                                 trigger_air_raid_alarm(f"🔥 {name} 爆量點火！[{p_type}]", final_msg)
                                             except: pass
-
                                         threading.Thread(
                                             target=async_alert_task, 
                                             args=(code, z, alert_msg, power_type, stock_data.get('name', code)),
@@ -5102,13 +3156,10 @@ def continuous_radar_loop():
                                         ).start()
                     except:
                         pass
-
                 def on_error(ws, error):
                     print(f"⚠️ 富果 WebSocket 異常: {error}", flush=True)
-
                 def on_close(ws, close_status_code, close_msg):
                     print("🔴 富果 WebSocket 連線斷開，準備重連...", flush=True)
-
                 def on_open(ws):
                     print("🟢 富果 WebSocket 已連線！正在發送安全驗證...", flush=True)
                     # 💥 破案關鍵：一接通必須立刻遞交 apikey 進行 Auth 驗證
@@ -5119,12 +3170,9 @@ def continuous_radar_loop():
                         }
                     }
                     ws.send(json.dumps(auth_msg))
-
                 websocket.enableTrace(False)
-                
                 # 更新為最新的 v1.0 串流端點
                 ws_url = "wss://api.fugle.tw/marketdata/v1.0/stock/streaming"
-                
                 ws = websocket.WebSocketApp(
                     ws_url,
                     on_open=on_open,
@@ -5132,16 +3180,12 @@ def continuous_radar_loop():
                     on_error=on_error,
                     on_close=on_close
                 )
-                
                 ws.run_forever(ping_interval=60, ping_timeout=30)
-                
                 time.sleep(5)
             else:
                 time.sleep(60) 
         except Exception as e:
             time.sleep(60)
-
-
 
 # ==========================================================
 # 🛡️ 戰術四：台股策略衰退監控與 T+1 回測引擎 (Alpha Decay Tracker)
@@ -5156,7 +3200,6 @@ def evaluate_alpha_decay():
                 "<div class='stat-card'><div class='stat-title'>T+1 隔日沖勝率</div><div class='stat-value yellow'>收集中</div><div class='stat-desc'>需累積兩天數據</div></div>",
                 "⏳ T+1 回測：數據收集中 (需至少兩日紀錄)"
             )
-        
         # 鎖定 T-1 (前一個交易日)
         t1_file = files[-2]
         track_list = []
@@ -5171,16 +3214,13 @@ def evaluate_alpha_decay():
                             "entry": float(row["Suggested_Entry"])
                         })
                     except: pass
-
         if not track_list:
             return (
                 "<div class='stat-card'><div class='stat-title'>T+1 隔日沖勝率</div><div class='stat-value yellow'>無訊號</div><div class='stat-desc'>昨日無觸發進場訊號</div></div>",
                 "⏳ T+1 回測：前一交易日無觸發訊號"
             )
-
         win_count = 0
         total_valid = 0
-        
         # 批次反查今日收盤價
         for item in track_list:
             code = item["code"]
@@ -5191,7 +3231,6 @@ def evaluate_alpha_decay():
                 if not res.get('chart', {}).get('result'):
                     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TWO?range=1d&interval=1d"
                     res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
-                
                 close_p = res['chart']['result'][0]['meta']['regularMarketPrice']
                 if close_p > 0:
                     total_valid += 1
@@ -5199,12 +3238,10 @@ def evaluate_alpha_decay():
                     if close_p >= entry_p:
                         win_count += 1
             except: pass
-        
         if total_valid > 0:
             win_rate = (win_count / total_valid) * 100
             color_cls = "green" if win_rate >= 50 else ("yellow" if win_rate >= 40 else "red")
             alert_tag = "🚀 動能延續，策略健康" if win_rate >= 50 else "⚠️ 動能衰退，嚴防假突破"
-            
             html_block = f"""
             <div class='stat-card'>
                 <div class='stat-title'>T+1 隔日沖勝率 (追蹤 {total_valid} 檔)</div>
@@ -5214,15 +3251,12 @@ def evaluate_alpha_decay():
             """
             line_text = f"🧪 T+1 隔日沖回測勝率：{win_rate:.0f}% ({alert_tag})"
             return html_block, line_text
-            
     except Exception as e:
         print(f"⚠️ Alpha Decay 運算失敗: {e}")
-        
     return (
         "<div class='stat-card'><div class='stat-title'>T+1 隔日沖勝率</div><div class='stat-value red'>異常</div><div class='stat-desc'>請檢查系統日誌</div></div>", 
         "⚠️ T+1 回測運算異常"
     )
-
 
 # ==========================================================
 # 📊 13:40 雲端收盤自動戰情與 HTML 網頁生成引擎 (真實收盤價與勝率修正版)
@@ -5233,44 +3267,35 @@ def afternoon_review_loop():
     import csv
     import os
     import json
-    
     print("📡 [收盤檢討哨] 雲端 HTML 戰情室自動生成引擎已就位 (真實價位校正版)...", flush=True)
     last_sent_date = ""
-
     while True:
         try:
             now = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
             is_weekend = now.weekday() >= 5
             current_time_num = now.hour * 100 + now.minute
             current_date_str = now.strftime("%Y-%m-%d")
-            
             global filtered_funds_codes, filtered_overheated_codes
             real_funds_filtered = len(filtered_funds_codes)
             real_overheated_filtered = len(filtered_overheated_codes)
-            
             win_rate_pct = "0%"
             total_scans = 0
             sent_count = 0
             win_count = 0
             sniper_cards_html = ""
-            
             today_str = now.strftime('%Y%m%d')
             output_html_name = f"war_room_{today_str}.html"
             csv_filename = f"trading_log_{today_str}.csv"
-
             # 盤後結算條件 (13:55 ~ 14:30)
             if not is_weekend and (1355 <= current_time_num <= 1430) and (last_sent_date != current_date_str):
                 print("🔍 [戰場鑑識] 時間已達收盤點，開始自動結算與真實價位校正...", flush=True)
-                
                 rows_data = []
                 if os.path.exists(csv_filename):
                     with open(csv_filename, mode='r', encoding='utf-8-sig') as f:
                         reader = csv.DictReader(f)
                         rows_data = list(reader)
-                
                 total_scans = len(rows_data)
                 is_first_card = True
-                
                 # 收集所有強勢達標標的並即時抓取 Yahoo 收盤價
                 target_ids = set()
                 sent_rows = []
@@ -5281,7 +3306,6 @@ def afternoon_review_loop():
                         sc = row.get("Stock_ID", "").strip()
                         target_ids.add(sc)
                         sent_rows.append(row)
-                
                 # 批量即時向 Yahoo 查收盤價
                 close_price_map = {}
                 for scode in target_ids:
@@ -5299,7 +3323,6 @@ def afternoon_review_loop():
                         close_price_map[scode] = cp if cp > 0 else float(row.get("Suggested_Entry", 0))
                     except:
                         close_price_map[scode] = 0.0
-
                 # 逐筆產生卡片與計算真實勝負
                 for row in sent_rows:
                     stock_n = row.get("Stock_Name", "未知")
@@ -5309,13 +3332,10 @@ def afternoon_review_loop():
                         price_in = float(price_in_str)
                     except:
                         price_in = 0.0
-                        
                     t_time = row.get("Trigger_Time", "09:00")
                     pct = row.get("Price_Change_Pct", "+0.00%")
-                    
                     real_close = close_price_map.get(stock_c, 0.0)
                     close_price_str = f"{real_close:.2f}" if real_close > 0 else "N/A"
-                    
                     # 真實勝負判定：收盤價 >= 建議進場/觸發價即算勝
                     is_win = False
                     if real_close > 0 and price_in > 0:
@@ -5329,11 +3349,9 @@ def afternoon_review_loop():
                         is_win = True # 缺價保底
                         win_count += 1
                         trade_res_text = "⚖️ 收盤比對中"
-
                     val_color = "red" if is_win else "green"
                     open_attr = "open" if is_first_card else ""
                     is_first_card = False
-                    
                     sniper_cards_html += f"""
                     <details class="sniper-card" {open_attr}>
                         <summary class="card-head" style="cursor: pointer; outline: none; list-style: none;">
@@ -5385,7 +3403,6 @@ def afternoon_review_loop():
                         </div>
                     </details>
                     """
-
                 win_rate_pct = f"{(win_count / sent_count * 100):.0f}%" if sent_count > 0 else "0%"
                 display_date = now.strftime("%Y.%m.%d (%a)")
                 pcloud_public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{output_html_name}"
@@ -5595,280 +3612,137 @@ def afternoon_review_loop():
 
 
 # 啟動盤中巡邏引擎
-
 threading.Thread(target=market_patrol_loop, daemon=True).start()
 
 # 啟動基本面情報掃描引擎
-
 threading.Thread(target=fundamental_patrol_loop, daemon=True).start()
 
 # 💥 啟動當沖雷達連續掃描引擎
-
 threading.Thread(target=continuous_radar_loop, daemon=True).start()
 
 # 💥 啟動收盤後多分頁戰場鑑識引擎
-
 threading.Thread(target=afternoon_review_loop, daemon=True).start()
 
-
-
 class StandaloneApplication:
-
     def __init__(self, app, options=None): 
-
         self.options = options or {}
-
         self.application = app
-
     def run(self):
-
         import gunicorn.app.base
-
         class FlaskGunicornApp(gunicorn.app.base.BaseApplication):
-
             def __init__(self, app, options): 
-
                 self.options = options
-
                 self.application = app
-
                 super().__init__()
-
             def load_config(self):
-
                 for key, value in self.options.items(): 
-
                     self.cfg.set(key.lower(), value)
-
             def load(self): 
-
                 return self.application
-
         FlaskGunicornApp(self.application, self.options).run()
 
-
-
 # 💓 戰情室心跳維持引擎：每 5 分鐘對自己戳一下，防止被 Render 強制休眠
-
 def keep_alive():
-
     while True:
-
         try:
-
             requests.get("https://stock-line-bot-c8em.onrender.com")
-
             print("💓 心跳送出，戰情室保持清醒中...")
-
         except:
-
             pass
-
         time.sleep(300) # 每 300 秒 (5分鐘) 戳一次
 
-
-
 # 啟動心跳線
-
 threading.Thread(target=keep_alive, daemon=True).start()
 
-
-
-
-
 # ==========================================================
-
 # 💬 戰情大廳：WebSocket 即時通訊樞紐與記憶模組
-
 # ==========================================================
-
 CHAT_FILE = "chat_memory.json"  # 💥 新增：實體對話紀錄檔案
-
 MAX_HISTORY = 1000  # 設定大廳最多保留最新 1000 筆訊息
 
-
-
 # 💥 新增：開機時讀取實體硬碟的函數
-
 def load_chat_history():
-
     if os.path.exists(CHAT_FILE):
-
         try:
-
             with open(CHAT_FILE, 'r', encoding='utf-8') as f:
-
                 return json.load(f)
-
         except: pass
-
     return []
 
-
-
 # 💥 新增：收到訊息時寫入實體硬碟的函數
-
 def save_chat_history(data):
-
     try:
-
         with open(CHAT_FILE, 'w', encoding='utf-8') as f:
-
             json.dump(data, f, ensure_ascii=False)
-
     except: pass
 
-
-
 # 啟動時立刻讀取舊有的對話紀錄
-
 chat_history = load_chat_history()
 
-
-
 @socketio.on('connect')
-
 def handle_connect():
-
     # 戰友連線時，立刻把歷史對話紀錄發給他
-
     emit('load_history', chat_history)
 
-
-
 @socketio.on('send_message')
-
 def handle_client_message(data):
-
     sender = data.get('sender', '游擊兵')
-
     msg = data.get('msg', '')
-
     print(f"💬 [大廳廣播] {sender}: {msg}", flush=True)
-
-    
-
     # 將訊息打包
-
     message_data = {'sender': sender, 'msg': msg}
-
-    
-
     # 寫入母艦記憶體
-
     chat_history.append(message_data)
-
     # 如果歷史紀錄超過設定的上限，就剔除最舊的一筆
-
     if len(chat_history) > MAX_HISTORY:
-
         chat_history.pop(0)
-
-    
-
     # 💥 關鍵補給：將更新後的陣列立刻寫入實體檔案存檔！
-
     save_chat_history(chat_history)
-
-    
-
     # 瞬間將訊息無延遲空投給所有連線中的戰友
-
     emit('receive_message', message_data, broadcast=True)
 
-
-
 # ==========================================================
-
 # 🔔 Web Push 伺服器端：接收裝置訂閱與發射防空警報
-
 # ==========================================================
-
 from pywebpush import webpush, WebPushException
 
-
-
 # 暫存所有訂閱防空警報的戰友裝置清單
-
 push_subscriptions = []
 
-
-
 @app.route('/subscribe_push', methods=['POST'])
-
 def subscribe_push():
-
     data = request.json
-
     sub = data.get('sub')
-
     sender = data.get('sender', '未知戰友')
-
     if sub:
-
         # 避免重複儲存相同的裝置
-
         if sub not in push_subscriptions:
-
             push_subscriptions.append({'sender': sender, 'sub': sub})
-
         print(f"✅ 成功註冊戰友 [{sender}] 的防空警報接收器！", flush=True)
-
         return jsonify({"status": "success", "message": "防空警報雷達鎖定成功！"}), 200
-
     return jsonify({"status": "error", "message": "無效的訂閱資料"}), 400
 
-
-
 # 當盤中偵測到爆量訊號時，呼叫此函數向所有已訂閱的戰友發射通知！
-
 def trigger_air_raid_alarm(title, body):
-
     vapid_private_key = os.environ.get('VAPID_PRIVATE_KEY')
-
     vapid_claim_email = os.environ.get('VAPID_SUBJECT', 'mailto:pd91233@gmail.com')
-
-
-
     if not vapid_private_key:
-
         print("⚠️ 警告：未找到 VAPID_PRIVATE_KEY 環境變數，無法發送推播！", flush=True)
-
         return
-
-
-
     for client in push_subscriptions:
-
         try:
-
             webpush(
-
                 subscription_info=client['sub'],
-
                 data=json.dumps({"title": title, "body": body, "url": "https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/latest_report.html"}),
-
                 vapid_private_key=vapid_private_key,
-
                 vapid_claims={"sub": vapid_claim_email}
-
             )
-
             print(f"🚀 成功向戰友 [{client['sender']}] 發射防空警報！", flush=True)
-
         except WebPushException as ex:
-
             print(f"❌ 推播發送失敗 ({client['sender']}): {ex}", flush=True)
 
-
-
-
-
 if __name__ == "__main__":
-
     print("🚀 戰情室與雷達掃描引擎全面啟動 (含 WebSocket 即時通訊與 Web Push 裝甲)...", flush=True)
-
     port = int(os.environ.get("PORT", 10000))
-
-    socketio.run(app, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True) 
+    socketio.run(app, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
 
