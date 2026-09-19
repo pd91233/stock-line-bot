@@ -1,10 +1,10 @@
 import eventlet
 eventlet.monkey_patch()
 # -*- coding: utf-8 -*-
-# ==========================================================
+# =========================================================
 # 📡 股海觀浪雲端探子母艦：防彈完全體戰情室 V100.0 (階段一：全市場基本面狙擊)
 # 開發代號：botmain.py (雲端守護協定 - 100% 完整解碼不閹割版)
-# ==========================================================
+# =========================================================
 
 from flask import Flask, request, abort, jsonify, make_response, send_file  # 👈 新增了 send_file
 from flask_socketio import SocketIO, emit
@@ -558,12 +558,25 @@ def smart_push_with_menu(group_id, message_text):
             
         except Exception as api_err:
             err_str = str(api_err)
-            if "429" in err_str or "limit" in err_str.lower() or "LineBotApiError" in err_str:
-                print(f"⚠️ [{bot_name} 額度耗盡/429] 雲端自動切換下一台機器人...", flush=True)
-                continue
+
+            print(
+                f"❌ [LINE推播例外] {bot_name} | "
+                f"{type(api_err).__name__}: {err_str}",
+                flush=True
+            )
+
+            if "429" in err_str or "limit" in err_str.lower():
+                print(
+                    f"🔄 [{bot_name}] 額度限制，切換下一台機器人...",
+                    flush=True
+                )
             else:
-                print(f"⚠️ {bot_name} 發射受阻 ({err_str})，嘗試切換...", flush=True)
-                continue
+                print(
+                    f"🔄 [{bot_name}] 推播失敗，切換下一台機器人...",
+                    flush=True
+                )
+
+            continue
                 
     if not success_sent:
         print(f"❌ [發射崩潰] 群組 {group_id} 查無可用的機器人，或所有駐紮機器人彈藥皆已耗盡！", flush=True)
@@ -1199,7 +1212,18 @@ def fetch_fundamental_data():
                 "eps": eps_str,
                 "eps_period": eps_period_str,        
                 "pe": pe_str,
+                
+                previous_close_str = "-"
+                try:
+                    close_val = float(close_str)
+                    chg_val = float(chg_pct_map.get(code, 0))
+                    if close_val > 0:
+                        previous_close_str = f"{close_val / (1 + chg_val / 100):.2f}"
+                except:
+                    pass
+                
                 "close": close_str,
+                "previous_close": previous_close_str,
                 "open": open_map.get(code, "-"),
                 "chg": chg_pct_map.get(code, "-"),
                 "is_new": is_new_release,
@@ -2811,13 +2835,27 @@ def process_tick_data(data, meta_info, top_ind):
                 filtered_funds_codes.add(code)
                 return None
 
-            if not (is_volume_surge and is_real_attack): return None
+            if not is_volume_surge:
+                print(
+                    f"⏳ [爆量未達標] {code} 1分鐘量={vol_1m:.1f}張 "
+                    f"點火金額={ignite_value/10000:.0f}萬",
+                    flush=True
+                )
+                return None
+
+            if not is_real_attack:
+                print(
+                    f"⏸️ [價格未跟上] {code} 現價={current_z} "
+                    f"50秒前={z_1m_ago}",
+                    flush=True
+                )
+                return None
 
             best_bid = float(data.get('bid', 0.0))
             best_ask = float(data.get('ask', 0.0))
             
             if best_bid > 0 and best_ask > 0:
-                if current_z <= best_bid:
+                if current_z < best_bid:
                     filtered_overheated_codes.add(code)
                     return None
 
@@ -2890,20 +2928,25 @@ def process_tick_data(data, meta_info, top_ind):
                 f"----------------------\n"
                 f"{action_guide}"
             )
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"❌ [爆量判斷錯誤] {code}: {e}", flush=True)
     return None
 
 # 🎯 獨立異步擊發彈匣
 instant_fire_queue = []
+instant_fire_queue_lock = threading.Lock()
 
 def instant_dispatcher_loop():
     """背景擊發手：每 3.5 秒巡視一次彈匣，確保雷達掃完一輪後完美打包擊發！"""
     import time
+
     while True:
-        time.sleep(3.5)  # 💥 這裡改為 3.5 秒
-        if len(instant_fire_queue) > 0:
-            # 瞬間抽出彈匣裡所有的飆股情報
+        time.sleep(3.5)
+
+        with instant_fire_queue_lock:
+            if not instant_fire_queue:
+                continue
+
             bullets = instant_fire_queue[:]
             instant_fire_queue.clear()
             # 打包發射
@@ -2915,8 +2958,11 @@ def instant_dispatcher_loop():
             for group_id in TARGET_GROUP_IDS:
                 try:
                     smart_push_with_menu(group_id, combined_msg[:4500])
-                except: pass
-            print(f"🚀 [異步擊發手] 已將 {len(bullets)} 檔飆股零時差空投至前線！", flush=True)
+                    print(f"✅ [LINE推播成功] 群組 {group_id}", flush=True)
+                except Exception as e:
+                    print(f"❌ [LINE推播失敗] 群組 {group_id}: {e}", flush=True)
+
+            print(f"🚀 [異步擊發手] 已處理 {len(bullets)} 檔爆量警報！", flush=True)
 
 # 啟動背景擊發手
 import threading
@@ -3049,32 +3095,54 @@ def continuous_radar_loop():
                         msg_data = json.loads(message)
                         event = msg_data.get("event")
                         # 💥 破案關鍵：收到機房的「驗證通過」訊號後，才開始大舉發送訂閱請求
+                        
+                        if event == "error":
+                            print(f"❌ [富果 WebSocket 錯誤] {msg_data.get('data')}", flush=True)
+                            return
+                        
                         if event == "authenticated":
                             print("✅ 安全驗證通過！開始向機房發送訂閱請求...", flush=True)
                             symbols = list(stock_data_map.keys())
-                            # 用獨立執行緒處理發送訂閱，避免主線程死鎖
+
                             def async_subscribe():
                                 chunk_size = 30
                                 for i in range(0, len(symbols), chunk_size):
                                     chunk = symbols[i:i+chunk_size]
-                                    for sym in chunk:
-                                        subscribe_msg = {
-                                            "event": "subscribe",
-                                            "data": {
-                                                "channel": "trades",
-                                                "symbol": sym
-                                            }
+
+                                    subscribe_msg = {
+                                        "event": "subscribe",
+                                        "data": {
+                                            "channel": "trades",
+                                            "symbols": chunk
                                         }
-                                        try: ws.send(json.dumps(subscribe_msg))
-                                        except: pass
+                                    }
+
+                                    try:
+                                        ws.send(json.dumps(subscribe_msg))
+                                    except Exception as e:
+                                        print(f"⚠️ [富果訂閱發送失敗] {e}", flush=True)
+
                                     time.sleep(0.5)
+
                                 print(f"✅ 成功訂閱 {len(symbols)} 檔標的，進入零延遲監聽模式！", flush=True)
+
                             threading.Thread(target=async_subscribe, daemon=True).start()
                             return
+
+                        if event == "subscribed":
+                            print(f"✅ [富果訂閱成功] {msg_data.get('data')}", flush=True)
+                            return
+
                         # 接收即時成交報價
                         if event == "data":
                             quote = msg_data.get("data", {})
                             code = quote.get("symbol", "")
+
+                            print(
+                                f"📡 [富果成交] {code} 價格={quote.get('price')} "
+                                f"單量={quote.get('size')} 累積量={quote.get('volume')}",
+                                flush=True
+                            )
                             if code in stock_data_map:
                                 z = quote.get('price', 0)
 
@@ -3110,8 +3178,19 @@ def continuous_radar_loop():
                                     # trades 頻道專注於即時成交，未提供的歷史欄位暫以現價補齊防呆
                                     # 從快取抓取真實昨收與開盤價，避免覆蓋後計算失真
                                     stock_data = stock_data_map[code]
-                                    ref_y = float(stock_data.get('y') or stock_data.get('referencePrice', z))
-                                    open_o = float(stock_data.get('o') or stock_data.get('openPrice', z))
+                                    ref_y = float(
+                                        stock_data.get('previous_close')
+                                        or stock_data.get('y')
+                                        or stock_data.get('referencePrice')
+                                        or z
+                                    )
+
+                                    open_o = float(
+                                        stock_data.get('open')
+                                        or stock_data.get('o')
+                                        or stock_data.get('openPrice')
+                                        or z
+                                    )
                                     formatted_data = {
                                         'c': code, 
                                         'z': z, 
@@ -3136,26 +3215,48 @@ def continuous_radar_loop():
                                     if industry and industry != '未分類':
                                         globals()['global_sector_heat'][industry] = globals()['global_sector_heat'].get(industry, 0) + trade_value_wan
                                     alert_msg = process_tick_data(formatted_data, stock_data, global_true_market_top_ind)
-                                    if alert_msg and alert_msg not in intraday_breakout_cache:
-                                        intraday_breakout_cache.insert(0, alert_msg)
+                                    if alert_msg:
+                                        print(f"🔥 [爆量警報命中] {code} {stock_data.get('name', code)}", flush=True)
+
+                                        if alert_msg not in intraday_breakout_cache:
+                                            intraday_breakout_cache.insert(0, alert_msg)
+                                            print(f"✅ [警報已進入通知流程] {code}", flush=True)
                                         # 將 API 查詢與訊息推播丟入背景 Thread，不卡死 WebSocket
                                         def async_alert_task(c_code, c_z, base_msg, p_type, name):
-                                            ema_status = check_dynamic_ema_defense(c_code, c_z)
+                                            try:
+                                                ema_status = check_dynamic_ema_defense(c_code, c_z)
+                                            except Exception as e:
+                                                print(f"⚠️ [EMA分析失敗] {c_code}: {e}", flush=True)
+                                                ema_status = ""
+
                                             final_msg = base_msg + ema_status if ema_status else base_msg
+
+                                            # 不論 EMA 是否成功，爆量訊息都必須進入 LINE 通知佇列
                                             instant_fire_queue.append(final_msg)
+                                            print(f"📨 [爆量通知入列] {c_code} {name}", flush=True)
+
                                             try:
                                                 new_cache = read_cache()
                                                 new_cache["intraday_alerts"] = intraday_breakout_cache
                                                 update_cache(new_cache)
-                                                trigger_air_raid_alarm(f"🔥 {name} 爆量點火！[{p_type}]", final_msg)
-                                            except: pass
+                                            except Exception as e:
+                                                print(f"⚠️ [爆量快取更新失敗] {c_code}: {e}", flush=True)
+
+                                            try:
+                                                trigger_air_raid_alarm(
+                                                    f"🔥 {name} 爆量點火！[{p_type}]",
+                                                    final_msg
+                                                )
+                                            except Exception as e:
+                                                print(f"⚠️ [Web Push 發送失敗] {c_code}: {e}", flush=True)
                                         threading.Thread(
                                             target=async_alert_task, 
                                             args=(code, z, alert_msg, power_type, stock_data.get('name', code)),
                                             daemon=True
                                         ).start()
-                    except:
-                        pass
+                    except Exception as e:
+                        print(f"❌ [富果資料解析失敗] {e}", flush=True)
+                        print(f"📦 [富果原始訊息] {message}", flush=True)
                 def on_error(ws, error):
                     print(f"⚠️ 富果 WebSocket 異常: {error}", flush=True)
                 def on_close(ws, close_status_code, close_msg):
