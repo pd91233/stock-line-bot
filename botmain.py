@@ -1779,7 +1779,7 @@ def handle_message(event):
                                     contents=[
                                         {"type": "text", "text": f"{total_funds:.1f} 億", "weight": "bold", "size": "xl", "color": "#b91c1c", "align": "end"}
                                     ]
-                                ]
+                                )
                             ]
                         ),
                         BoxComponent(
