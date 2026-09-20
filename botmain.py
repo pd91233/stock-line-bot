@@ -2932,6 +2932,68 @@ def process_tick_data(data, meta_info, top_ind):
     except Exception as e:
         print(f"❌ [爆量判斷錯誤] {code}: {e}", flush=True)
     return None
+    
+
+# ==========================================================
+# 🧪 盤中爆量偽資料測試
+# ==========================================================
+def test_fake_intraday_alert():
+    import time
+
+    print("🧪 [測試] 開始注入假成交資料...", flush=True)
+
+    test_code = "9999"
+
+    test_meta = {
+        "name": "測試股票",
+        "ind": "測試產業",
+        "ma20": 90
+    }
+
+    # 模擬 50 秒內的成交量與價格逐步上升
+    fake_ticks = [
+        (100.00, 100),
+        (100.20, 150),
+        (100.40, 250),
+        (100.60, 400),
+        (100.80, 600),
+        (101.00, 900),
+        (101.20, 1300),
+        (101.40, 1800),
+        (101.60, 2400),
+        (101.80, 3200),
+    ]
+
+    for price, volume_lots in fake_ticks:
+        fake_data = {
+            "c": test_code,
+            "z": price,
+            "o": 100.00,
+            "h": price,
+            "l": 99.80,
+            "y": 100.00,
+            "v": volume_lots,
+            "bid": price - 0.05,
+            "ask": price + 0.05,
+        }
+
+        result = process_tick_data(
+            fake_data,
+            test_meta,
+            ""
+        )
+
+        print(
+            f"🧪 [測試成交] {test_code} "
+            f"價格={price} 累積量={volume_lots}張 "
+            f"結果={'🔥命中' if result else '未命中'}",
+            flush=True
+        )
+
+        time.sleep(5)
+
+    print("🧪 [測試] 假成交資料注入完成", flush=True)
+
 
 # 🎯 獨立異步擊發彈匣
 instant_fire_queue = []
@@ -2968,6 +3030,12 @@ def instant_dispatcher_loop():
 # 啟動背景擊發手
 import threading
 threading.Thread(target=instant_dispatcher_loop, daemon=True).start()
+
+threading.Thread(
+    target=test_fake_intraday_alert,
+    daemon=True
+).start()
+
 
 def check_dynamic_ema_defense(stock_code, current_price):
     """
