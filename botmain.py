@@ -2990,6 +2990,13 @@ def test_fake_intraday_alert():
             flush=True
         )
 
+        if result:
+            print(f"🔥 [測試爆量命中] {test_code}，開始進入 LINE 通知流程", flush=True)
+
+            instant_fire_queue.append(result)
+
+            print(f"📨 [測試通知入列] {test_code}", flush=True)
+
         time.sleep(5)
 
     print("🧪 [測試] 假成交資料注入完成", flush=True)
