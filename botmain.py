@@ -1198,6 +1198,17 @@ def fetch_fundamental_data():
             if eps_period_str == "-" and eps_str != "-":
                 eps_period_str = "最新財報"
 
+            # 1. 先在字典外部計算所需的變數
+            previous_close_str = "-"
+            try:
+                close_val = float(close_str)
+                chg_val = float(chg_pct_map.get(code, 0))
+                if close_val > 0:
+                    previous_close_str = f"{close_val / (1 + chg_val / 100):.2f}"
+            except:
+                pass
+
+            # 2. 接著再組裝 stock_info 字典
             stock_info = {
                 "code": code,
                 "name": item.get("公司名稱", ""),
@@ -1212,16 +1223,6 @@ def fetch_fundamental_data():
                 "eps": eps_str,
                 "eps_period": eps_period_str,        
                 "pe": pe_str,
-                
-                previous_close_str = "-"
-                try:
-                    close_val = float(close_str)
-                    chg_val = float(chg_pct_map.get(code, 0))
-                    if close_val > 0:
-                        previous_close_str = f"{close_val / (1 + chg_val / 100):.2f}"
-                except:
-                    pass
-                
                 "close": close_str,
                 "previous_close": previous_close_str,
                 "open": open_map.get(code, "-"),
