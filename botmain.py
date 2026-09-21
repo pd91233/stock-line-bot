@@ -1554,10 +1554,18 @@ def execute_force_refresh():
             # ==========================================
             try:
                 import json, os
+
                 current_heat = globals().get('global_sector_heat', {})
+                current_change = globals().get('global_sector_change', {})
+
                 if current_heat:
                     with open("heat_memory.json", "w", encoding="utf-8") as f:
                         json.dump(current_heat, f, ensure_ascii=False)
+
+                if current_change:
+                    with open("heat_change_memory.json", "w", encoding="utf-8") as f:
+                        json.dump(current_change, f, ensure_ascii=False)
+
             except Exception as e:
                 print(f"熱力圖存檔失敗: {e}")
             # ==========================================
@@ -1754,16 +1762,31 @@ def handle_message(event):
     def handle_heatmap_command(event, user_msg):
         if user_msg in ["!熱力圖", "熱力圖"]:
             heat_data = globals().get('global_sector_heat', {})
+            change_data = globals().get('global_sector_change', {})
+
             if not heat_data:
                 try:
                     import json, os
+
                     if os.path.exists("heat_memory.json"):
                         with open("heat_memory.json", "r", encoding="utf-8") as f:
                             heat_data = json.load(f)
-                except:
-                    pass
+
+                    if os.path.exists("heat_change_memory.json"):
+                        with open("heat_change_memory.json", "r", encoding="utf-8") as f:
+                            change_data = json.load(f)
+
+                except Exception as e:
+                    print(f"⚠️ [盤後熱力圖資料讀取失敗] {e}", flush=True)
+
+            if change_data:
+                globals()['global_sector_change'] = change_data
+
             if not heat_data:
-                smart_reply_with_menu(event, "📭 [戰情室回報]\n目前尚無資金流動數據，可能尚未開盤。")
+                smart_reply_with_menu(
+                    event,
+                    "📭 [戰情室回報]\n目前尚無資金流動數據，可能尚未開盤。"
+                )
                 return
             success = generate_treemap_image(heat_data)
             if not success:
@@ -1850,15 +1873,22 @@ def handle_message(event):
             return
         stocks_cache = globals().get('global_stocks_cache', {})
         sector_stocks = []
+
         for symbol, data in stocks_cache.items():
-            stock_sector = data.get('industry', '') or data.get('category', '')
+            stock_sector = (
+                data.get('ind')
+                or data.get('industry')
+                or data.get('category')
+                or ''
+            )
+
             if target_sector in stock_sector or stock_sector in target_sector:
                 sector_stocks.append({
                     'code': symbol,
                     'name': data.get('name', symbol),
-                    'chg_pct': data.get('change_percent', 0.0),
+                    'chg_pct': data.get('change_percent', data.get('chg', 0.0)),
                     'volume': data.get('volume', 0),
-                    'price': data.get('price', 0.0)
+                    'price': data.get('price', data.get('close', 0.0))
                 })
         if not sector_stocks:
             smart_reply_with_menu(event, f"📭 [股海系統回報]\n未尋獲【{target_sector}】族群的即時個股數據，可能尚未開盤或資料更新中。")
@@ -1947,16 +1977,31 @@ def handle_message(event):
     # ==========================================
     if user_msg in ["!熱力圖", "熱力圖"]:
         heat_data = globals().get('global_sector_heat', {})
+        change_data = globals().get('global_sector_change', {})
+
         if not heat_data:
             try:
                 import json, os
+
                 if os.path.exists("heat_memory.json"):
                     with open("heat_memory.json", "r", encoding="utf-8") as f:
                         heat_data = json.load(f)
-            except:
-                pass
+
+                if os.path.exists("heat_change_memory.json"):
+                    with open("heat_change_memory.json", "r", encoding="utf-8") as f:
+                        change_data = json.load(f)
+
+            except Exception as e:
+                print(f"⚠️ [盤後熱力圖資料讀取失敗] {e}", flush=True)
+
+        if change_data:
+            globals()['global_sector_change'] = change_data
+
         if not heat_data:
-            smart_reply_with_menu(event, "📭 [戰情室回報]\n目前尚無資金流動數據，可能尚未開盤。")
+            smart_reply_with_menu(
+                event,
+                "📭 [戰情室回報]\n目前尚無資金流動數據，可能尚未開盤。"
+            )
             return
         success = generate_treemap_image(heat_data)
         if success:
@@ -1964,13 +2009,13 @@ def handle_message(event):
             timestamp = int(time.time())
             img_url = f"{base_url}/heatmap.png?t={timestamp}"
             sorted_sectors = sorted(heat_data.items(), key=lambda x: x[1], reverse=True)
-            top_4_names = [s[0] for s in sorted_sectors[:4]]
-            while len(top_4_names) < 4:
-                top_4_names.append("-")
+            top_5_names = [s[0] for s in sorted_sectors[:5]]
+            while len(top_5_names) < 5:
+                top_5_names.append("-")
             total_val_yi = sum(val for _, val in sorted_sectors) / 10000
             current_time_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
             clickable_top_4 = []
-            for name in top_4_names:
+            for name in top_5_names:
                 if name != "-":
                     clickable_top_4.append({
                         "type": "box",
@@ -2834,6 +2879,14 @@ def process_tick_data(data, meta_info, top_ind):
 
             if vol_1m >= 50 and current_z >= z_1m_ago and not is_volume_surge:
                 filtered_funds_codes.add(code)
+                print(
+                    f"⏳ [爆量資金不足] {code} "
+                    f"時間段={time_status} "
+                    f"1分鐘量={vol_1m:.1f}張 "
+                    f"點火金額={ignite_value/10000:.0f}萬 "
+                    f"現價={current_z} 50秒前={z_1m_ago}",
+                    flush=True
+                )
                 return None
 
             if not is_volume_surge:
@@ -2852,12 +2905,27 @@ def process_tick_data(data, meta_info, top_ind):
                 )
                 return None
 
+            print(
+                f"🔥 [爆量條件已達標] {code} "
+                f"時間段={time_status} "
+                f"1分鐘量={vol_1m:.1f}張 "
+                f"點火金額={ignite_value/10000:.0f}萬 "
+                f"現價={current_z} "
+                f"50秒前={z_1m_ago}",
+                flush=True
+            )
+
             best_bid = float(data.get('bid', 0.0))
             best_ask = float(data.get('ask', 0.0))
             
             if best_bid > 0 and best_ask > 0:
                 if current_z < best_bid:
                     filtered_overheated_codes.add(code)
+                    print(
+                        f"⛔ [買一檔過熱過濾] {code} "
+                        f"現價={current_z} 買一={best_bid} 賣一={best_ask}",
+                        flush=True
+                    )
                     return None
 
             prices = [t[1] for t in ticks]
@@ -2881,9 +2949,29 @@ def process_tick_data(data, meta_info, top_ind):
             is_bottom_reversal = is_cross_vwap and (current_z > ema5_now)
             # 戰術二：主升段 (高頻多頭排列：EMA5 > EMA12 > 均價線，且現價創高)
             is_main_trend = is_ema_up and (ema5_now > ema12_now) and (current_z >= vwap_est)
-            if not is_bottom_reversal and not is_main_trend: return None
+            if not is_bottom_reversal and not is_main_trend:
+                print(
+                    f"⛔ [EMA/VWAP戰術未觸發] {code} "
+                    f"現價={current_z} "
+                    f"EMA5={ema5_now:.2f} "
+                    f"EMA12={ema12_now:.2f} "
+                    f"VWAP={vwap_est} "
+                    f"EMA5上升={is_ema_up} "
+                    f"破底翻={is_bottom_reversal} "
+                    f"主升段={is_main_trend}",
+                    flush=True
+                )
+                return None
+
             is_below_20ma = (ma20 > 0 and current_z < ma20)
-            if is_below_20ma: return None
+
+            if is_below_20ma:
+                print(
+                    f"⛔ [20MA壓制] {code} "
+                    f"現價={current_z} 20MA={ma20}",
+                    flush=True
+                )
+                return None
             alert_type = ""
             action_guide = ""
             if is_bottom_reversal and not is_main_trend:
@@ -2920,6 +3008,17 @@ def process_tick_data(data, meta_info, top_ind):
                 "stop_loss": vwap_est
             }
             log_event(csv_payload)
+
+            print(
+                f"🚨 [雷達訊號產生] {code} {name} "
+                f"爆量={int(vol_1m)}張 "
+                f"點火={int(ignite_value/10000)}萬 "
+                f"現價={current_z} "
+                f"乖離={bias:+.1f}% "
+                f"類型={alert_type}",
+                flush=True
+            )
+
             # 💡 請保留您原本這段完整、豐富的回傳字串，一絲一毫都不少！
             return (
                 f"[{time_str}] ⚡ {name}({code}) {alert_type}\n"
@@ -3092,6 +3191,10 @@ def continuous_radar_loop():
                     code = str(s.get('code', '')).strip()
                     if code and len(code) == 4 and code.isdigit():
                         stock_data_map[code] = s
+
+                # 💥 提供熱力圖「!族群」下鑽使用的全域個股快取
+                globals()['global_stocks_cache'] = stock_data_map
+
                 def on_message(ws, message):
                     try:
                         msg_data = json.loads(message)
@@ -3210,10 +3313,15 @@ def continuous_radar_loop():
                                     # 動態建立全域變數，避免跨執行緒讀寫問題
                                     if 'global_sector_heat' not in globals():
                                         globals()['global_sector_heat'] = {}
-                                    # 嘗試抓取該股票的產業類別 (若無則歸類為'未分類')
-                                    industry = stock_data.get('industry', stock_data.get('category', '未分類'))
+                                    # 嘗試抓取該股票的產業類別
+                                    industry = (
+                                        stock_data.get('ind')
+                                        or stock_data.get('industry')
+                                        or stock_data.get('category')
+                                        or '未分類'
+                                    )
                                     # 計算單筆成交金額 (單位：萬元)。股價(元) * 張數 * 1000 / 10000 = 股價 * 張數 * 0.1
-                                    trade_value_wan = z * v * 0.1 
+                                    trade_value_wan = z * single_trade_lots * 0.1
                                     if industry and industry != '未分類':
                                         globals()['global_sector_heat'][industry] = globals()['global_sector_heat'].get(industry, 0) + trade_value_wan
                                     alert_msg = process_tick_data(formatted_data, stock_data, global_true_market_top_ind)
