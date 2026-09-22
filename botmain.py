@@ -581,6 +581,8 @@ def smart_push_with_menu(group_id, message_text):
     if not success_sent:
         print(f"❌ [發射崩潰] 群組 {group_id} 查無可用的機器人，或所有駐紮機器人彈藥皆已耗盡！", flush=True)
 
+    return success_sent
+
 # ==========================================================
 # 💎 升級版：雙排高質感戰情快捷面板 (通用的 Flex 產生器)
 # ==========================================================
@@ -3050,6 +3052,12 @@ def instant_dispatcher_loop():
 
             bullets = instant_fire_queue[:]
             instant_fire_queue.clear()
+
+            print(
+                f"📦 [LINE彈匣已取出] 共 {len(bullets)} 檔，準備發射",
+                flush=True
+            )
+
             # 打包發射
             combined_msg = "🚨 【全市場同步跟單急報】\n\n" + "\n\n======================\n\n".join(bullets)
             TARGET_GROUP_IDS = [
@@ -3058,10 +3066,15 @@ def instant_dispatcher_loop():
             ]
             for group_id in TARGET_GROUP_IDS:
                 try:
-                    smart_push_with_menu(group_id, combined_msg[:4500])
-                    print(f"✅ [LINE推播成功] 群組 {group_id}", flush=True)
+                    sent_ok = smart_push_with_menu(group_id, combined_msg[:4500])
+
+                    if sent_ok:
+                        print(f"✅ [LINE推播成功] 群組 {group_id}", flush=True)
+                    else:
+                        print(f"❌ [LINE推播失敗] 群組 {group_id}：沒有任何機器人成功發送", flush=True)
+
                 except Exception as e:
-                    print(f"❌ [LINE推播失敗] 群組 {group_id}: {e}", flush=True)
+                    print(f"❌ [LINE推播例外] 群組 {group_id}: {e}", flush=True)
 
             print(f"🚀 [異步擊發手] 已處理 {len(bullets)} 檔爆量警報！", flush=True)
 
@@ -3342,7 +3355,9 @@ def continuous_radar_loop():
                                             final_msg = base_msg + ema_status if ema_status else base_msg
 
                                             # 不論 EMA 是否成功，爆量訊息都必須進入 LINE 通知佇列
-                                            instant_fire_queue.append(final_msg)
+                                            with instant_fire_queue_lock:
+                                                instant_fire_queue.append(final_msg)
+
                                             print(f"📨 [爆量通知入列] {c_code} {name}", flush=True)
 
                                             try:
