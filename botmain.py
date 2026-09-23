@@ -3212,6 +3212,15 @@ def continuous_radar_loop():
                     try:
                         msg_data = json.loads(message)
                         event = msg_data.get("event")
+                        
+                        print(
+
+                            f"📨 [收到事件] {event}",
+                        
+                            flush=True
+                        
+                        )
+                        
                         # 💥 破案關鍵：收到機房的「驗證通過」訊號後，才開始大舉發送訂閱請求
                         
                         if event == "error":
