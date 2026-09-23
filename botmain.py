@@ -3261,7 +3261,7 @@ def continuous_radar_loop():
                                 flush=True
                         
                             )
-                            quote = msg_data.get you("data", {})
+                            quote = msg_data.get("data", {})
                             code = quote.get("symbol", "")
 
                             print(
