@@ -1,10 +1,10 @@
 import eventlet
 eventlet.monkey_patch()
 # -*- coding: utf-8 -*-
-# ========================================================
+# =========================================================
 # 📡 股海觀浪雲端探子母艦：防彈完全體戰情室 V100.0 (階段一：全市場基本面狙擊)
 # 開發代號：botmain.py (雲端守護協定 - 100% 完整解碼不閹割版)
-# ========================================================
+# =========================================================
 
 from flask import Flask, request, abort, jsonify, make_response, send_file  # 👈 新增了 send_file
 from flask_socketio import SocketIO, emit
@@ -3212,15 +3212,6 @@ def continuous_radar_loop():
                     try:
                         msg_data = json.loads(message)
                         event = msg_data.get("event")
-                        
-                        print(
-
-                            f"📨 [收到事件] {event}",
-                        
-                            flush=True
-                        
-                        )
-                        
                         # 💥 破案關鍵：收到機房的「驗證通過」訊號後，才開始大舉發送訂閱請求
                         
                         if event == "error":
@@ -3229,7 +3220,7 @@ def continuous_radar_loop():
                         
                         if event == "authenticated":
                             print("✅ 安全驗證通過！開始向機房發送訂閱請求...", flush=True)
-                            symbols = list(stock_data_map.keys())[:30]
+                            symbols = list(stock_data_map.keys())
 
                             def async_subscribe():
                                 chunk_size = 30
@@ -3245,6 +3236,11 @@ def continuous_radar_loop():
                                     }
 
                                     try:
+                                        print(
+                                            f"🛰️ 訂閱內容: {subscribe_msg}",
+                                            flush=True
+                                        )
+
                                         ws.send(json.dumps(subscribe_msg))
                                     except Exception as e:
                                         print(f"⚠️ [富果訂閱發送失敗] {e}", flush=True)
@@ -3262,14 +3258,6 @@ def continuous_radar_loop():
 
                         # 接收即時成交報價
                         if event == "data":
-
-                            print(
-                        
-                                f"📦 [原始封包] {str(msg_data)[:500]}",
-                        
-                                flush=True
-                        
-                            )
                             quote = msg_data.get("data", {})
                             code = quote.get("symbol", "")
 
