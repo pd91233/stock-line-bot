@@ -3254,13 +3254,13 @@ def continuous_radar_loop():
                         # 接收即時成交報價
                         if event == "data":
 
-                        print(
-                    
-                            f"📦 [原始封包] {str(msg_data)[:500]}",
-                    
-                            flush=True
-                    
-                        )
+                            print(
+                        
+                                f"📦 [原始封包] {str(msg_data)[:500]}",
+                        
+                                flush=True
+                        
+                            )
                             quote = msg_data.get you("data", {})
                             code = quote.get("symbol", "")
 
