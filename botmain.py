@@ -3220,7 +3220,7 @@ def continuous_radar_loop():
                         
                         if event == "authenticated":
                             print("✅ 安全驗證通過！開始向機房發送訂閱請求...", flush=True)
-                            symbols = list(stock_data_map.keys())[:100]
+                            symbols = list(stock_data_map.keys())[:30]
 
                             def async_subscribe():
                                 chunk_size = 30
