@@ -3220,7 +3220,40 @@ def continuous_radar_loop():
                         
                         if event == "authenticated":
                             print("✅ 安全驗證通過！開始向機房發送訂閱請求...", flush=True)
-                            symbols = list(stock_data_map.keys())
+                            current_cache = read_cache()
+
+                            subscribe_targets = (
+                                current_cache.get("market_top", [])[:30]
+                            )
+                            
+                            symbols = []
+                            
+                            for item in subscribe_targets:
+                                code = str(item.get("code", "")).strip()
+                            
+                                if (
+                                    code
+                                    and code.isdigit()
+                                    and len(code) == 4
+                                ):
+                                    symbols.append(code)
+                  
+                            print(
+            
+                                f"🔥 本次實際訂閱股票數={len(symbols)}",
+                            
+                                flush=True
+                            
+                            )
+                            
+                            print(
+                            
+                                f"🔥 訂閱清單={symbols}",
+                            
+                                flush=True
+                            
+                            )
+                                                                
 
                             def async_subscribe():
                                 chunk_size = 30
