@@ -3222,7 +3222,7 @@ def continuous_radar_loop():
                             print("✅ 安全驗證通過！開始向機房發送訂閱請求...", flush=True)
                             current_cache = read_cache()
 
-                            symbols = list(stock_data_map.keys())[:30]
+                            symbols = list(stock_data_map.keys())[:5]
 
                             print(
                                 f"🔥 本次實際訂閱股票數={len(symbols)}",
