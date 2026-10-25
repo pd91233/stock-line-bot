@@ -2961,37 +2961,63 @@ def handle_message(event):
 
     # ==========================================
 
-    # 💥 盤後覆盤 (智慧跨日回溯 + 即時觸發生成引擎雙彈版)
-    if user_msg in ["防禦報告", "盤後覆盤", "攔截清單", "強制結算", "重新結算"]:
+    # 💥 盤後覆盤 (支援「無參數自動回溯前一日」＋「指定歷史日期調閱：如 覆盤 20261023 或 覆盤 1023」)
+    cmd_review_match = re.match(r'^(?:盤後覆盤|防禦報告|攔截清單|強制結算|重新結算|覆盤)(?:\s*[-/:]?\s*(\d{4,8}))?$', user_msg)
+    if cmd_review_match:
         try:
-            force_rebuild = user_msg in ["強制結算", "重新結算"]
-            target_date_str, is_fallback = resolve_latest_trading_date()
+            raw_date_arg = cmd_review_match.group(1)
+            force_rebuild = user_msg.startswith(("強制結算", "重新結算"))
+            tz_tw = datetime.timezone(datetime.timedelta(hours=8))
+            now_tw = datetime.datetime.now(tz_tw)
+
+            if raw_date_arg:
+                # 使用者有指定日期：支援 4 碼 (如 1023 -> 20261023) 或 8 碼 (如 20261023)
+                if len(raw_date_arg) == 4:
+                    target_date_str = f"{now_tw.strftime('%Y')}{raw_date_arg}"
+                elif len(raw_date_arg) == 8:
+                    target_date_str = raw_date_arg
+                else:
+                    smart_reply_with_menu(event, "⚠️ 日期格式請輸入 8 碼（例如：`覆盤 20261023`）或 4 碼月日（例如：`覆盤 1023`）！")
+                    return
+                is_fallback = False
+                custom_date_mode = True
+            else:
+                # 使用者未指定日期：自動檢查今日，若休市或無紀錄則回溯最近一個交易日
+                target_date_str, is_fallback = resolve_latest_trading_date()
+                custom_date_mode = False
+
             render_url = f"https://stock-line-bot-c8em.onrender.com/war_room_{target_date_str}.html"
             date_label = f"{target_date_str[:4]}/{target_date_str[4:6]}/{target_date_str[6:]}"
-            fallback_note = f"（今日休市或尚無紀錄，已自動為您調閱最近交易日 {date_label} 戰報）" if is_fallback else f"（{date_label} 當日戰報）"
+            
+            if custom_date_mode:
+                header_note = f"📅（指定調閱歷史交易日：{date_label} 戰報）"
+            elif is_fallback:
+                header_note = f"🔄（今日休市或尚無紀錄，已自動調閱最近交易日：{date_label} 戰報）"
+            else:
+                header_note = f"⚡（{date_label} 當日最新戰報）"
 
-            # 情況 A：如果記憶體已經有生成好的報告，且非強制重算 -> 0.1 秒瞬間雙彈齊發！
+            # 情況 A：記憶體中已有編譯好的報告且非強制重算 -> 0.1 秒瞬間雙彈秒回
             if (not force_rebuild) and (target_date_str in war_room_memory_cache) and (target_date_str in war_room_summary_cache):
-                reply_msg = f"🛡️ 【機構級盤後覆盤】\n{fallback_note}\n\n{war_room_summary_cache[target_date_str]}"
+                reply_msg = f"🛡️ 【機構級盤後覆盤】\n{header_note}\n\n{war_room_summary_cache[target_date_str]}"
                 flex_msg = create_flex_menu_message(reply_msg[:3000])
                 link_msg = TextSendMessage(text=render_url)
                 smart_reply_with_menu(event, [flex_msg, link_msg])
                 return
 
-            # 情況 B：尚未生成網頁或要求強制重算 -> 先秒回破除 LINE 5秒死線，再派背景分身即時生成並推播！
+            # 情況 B：尚未編譯或指定調閱歷史檔案 -> 先秒回破除 LINE 5秒限制，再由背景分身從 pCloud 調閱並生成
             smart_reply_with_menu(
                 event,
-                TextSendMessage(text=f"🛡️ 收到指令！正在為您調閱 {date_label} 戰情紀錄並啟動【機構級 MFE/MAE 盤後歸因引擎】即時生成網頁，約需 5~10 秒，請稍候...")
+                TextSendMessage(text=f"🛡️ 收到指令！正在從雲端戰史庫調閱【{date_label}】交易紀錄並啟動 MFE/MAE 歸因引擎編譯網頁，約需 5~10 秒，請稍候...")
             )
 
             def process_on_demand_war_room():
                 try:
                     target_id = event.source.group_id if hasattr(event.source, 'group_id') else event.source.user_id
                     _, summary_text = build_war_room_report(target_date_str=target_date_str, push_to_groups=False)
-                    full_msg = f"🛡️ 【機構級盤後覆盤結算完畢】\n{fallback_note}\n\n{summary_text}"
+                    full_msg = f"🛡️ 【機構級盤後覆盤結算完畢】\n{header_note}\n\n{summary_text}"
                     smart_push_with_menu(target_id, full_msg[:4000])
                 except Exception as ex:
-                    print(f"⚠️ 手動觸發盤後覆盤背景異常: {ex}", flush=True)
+                    print(f"⚠️ 指定日期盤後覆盤背景異常: {ex}", flush=True)
 
             import eventlet
             eventlet.spawn(process_on_demand_war_room)
@@ -4409,244 +4435,222 @@ threading.Thread(target=instant_dispatcher_loop, daemon=True).start()
 
 
 def continuous_radar_loop():
-
     global instant_fire_queue
-
-    print("📡 [當沖雷達] 啟動統帥認證版【極速批次掃描 + 異步秒發引擎】...", flush=True)
-
-    import time, datetime, requests
-
-    
-
-    # 💥 破解 Yahoo 防火牆：建立長效 Session 並取得 Crumb 憑證
+    print("📡 [當沖雷達] 啟動統帥認證版【Yahoo雙節點 + 證交所MIS官方雙通道防封鎖雷達】...", flush=True)
+    import time, datetime, requests, urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     yahoo_session = requests.Session()
-
-    yahoo_session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
-
+    yahoo_session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "application/json,text/plain,*/*"
+    })
     yahoo_crumb = ""
 
-    try:
+    def refresh_yahoo_crumb():
+        nonlocal yahoo_crumb
+        for host in ["query2.finance.yahoo.com", "query1.finance.yahoo.com"]:
+            try:
+                yahoo_session.get("https://fc.yahoo.com", timeout=4)
+                c_res = yahoo_session.get(f"https://{host}/v1/test/getcrumb", timeout=4)
+                cand = c_res.text.strip()
+                # 嚴格驗證 Crumb 格式，避免把 "Too Many Requests" 或 HTML 錯誤當成憑證
+                if c_res.status_code == 200 and 4 <= len(cand) <= 25 and ("<" not in cand) and ("Too Many" not in cand):
+                    yahoo_crumb = cand
+                    print(f"✅ [破甲成功] 已從 {host} 取得有效 Yahoo 憑證: {yahoo_crumb}", flush=True)
+                    return True
+            except Exception:
+                pass
+        return False
 
-        # 先去首頁拿 Cookie
+    refresh_yahoo_crumb()
 
-        yahoo_session.get("https://fc.yahoo.com", timeout=5)
+    # 建立證交所/櫃買中心官方 MIS 專用 Session (第二通道備援主力)
+    mis_session = requests.Session()
+    mis_session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://mis.twse.com.tw/stock/fibest.jsp"
+    })
 
-        # 再用 Cookie 去換 Crumb 護照
-
-        c_res = yahoo_session.get("https://query1.finance.yahoo.com/v1/test/getcrumb", timeout=5)
-
-        yahoo_crumb = c_res.text.strip()
-
-        print(f"✅ [破甲成功] 已取得 Yahoo 核心憑證: {yahoo_crumb}", flush=True)
-
-    except Exception as e:
-
-        print(f"⚠️ [憑證警告] 無法取得 Crumb，嘗試降級連線...", flush=True)
-
-    
+    def parse_mis_first_price(val_str):
+        """從證交所五檔字串 (如 '105.50_105.00_...') 提取第一檔有效價格"""
+        if not val_str or val_str == '-':
+            return 0.0
+        for part in str(val_str).split('_'):
+            try:
+                p = float(part)
+                if p > 0:
+                    return p
+            except:
+                pass
+        return 0.0
 
     # --- 雷達主迴圈 ---
-
     while True:
-
         try:
-
-            now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
-
+            tz_tw = datetime.timezone(datetime.timedelta(hours=8))
+            now = datetime.datetime.now(tz_tw)
             is_weekend = now.weekday() >= 5
-
             current_time_num = now.hour * 100 + now.minute
 
-            
-
-            # 💥 強制在 13:24 準時關閉！絕對不掃描 13:25~13:30 的收盤大單！
-
+            # 強制在 09:00 ~ 13:24 執行，避開 13:25 收盤試撮大單
             if not is_weekend and (900 <= current_time_num <= 1324):
-
                 current_cache = read_cache()
-
                 full_stocks = current_cache.get("fundamental_full", [])
 
-                
-
+                # 🛡️ 防空保護：若剛開機 fundamental_full 尚未抓完，立即從本地 all_stocks.json 備援載入
                 if not full_stocks:
-
-                    time.sleep(10)
-
-                    continue
-
-
-
-                # 整理全市場 2000 檔的代號清單
+                    _, local_list = get_stock_dict()
+                    if local_list:
+                        full_stocks = [{"code": item["code"], "name": item["name"], "market": "上市", "ind": "未分類", "ma20": "-"} for item in local_list]
+                    else:
+                        time.sleep(5)
+                        continue
 
                 valid_symbols = []
-
-                stock_data_map = {} 
-
-                
+                stock_data_map = {}
 
                 for s in full_stocks:
-
                     code = str(s.get('code', '')).strip()
-
-                    market = s.get('market', '上市')
-
-                    suffix = ".TW" if market == "上市" else ".TWO"
-
+                    market = str(s.get('market', '上市')).strip()
+                    suffix = ".TWO" if "櫃" in market else ".TW"
                     if code and len(code) == 4 and code.isdigit():
-
-                        symbol = f"{code}{suffix}"
-
-                        valid_symbols.append(symbol)
-
+                        valid_symbols.append(f"{code}{suffix}")
                         stock_data_map[code] = s
 
-
-
-                # 💥 降載護城河：改為每次抓 100 檔，避免 URL 太長被直接踢掉
-
-                chunk_size = 100 
-
+                chunk_size = 90
                 successful_count = 0
-
-                
+                yahoo_blocked = (not yahoo_crumb)
 
                 for i in range(0, len(valid_symbols), chunk_size):
-
                     chunk_symbols = valid_symbols[i : i + chunk_size]
+                    chunk_quotes_standardized = []
 
-                    symbols_str = ",".join(chunk_symbols) 
+                    # ==========================================
+                    # 🚀 通道一：嘗試 Yahoo Finance 極速批次接口 (query2 / query1)
+                    # ==========================================
+                    if not yahoo_blocked:
+                        symbols_str = ",".join(chunk_symbols)
+                        for y_host in ["query2.finance.yahoo.com", "query1.finance.yahoo.com"]:
+                            try:
+                                url = f"https://{y_host}/v7/finance/quote?symbols={symbols_str}&crumb={yahoo_crumb}"
+                                res = yahoo_session.get(url, timeout=4)
+                                if res.status_code == 200:
+                                    quotes = res.json().get('quoteResponse', {}).get('result', [])
+                                    for q in quotes:
+                                        c_code = q.get('symbol', '').split('.')[0]
+                                        z_val = float(q.get('regularMarketPrice', 0) or 0)
+                                        y_val = float(q.get('regularMarketPreviousClose', z_val) or z_val)
+                                        v_val = float(q.get('regularMarketVolume', 0) or 0) / 1000.0
+                                        if z_val > 0 and v_val > 0 and c_code in stock_data_map:
+                                            chunk_quotes_standardized.append({
+                                                'c': c_code,
+                                                'z': z_val,
+                                                'y': y_val,
+                                                'o': float(q.get('regularMarketOpen', z_val) or z_val),
+                                                'h': float(q.get('regularMarketDayHigh', z_val) or z_val),
+                                                'l': float(q.get('regularMarketDayLow', z_val) or z_val),
+                                                'v': v_val
+                                            })
+                                    break  # 成功拿到即跳出 host 迴圈
+                                elif res.status_code in [401, 403, 429]:
+                                    # 若遭遇封鎖或憑證失效，嘗試刷新一次 Crumb；若仍失敗則本輪直接切換至證交所 MIS 通道
+                                    if not refresh_yahoo_crumb():
+                                        yahoo_blocked = True
+                                        break
+                            except Exception:
+                                pass
 
-                    
+                    # ==========================================
+                    # 🛡️ 通道二 (防封鎖主力備援)：台灣證交所/櫃買中心 MIS 官方批次直連
+                    # 當 Yahoo 被擋或該批抓不到任何報價時，自動無縫接管！
+                    # ==========================================
+                    if len(chunk_quotes_standardized) == 0:
+                        try:
+                            ex_ch_list = []
+                            for sym in chunk_symbols:
+                                c_code, sfx = sym.split('.')
+                                prefix = "otc" if sfx == "TWO" else "tse"
+                                ex_ch_list.append(f"{prefix}_{c_code}.tw")
 
-                    try:
-
-                        # 💥 加入 crumb 憑證解鎖，並使用 session 連線！
-
-                        url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols_str}&crumb={yahoo_crumb}"
-
-                        res = yahoo_session.get(url, timeout=5)
-
-                        
-
-                        if res.status_code == 200:
-
-                            quotes = res.json().get('quoteResponse', {}).get('result', [])
-
-                            
-
-                            for quote in quotes:
-
-                                code = quote.get('symbol', '').split('.')[0] 
-
-                                
-
-                                # 萃取官方結算價量
-
-                                z = quote.get('regularMarketPrice', 0)
-
-                                y = quote.get('regularMarketPreviousClose', z)
-
-                                v = quote.get('regularMarketVolume', 0) / 1000.0 
-
-                                
-
-                                if z == 0 or v == 0 or code not in stock_data_map: continue
-
-                                
-
-                                formatted_data = {
-
-                                    'c': code,
-
-                                    'z': z,
-
-                                    'y': y,
-
-                                    'o': quote.get('regularMarketOpen', z),
-
-                                    'h': quote.get('regularMarketDayHigh', z),
-
-                                    'l': quote.get('regularMarketDayLow', z),
-
-                                    'v': v
-
-                                }
-
-                                
-
-                                stock_data = stock_data_map[code]
-
-                                alert_msg = process_tick_data(formatted_data, stock_data, global_true_market_top_ind)
-
-                                successful_count += 1
-
-                                
-
-                                if alert_msg and alert_msg not in intraday_breakout_cache:
-
-                                    intraday_breakout_cache.insert(0, alert_msg)
-
-                                    
-
-                                    # 💥 關鍵核心：丟進異步彈匣，由上方的擊發手立刻開槍，達成 0 秒延遲！
-
-                                    instant_fire_queue.append(alert_msg)
-
-                                    
-
-                                    new_cache = read_cache()
-
-                                    new_cache["intraday_alerts"] = intraday_breakout_cache
-
-                                    update_cache(new_cache)
-
-                                    
-
+                            mis_url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={'|'.join(ex_ch_list)}&_={int(time.time() * 1000)}"
+                            m_res = mis_session.get(mis_url, timeout=5, verify=False)
+                            if m_res.status_code == 200:
+                                msg_array = m_res.json().get('msgArray', [])
+                                for item in msg_array:
+                                    c_code = str(item.get('c', '')).strip()
+                                    if c_code not in stock_data_map:
+                                        continue
                                     try:
+                                        v_val = float(item.get('v', 0) if item.get('v', '-') not in ['-', ''] else 0)
+                                        y_val = float(item.get('y', 0) if item.get('y', '-') not in ['-', ''] else 0)
+                                        if v_val <= 0 or y_val <= 0:
+                                            continue
 
-                                        trigger_air_raid_alarm(f"🔥 {stock_data.get('name', code)} 爆量點火！", alert_msg)
+                                        # 盤中某秒若無單筆成交 (z 為 '-')，自動以最佳買價一檔或開盤價補位，徹底解決開盤 0 報價！
+                                        z_raw = item.get('z', '-')
+                                        if z_raw not in ['-', '']:
+                                            z_val = float(z_raw)
+                                        else:
+                                            z_val = parse_mis_first_price(item.get('b', '')) or parse_mis_first_price(item.get('a', ''))
+                                            if z_val <= 0 and item.get('o', '-') not in ['-', '']:
+                                                z_val = float(item.get('o'))
 
-                                    except: pass
+                                        if z_val <= 0:
+                                            continue
 
-                                    
+                                        o_val = float(item.get('o', z_val)) if item.get('o', '-') not in ['-', ''] else z_val
+                                        h_val = float(item.get('h', z_val)) if item.get('h', '-') not in ['-', ''] else z_val
+                                        l_val = float(item.get('l', z_val)) if item.get('l', '-') not in ['-', ''] else z_val
 
-                        elif res.status_code == 401:
+                                        chunk_quotes_standardized.append({
+                                            'c': c_code,
+                                            'z': z_val,
+                                            'y': y_val,
+                                            'o': o_val,
+                                            'h': h_val,
+                                            'l': l_val,
+                                            'v': v_val
+                                        })
+                                    except Exception:
+                                        pass
+                            # 官方 MIS 通道溫和限速保護 (避免過快被證交所短暫阻擋)
+                            time.sleep(0.15)
+                        except Exception:
+                            pass
 
-                            # 萬一憑證過期，系統自動重新索取護照！
+                    # ==========================================
+                    # 🎯 將標準化報價送入 process_tick_data 進行點火鑑識
+                    # ==========================================
+                    for formatted_data in chunk_quotes_standardized:
+                        code = formatted_data['c']
+                        stock_data = stock_data_map[code]
+                        alert_msg = process_tick_data(formatted_data, stock_data, global_true_market_top_ind)
+                        successful_count += 1
 
-                            yahoo_session.get("https://fc.yahoo.com", timeout=5)
+                        if alert_msg and alert_msg not in intraday_breakout_cache:
+                            intraday_breakout_cache.insert(0, alert_msg)
+                            instant_fire_queue.append(alert_msg)
 
-                            c_res = yahoo_session.get("https://query1.finance.yahoo.com/v1/test/getcrumb", timeout=5)
+                            new_cache = read_cache()
+                            new_cache["intraday_alerts"] = intraday_breakout_cache
+                            update_cache(new_cache)
 
-                            yahoo_crumb = c_res.text.strip()
+                            try:
+                                trigger_air_raid_alarm(f"🔥 {stock_data.get('name', code)} 爆量點火！", alert_msg)
+                            except:
+                                pass
 
-                            
-
-                    except Exception as e:
-
-                        pass # 保持安靜，不印出擾人的錯誤訊息
-
-
-
-                now_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%H:%M:%S")
-
-                print(f"👁️ [{now_str}] 全市場批量掃描完畢 (本輪精準抓取 {successful_count} 檔報價)。", flush=True)
-
-                
-
-                # 掃完一圈全市場後，休息 3 秒再戰
+                now_str = datetime.datetime.now(tz_tw).strftime("%H:%M:%S")
+                channel_tag = "MIS官方備援" if yahoo_blocked else "Yahoo+MIS雙通道"
+                print(f"👁️ [{now_str}] 全市場批量掃描完畢 ({channel_tag} 本輪精準抓取 {successful_count} 檔報價)。", flush=True)
 
                 time.sleep(3)
-
             else:
-
-                time.sleep(60) 
-
+                time.sleep(60)
         except Exception as e:
-
-            time.sleep(60)
+            print(f"⚠️ 雷達主迴圈異常: {e}", flush=True)
+            time.sleep(15)
 
 
 
@@ -4938,20 +4942,28 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
                         print(f"⚠️ 抓取 {stock_c} 5分K歸因異常: {e_5m}", flush=True)
 
                     # ==========================================
-                    # 🎯 3. 判定勝負與病理診斷標籤
+                    # 🎯 3. 判定勝負與病理診斷標籤 (可自由微調下方 5 個門檻數字)
                     # ==========================================
+                    PATHOLOGY_CONFIG = {
+                        "BIG_WIN_MFE": 3.0,        # 衝高大勝的最低 MFE 門檻 (%)
+                        "BIG_WIN_NET": 2.0,        # 衝高大勝的最低收盤鎖利門檻 (%)
+                        "GIVEBACK_MFE": 2.5,       # 判定「獲利回吐」的盤中最高衝刺門檻 (%) -> 短打可改 2.0
+                        "GIVEBACK_KEEP": 0.8,      # 衝高後若收盤剩不到此報酬率 (%)，列為獲利回吐警示
+                        "WHIPSAW_MAX_MINS": 10     # 突破後站穩進場價少於幾分鐘即跌破，判定為「瞬間假突破誘多」
+                    }
+
                     is_win = net_ret_pct > 0
                     if is_win:
                         win_count += 1
                         trade_res_str = f"🔴 獲利 ({net_ret_pct:+.2f}%)"
                         val_color = "red"
-                        if mfe_pct >= 3.0 and net_ret_pct >= 2.0:
+                        if mfe_pct >= PATHOLOGY_CONFIG["BIG_WIN_MFE"] and net_ret_pct >= PATHOLOGY_CONFIG["BIG_WIN_NET"]:
                             pathology_tag = "🎯 衝高抱牢大勝 (主升鎖定)"
                             badge_class = "red"
                         elif hit_stop:
                             pathology_tag = f"🛡️ 先洗後拉 (曾破VWAP回撤 {mae_pct:.2f}%)"
                             badge_class = "yellow"
-                        elif mfe_pct >= 2.5 and net_ret_pct < 0.8:
+                        elif mfe_pct >= PATHOLOGY_CONFIG["GIVEBACK_MFE"] and net_ret_pct < PATHOLOGY_CONFIG["GIVEBACK_KEEP"]:
                             pathology_tag = f"⚠️ 大幅獲利回吐 (最高曾賺 +{mfe_pct:.2f}%)"
                             badge_class = "yellow"
                             giveback_count += 1
@@ -4962,11 +4974,11 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
                         lose_count += 1
                         trade_res_str = f"🟢 虧損 ({net_ret_pct:+.2f}%)"
                         val_color = "green"
-                        if mfe_pct >= 2.0:
+                        if mfe_pct >= PATHOLOGY_CONFIG["BIG_WIN_NET"]:
                             pathology_tag = f"⚠️ 衝高A轉倒貨 (曾賺 +{mfe_pct:.2f}% 未停利)"
                             badge_class = "yellow"
                             giveback_count += 1
-                        elif above_mins <= 10:
+                        elif above_mins <= PATHOLOGY_CONFIG["WHIPSAW_MAX_MINS"]:
                             pathology_tag = f"🔪 瞬間假突破誘多 (僅撐 {above_mins} 分鐘)"
                             badge_class = "red"
                         else:
