@@ -4313,7 +4313,7 @@ def process_tick_data(data, meta_info, top_ind):
 
 
 
-# 🎯 獨立異步擊發彈匣
+# 🎯 獨立即時直發彈匣 (改為偵測到立刻單獨發送、絕不等待)
 
 instant_fire_queue = []
 
@@ -4321,27 +4321,25 @@ instant_fire_queue = []
 
 def instant_dispatcher_loop():
 
-    """背景擊發手：每 3.5 秒巡視一次彈匣，確保雷達掃完一輪後完美打包擊發！"""
+    """即時直發手：一有飆股進彈匣立刻單獨開槍，達成 0 秒延遲！"""
 
     import time
 
     while True:
 
-        time.sleep(3.5)  # 💥 這裡改為 3.5 秒
+        time.sleep(0.5)  # 每 0.5 秒檢查一次彈匣
 
         if len(instant_fire_queue) > 0:
 
-            # 瞬間抽出彈匣裡所有的飆股情報
+            # 每次只抓取最前面的一筆標的
 
-            bullets = instant_fire_queue[:]
-
-            instant_fire_queue.clear()
+            bullet = instant_fire_queue.pop(0)
 
             
 
-            # 打包發射
+            # 單獨打包發射
 
-            combined_msg = "🚨 【全市場同步跟單急報】\n\n" + "\n\n======================\n\n".join(bullets)
+            single_msg = f"🚨 【實戰飆股即時急報】\n\n{bullet}"
 
             TARGET_GROUP_IDS = [
 
@@ -4355,11 +4353,11 @@ def instant_dispatcher_loop():
 
                 try:
 
-                    smart_push_with_menu(group_id, combined_msg[:4500])
+                    smart_push_with_menu(group_id, single_msg[:4500])
 
                 except: pass
 
-            print(f"🚀 [異步擊發手] 已將 {len(bullets)} 檔飆股零時差空投至前線！", flush=True)
+            print(f"🚀 [即時直發手] 已單獨空投 1 檔飆股至前線！", flush=True)
 
 
 
