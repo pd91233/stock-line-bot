@@ -4352,6 +4352,17 @@ def process_tick_data(data, meta_info, top_ind):
                 "stop_loss": vwap_est
             }
             log_event(csv_payload)
+            
+            
+            # 註冊進入盤中即時風控監控網格
+            intraday_live_monitors[code] = {
+                "name": name,
+                "entry": suggested_entry,
+                "vwap": vwap_est,
+                "alerted_mfe3": False,
+                "alerted_break": False
+            }
+            
 
             # 💡 請保留您原本這段完整、豐富的回傳字串，一絲一毫都不少！
             return (
@@ -4418,7 +4429,91 @@ def instant_dispatcher_loop():
 
 
 
+# ==========================================================
+# 🚨 盤中即時停利與破線警報巡邏手 (監控 MFE >= +3% 或 跌破 VWAP)
+# ==========================================================
+intraday_live_monitors = {}  # 格式: { code: { "name": name, "entry": entry, "vwap": vwap, "alerted_mfe3": False, "alerted_break": False } }
 
+def intraday_live_alarm_loop():
+    import time, datetime, requests
+    print("📡 [即時風控哨] 盤中停利與破線警報巡邏引擎已啟動...", flush=True)
+    while True:
+        try:
+            time.sleep(15)  # 每 15 秒巡視一次盤中已發報標的
+            tz_tw = datetime.timezone(datetime.timedelta(hours=8))
+            now_dt = datetime.datetime.now(tz_tw)
+            is_weekend = now_dt.weekday() >= 5
+            curr_hhmm = now_dt.hour * 100 + now_dt.minute
+
+            # 僅在盤中 09:00 ~ 13:25 進行即時風控監控
+            if is_weekend or not (900 <= curr_hhmm <= 1325):
+                continue
+
+            if not intraday_live_monitors:
+                continue
+
+            TARGET_GROUP_IDS = [
+                "C0481b44935888bb1dc20dfd52a675e8a", 
+                "C47bfa8e16a7216bd54dceb3b5e90cfa0"  
+            ]
+
+            for code, info in list(intraday_live_monitors.items()):
+                try:
+                    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?range=1d&interval=1m"
+                    res = requests.get(url, headers={ "User-Agent": "Mozilla/5.0" }, timeout=4).json()
+                    if not res.get('chart', {}).get('result'):
+                        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TWO?range=1d&interval=1m"
+                        res = requests.get(url, headers={ "User-Agent": "Mozilla/5.0" }, timeout=4).json()
+
+                    node = res['chart']['result'][0]
+                    meta = node['meta']
+                    curr_z = float(meta.get('regularMarketPrice', 0) or 0)
+                    if curr_z <= 0:
+                        continue
+
+                    quotes = node['indicators']['quote'][0]
+                    highs = [float(x) for x in quotes.get('high', []) if x is not None]
+                    day_high = max(highs) if highs else curr_z
+
+                    entry_p = info["entry"]
+                    vwap_line = info["vwap"]
+                    name = info["name"]
+
+                    # 1. 檢測 MFE 衝過 +3% 停利提示
+                    if entry_p > 0 and not info["alerted_mfe3"]:
+                        mfe_est = ((day_high - entry_p) / entry_p) * 100
+                        if mfe_est >= 3.0:
+                            info["alerted_mfe3"] = True
+                            msg = (
+                                f"🎯 【即時停利捷報】{name}({code})\n"
+                                f"----------------------\n"
+                                f"🚀 盤中最高衝刺已達 +{mfe_est:.2f}% (超越 +3% 停利標準)！\n"
+                                f"💡 操盤建議：建議分批獲利入袋，或將移動停利上移至進場價防守！"
+                            )
+                            for g_id in TARGET_GROUP_IDS:
+                                try: smart_push_with_menu(g_id, msg)
+                                except: pass
+
+                    # 2. 檢測盤中跌破 VWAP 停損防線警報
+                    if vwap_line > 0 and not info["alerted_break"]:
+                        if curr_z < vwap_line * 0.995:
+                            info["alerted_break"] = True
+                            msg = (
+                                f"🛑 【即時破線警報】{name}({code})\n"
+                                f"----------------------\n"
+                                f"⚠️ 注意！現價 {curr_z} 已跌破絕對防禦 VWAP 線 ({vwap_line})\n"
+                                f"🔪 操盤建議：多方動能暫失，請依紀律執行風險控制或停損出場！"
+                            )
+                            for g_id in TARGET_GROUP_IDS:
+                                try: smart_push_with_menu(g_id, msg)
+                                except: pass
+                except:
+                    pass
+        except Exception as e_alarm:
+            print(f"⚠️ 即時風控巡邏異常: {e_alarm}", flush=True)
+
+# 啟動即時風控巡邏執行緒
+threading.Thread(target=intraday_live_alarm_loop, daemon=True).start()
 
 
 
@@ -4717,8 +4812,7 @@ def resolve_latest_trading_date():
 
 def build_war_room_report(target_date_str=None, push_to_groups=False):
     """
-    🎯 機構級盤後歸因與 HTML 戰情室核心建構引擎
-    支援指定日期 (YYYYMMDD) 或自動回溯最近交易日，並可由 13:55 排程或 LINE 手動指令隨時呼叫。
+    🎯 機構級盤後歸因與 HTML 戰情室核心建構引擎 (含歷史 Alpha 衰退趨勢追蹤)
     """
     import time, datetime, csv, os, json, requests
     global filtered_funds_codes, filtered_overheated_codes, war_room_memory_cache, war_room_summary_cache, global_true_market_top_ind
@@ -4729,7 +4823,6 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
     if not target_date_str:
         target_date_str, _ = resolve_latest_trading_date()
 
-    # 若指定日期本機無資料，先嘗試去 pCloud 下載該日 CSV
     csv_filename = f"trading_log_{target_date_str}.csv"
     if not _csv_has_data_rows(csv_filename):
         try:
@@ -4776,6 +4869,59 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
     updated_csv_rows = []
     csv_fieldnames = []
 
+    # ==========================================
+    # 📈 【新功能】歷史多日勝率與 Alpha 衰退趨勢追蹤運算 (近 10 日)
+    # ==========================================
+    history_trend_dates = []
+    history_trend_winrates = []
+    history_trend_avgrets = []
+
+    for d_back in range(9, -1, -1):
+        past_dt = target_dt_obj - datetime.timedelta(days=d_back)
+        past_str = past_dt.strftime('%Y%m%d')
+        past_csv = f"trading_log_{past_str}.csv"
+        
+        p_total = 0
+        p_wins = 0
+        p_rets = []
+
+        if not _csv_has_data_rows(past_csv):
+            try:
+                p_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{past_csv}?t={int(time.time())}"
+                r_p = requests.get(p_url, timeout=3)
+                if r_p.status_code == 200 and ("Trigger_Time" in r_p.text or "Stock_ID" in r_p.text):
+                    with open(past_csv, 'wb') as pf:
+                        pf.write(r_p.content)
+            except:
+                pass
+
+        if _csv_has_data_rows(past_csv):
+            try:
+                with open(past_csv, mode='r', encoding='utf-8-sig') as pf_r:
+                    p_reader = csv.DictReader(pf_r)
+                    for prow in p_reader:
+                        if "強勢達標_發送" in prow.get("System_Decision", ""):
+                            p_total += 1
+                            net_str = prow.get("Net_Return_Pct", "").strip()
+                            try:
+                                if net_str:
+                                    val_r = float(net_str.replace('%', '').replace('+', ''))
+                                    p_rets.append(val_r)
+                                    if val_r > 0: p_wins += 1
+                            except:
+                                pass
+            except:
+                pass
+
+        if p_total > 0:
+            history_trend_dates.append(past_dt.strftime('%m/%d'))
+            history_trend_winrates.append(round((p_wins / p_total) * 100, 1))
+            history_trend_avgrets.append(round(sum(p_rets) / len(p_rets), 2) if p_rets else 0.0)
+
+    history_trend_dates_json = json.dumps(history_trend_dates, ensure_ascii=False)
+    history_trend_wr_json = json.dumps(history_trend_winrates)
+    history_trend_ret_json = json.dumps(history_trend_avgrets)
+
     if os.path.exists(csv_filename):
         with open(csv_filename, mode='r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
@@ -4820,9 +4966,6 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
                     pathology_tag = "⏳ 資料同步中"
                     badge_class = "yellow"
 
-                    # ==========================================
-                    # 🎯 1. 抓取近 2 個月日 K 資料 (並鎖定該交易日真實收盤價)
-                    # ==========================================
                     try:
                         url_1d = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_c}.TW?range=2mo&interval=1d"
                         res_1d = requests.get(url_1d, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
@@ -4850,9 +4993,6 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
                     except Exception as e_1d:
                         print(f"⚠️ 抓取 {stock_c} 日K失敗: {e_1d}", flush=True)
 
-                    # ==========================================
-                    # 🎯 2. 抓取 5日內 5分K (確保週末或跨日調閱時，精準切出 target_date_str 當天的 5分K)
-                    # ==========================================
                     try:
                         url_5m = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_c}.TW?range=5d&interval=5m"
                         res_5m = requests.get(url_5m, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
@@ -4876,7 +5016,6 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
                         t_parts = t_time.split(':')
                         trig_hhmm = int(t_parts[0]) * 100 + int(t_parts[1]) if len(t_parts) >= 2 else 900
 
-                        # 找出所有可用日期，優先鎖定 target_date_str；若超過5天則取最新一個交易日
                         available_dates = []
                         for ts_val in ts_list:
                             d_s = datetime.datetime.fromtimestamp(ts_val, tz_tw).strftime('%Y%m%d')
@@ -4941,15 +5080,12 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
                     except Exception as e_5m:
                         print(f"⚠️ 抓取 {stock_c} 5分K歸因異常: {e_5m}", flush=True)
 
-                    # ==========================================
-                    # 🎯 3. 判定勝負與病理診斷標籤 (可自由微調下方 5 個門檻數字)
-                    # ==========================================
                     PATHOLOGY_CONFIG = {
-                        "BIG_WIN_MFE": 3.0,        # 衝高大勝的最低 MFE 門檻 (%)
-                        "BIG_WIN_NET": 2.0,        # 衝高大勝的最低收盤鎖利門檻 (%)
-                        "GIVEBACK_MFE": 2.5,       # 判定「獲利回吐」的盤中最高衝刺門檻 (%) -> 短打可改 2.0
-                        "GIVEBACK_KEEP": 0.8,      # 衝高後若收盤剩不到此報酬率 (%)，列為獲利回吐警示
-                        "WHIPSAW_MAX_MINS": 10     # 突破後站穩進場價少於幾分鐘即跌破，判定為「瞬間假突破誘多」
+                        "BIG_WIN_MFE": 3.0,
+                        "BIG_WIN_NET": 2.0,
+                        "GIVEBACK_MFE": 2.5,
+                        "GIVEBACK_KEEP": 0.8,
+                        "WHIPSAW_MAX_MINS": 10
                     }
 
                     is_win = net_ret_pct > 0
@@ -5084,7 +5220,6 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
                     """
                 updated_csv_rows.append(row)
 
-        # 將歸因結算寫回 CSV (若為當日則同步備份上 pCloud)
         try:
             with open(csv_filename, mode='w', newline='', encoding='utf-8-sig') as wf:
                 writer = csv.DictWriter(wf, fieldnames=csv_fieldnames)
@@ -5095,7 +5230,6 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
         except Exception as e_csv:
             print(f"⚠️ 結算回寫 CSV 失敗: {e_csv}", flush=True)
 
-    # 計算 8 大 KPI
     win_rate_num = round((win_count / sent_count) * 100, 1) if sent_count > 0 else 0.0
     win_rate_pct = f"{win_rate_num:.1f}%"
     avg_net_ret = round(sum(net_returns) / len(net_returns), 2) if net_returns else 0.0
@@ -5117,7 +5251,6 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
             best_zone_wr = zwr
             best_zone_str = f"{zn} ({zw}勝/{zt}檔, {zwr}%)"
 
-    # 連動 monitor_list.json 驗證四大策略分頁
     strat_groups_html = ""
     try:
         res_mon = requests.get(f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?t={int(time.time())}", timeout=6).json()
@@ -5331,6 +5464,15 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
         </div>
     </div>
 
+    <!-- 歷史 Alpha 衰退趨勢追蹤艙 -->
+    <div class="panel-card" style="margin-bottom: 30px;">
+        <div class="panel-title">
+            <span>📈 近 10 日策略累計勝率與平均報酬率趨勢追蹤 (Alpha 衰退診斷)</span>
+            <span style="font-size:0.8rem; color:var(--text-muted);">動態監控策略健康度</span>
+        </div>
+        <div id="alpha_decay_chart" style="width: 100%; height: 280px;"></div>
+    </div>
+
     <div class="stats-grid">
         <div class="stat-card">
             <div class="stat-title">1. 盤中動能掃描 / 觸發數</div>
@@ -5443,10 +5585,34 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
     const CHART_NET = {chart_net_json};
     const ZONE_WR = {zone_wr_json};
     const ZONE_TOT = {zone_tot_json};
+    const TREND_DATES = {history_trend_dates_json};
+    const TREND_WR = {history_trend_wr_json};
+    const TREND_RET = {history_trend_ret_json};
 
     let chartsStore = {{}};
 
     function initGlobalCharts() {{
+        // Alpha 衰退趨勢圖
+        const domAlpha = document.getElementById('alpha_decay_chart');
+        if (domAlpha && TREND_DATES.length > 0) {{
+            const chartAlpha = echarts.init(domAlpha);
+            chartAlpha.setOption({{
+                tooltip: {{ trigger: 'axis', backgroundColor: 'rgba(15,23,42,0.95)', borderColor: '#334155', textStyle: {{ color: '#fff' }} }},
+                legend: {{ data: ['歷史勝率(%)', '平均單筆報酬(%)'], textStyle: {{ color: '#cbd5e1', fontSize: 11 }}, top: 0 }},
+                grid: {{ left: '6%', right: '6%', top: '16%', bottom: '12%' }},
+                xAxis: {{ type: 'category', data: TREND_DATES, axisLabel: {{ color: '#94a3b8', fontSize: 11 }} }},
+                yAxis: [
+                    {{ type: 'value', name: '勝率%', min: 0, max: 100, axisLabel: {{ color: '#94a3b8', formatter: '{{value}}%' }}, splitLine: {{ lineStyle: {{ color: '#1e293b', type: 'dashed' }} }} }},
+                    {{ type: 'value', name: '報酬%', axisLabel: {{ color: '#38bdf8', formatter: '{{value}}%' }}, splitLine: {{ show: false }} }}
+                ],
+                series: [
+                    {{ name: '歷史勝率(%)', type: 'line', data: TREND_WR, smooth: true, lineStyle: {{ color: '#f59e0b', width: 3 }}, itemStyle: {{ color: '#f59e0b' }} }},
+                    {{ name: '平均單筆報酬(%)', type: 'bar', yAxisIndex: 1, data: TREND_RET, barWidth: '30%', itemStyle: {{ color: '#38bdf8', borderRadius: [4,4,0,0] }} }}
+                ]
+            }});
+            chartsStore['global_alpha'] = chartAlpha;
+        }}
+
         const domMfe = document.getElementById('mfe_mae_chart');
         if (domMfe) {{
             const chartMfe = echarts.init(domMfe);
@@ -5640,7 +5806,6 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
 </html>
 """
 
-    # 1. 存入母艦記憶體與本機硬碟
     war_room_memory_cache[target_date_str] = html_content
     war_room_summary_cache[target_date_str] = final_report
     with open(output_html_name, "w", encoding="utf-8") as f:
@@ -5648,7 +5813,6 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
     with open("daily_review_latest.html", "w", encoding="utf-8") as f:
         f.write(html_content)
 
-    # 2. pCloud 雲端備份
     try:
         token = os.environ.get('PCLOUD_AUTH_TOKEN', '')
         folder_id_main = os.environ.get('PCLOUD_FOLDER_ID', '31448526072')
@@ -5664,7 +5828,6 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
     except:
         pass
 
-    # 3. 若為排程觸發，主動推播至 LINE 群組
     if push_to_groups:
         TARGET_GROUP_IDS = [
             "C0481b44935888bb1dc20dfd52a675e8a",
