@@ -2602,10 +2602,13 @@ def callback():
 
 # 🎯 建立全域記憶體快取，對抗 Render 洗檔機制
 war_room_memory_cache = {}
+war_room_summary_cache = {}
 
 @app.route("/war_room_<date_str>.html", methods=['GET'])
 def serve_war_room(date_str):
     import os
+    import time
+    import requests
     # 1. 優先從記憶體直接提取（最快，絕對不會被系統洗掉）
     if date_str in war_room_memory_cache:
         return war_room_memory_cache[date_str]
@@ -2615,11 +2618,31 @@ def serve_war_room(date_str):
     if os.path.exists(file_path):
         try:
             with open(file_path, "r", encoding="utf-8") as f:
-                return f.read()
+                content = f.read()
+                war_room_memory_cache[date_str] = content
+                return content
         except:
-            return "檔案讀取錯誤", 500
+            pass
+
+    # 3. 雲端自癒方案：若 Render 休眠重啟洗掉檔案，自動去 pCloud 抓回歷史 HTML
+    try:
+        pcloud_html_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/war_room_{date_str}.html?t={int(time.time())}"
+        res = requests.get(pcloud_html_url, timeout=6)
+        if res.status_code == 200 and "<!DOCTYPE html>" in res.text:
+            war_room_memory_cache[date_str] = res.text
+            return res.text
+    except:
+        pass
+
+    # 4. 終極現場重算：若連 HTML 都還沒生成，直接調閱該日 CSV 現場生成！
+    try:
+        html_out, _ = build_war_room_report(target_date_str=date_str, push_to_groups=False)
+        if html_out:
+            return html_out
+    except Exception as e:
+        print(f"⚠️ 現場重算戰情室失敗 ({date_str}): {e}", flush=True)
             
-    return "戰情室尚未生成，或已被雲端主機休眠重置洗除", 404
+    return "戰情室尚未生成，或查無該日歷史戰績紀錄", 404
 
 
 @app.route("/live_data.json", methods=['GET'])
@@ -2938,36 +2961,41 @@ def handle_message(event):
 
     # ==========================================
 
-    # 💥 盤後覆盤 (雙彈齊發版)
-    if user_msg in ["防禦報告", "盤後覆盤", "攔截清單"]:
+    # 💥 盤後覆盤 (智慧跨日回溯 + 即時觸發生成引擎雙彈版)
+    if user_msg in ["防禦報告", "盤後覆盤", "攔截清單", "強制結算", "重新結算"]:
         try:
-            today_str = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime('%Y%m%d')
-            render_url = f"https://stock-line-bot-c8em.onrender.com/war_room_{today_str}.html"
-            
-            if not intercepted_traps_log:
-                reply_msg = f"🛡️ 【盤後覆盤】\n今日雷達未偵測到符合爆量門檻的主力陷阱。\n\n📊 今日 13:40 盤後覆盤網頁已結算，請點擊下方專屬連結查看："
-            else:
-                reply_lines = [
-                    "🛡️ 【盤後覆盤：今日攔截假突破清單】",
-                    "----------------------"
-                ]
-                for trap in intercepted_traps_log:
-                    reply_lines.append(trap)
-                
-                reply_lines.append("----------------------")
-                reply_lines.append(f"🎯 總計擋下 {len(intercepted_traps_log)} 次主力割韭菜陷阱！")
-                reply_lines.append(f"\n📊 今日 13:40 盤後覆盤網頁已結算，請點擊下方專屬連結查看：")
-                
-                reply_msg = "\n".join(reply_lines)
-            
-            # 1. 第一發：帶有按鈕的深色面板
-            flex_msg = create_flex_menu_message(reply_msg[:3000])
-            # 2. 第二發：純文字網址
-            link_msg = TextSendMessage(text=render_url)
-            
-            # 3. 雙彈齊發！
-            smart_reply_with_menu(event, [flex_msg, link_msg])
-            
+            force_rebuild = user_msg in ["強制結算", "重新結算"]
+            target_date_str, is_fallback = resolve_latest_trading_date()
+            render_url = f"https://stock-line-bot-c8em.onrender.com/war_room_{target_date_str}.html"
+            date_label = f"{target_date_str[:4]}/{target_date_str[4:6]}/{target_date_str[6:]}"
+            fallback_note = f"（今日休市或尚無紀錄，已自動為您調閱最近交易日 {date_label} 戰報）" if is_fallback else f"（{date_label} 當日戰報）"
+
+            # 情況 A：如果記憶體已經有生成好的報告，且非強制重算 -> 0.1 秒瞬間雙彈齊發！
+            if (not force_rebuild) and (target_date_str in war_room_memory_cache) and (target_date_str in war_room_summary_cache):
+                reply_msg = f"🛡️ 【機構級盤後覆盤】\n{fallback_note}\n\n{war_room_summary_cache[target_date_str]}"
+                flex_msg = create_flex_menu_message(reply_msg[:3000])
+                link_msg = TextSendMessage(text=render_url)
+                smart_reply_with_menu(event, [flex_msg, link_msg])
+                return
+
+            # 情況 B：尚未生成網頁或要求強制重算 -> 先秒回破除 LINE 5秒死線，再派背景分身即時生成並推播！
+            smart_reply_with_menu(
+                event,
+                TextSendMessage(text=f"🛡️ 收到指令！正在為您調閱 {date_label} 戰情紀錄並啟動【機構級 MFE/MAE 盤後歸因引擎】即時生成網頁，約需 5~10 秒，請稍候...")
+            )
+
+            def process_on_demand_war_room():
+                try:
+                    target_id = event.source.group_id if hasattr(event.source, 'group_id') else event.source.user_id
+                    _, summary_text = build_war_room_report(target_date_str=target_date_str, push_to_groups=False)
+                    full_msg = f"🛡️ 【機構級盤後覆盤結算完畢】\n{fallback_note}\n\n{summary_text}"
+                    smart_push_with_menu(target_id, full_msg[:4000])
+                except Exception as ex:
+                    print(f"⚠️ 手動觸發盤後覆盤背景異常: {ex}", flush=True)
+
+            import eventlet
+            eventlet.spawn(process_on_demand_war_room)
+
         except Exception as e:
             smart_reply_with_menu(event, f"⚠️ 查詢防禦報告異常：{e}")
         return
@@ -4623,513 +4651,578 @@ def continuous_radar_loop():
 
 
 # ==========================================================
-# 📊 13:40 雲端收盤自動戰情與 HTML 網頁生成引擎 (機構級全方位鑑識版)
+# 📊 13:40 雲端收盤自動戰情與 HTML 網頁生成引擎 (支援休市自動回溯前一日)
 # ==========================================================
-def afternoon_review_loop():
-    import time
-    import datetime
-    import csv
-    import os
-    import json
-    import requests
-    
-    print("📡 [收盤檢討哨] 雲端 HTML 戰情室自動生成引擎 (機構級鑑識版) 已就位...", flush=True)
-    last_sent_date = ""
+def _csv_has_data_rows(filepath):
+    """檢查 CSV 是否包含至少 1 筆實質交易資料列 (排除開機 init_csv 產生的空標題檔)"""
+    import os, csv
+    if not os.path.exists(filepath):
+        return False
+    try:
+        with open(filepath, mode='r', encoding='utf-8-sig') as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            first_row = next(reader, None)
+            return first_row is not None and len(first_row) > 0
+    except:
+        return False
 
-    while True:
+def resolve_latest_trading_date():
+    """
+    🎯 智慧跨日回溯器：
+    1. 先檢查今日是否有實質交易紀錄。
+    2. 若今天是週末、國定假日、開盤前、或今日尚無觸發紀錄，自動往前回溯最近 10 天，
+       從本機或 pCloud 雲端歷史庫找回「最近一個有紀錄的交易日 CSV」。
+    回傳: (target_date_str 'YYYYMMDD', is_fallback bool)
+    """
+    import datetime, time, requests
+    tz_tw = datetime.timezone(datetime.timedelta(hours=8))
+    now = datetime.datetime.now(tz_tw)
+    today_str = now.strftime('%Y%m%d')
+
+    for days_back in range(0, 10):
+        cand_dt = now - datetime.timedelta(days=days_back)
+        cand_str = cand_dt.strftime('%Y%m%d')
+        csv_name = f"trading_log_{cand_str}.csv"
+
+        # 1. 先檢查本機是否有含實質資料的 CSV
+        if _csv_has_data_rows(csv_name):
+            return cand_str, (days_back > 0)
+
+        # 2. 本機沒有或為空標題檔 -> 嘗試從 pCloud 歷史資料夾拉取該日 CSV
         try:
-            tz_tw = datetime.timezone(datetime.timedelta(hours=8))
-            now = datetime.datetime.now(tz_tw)
-            is_weekend = now.weekday() >= 5
-            current_time_num = now.hour * 100 + now.minute
-            current_date_str = now.strftime("%Y-%m-%d")
-            
-            # 從全域變數取得今日真實過濾的股票集合
-            global filtered_funds_codes, filtered_overheated_codes, war_room_memory_cache, global_true_market_top_ind
-            real_funds_filtered = len(filtered_funds_codes)
-            real_overheated_filtered = len(filtered_overheated_codes)
-            
-            today_str = now.strftime('%Y%m%d')
-            output_html_name = f"war_room_{today_str}.html"
-            csv_filename = f"trading_log_{today_str}.csv"
+            public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{csv_name}?t={int(time.time())}"
+            res = requests.get(public_url, timeout=5)
+            if res.status_code == 200 and ("Trigger_Time" in res.text or "Stock_ID" in res.text):
+                lines = [line.strip() for line in res.text.splitlines() if line.strip()]
+                if len(lines) >= 2:  # 至少有標題列 + 1筆資料列
+                    with open(csv_name, 'wb') as f:
+                        f.write(res.content)
+                    print(f"✅ [跨日回溯成功] 已從 pCloud 調閱 {cand_str} 歷史戰績 CSV ({len(lines)-1} 筆)！", flush=True)
+                    return cand_str, (days_back > 0)
+        except:
+            pass
 
-            # 盤後結算條件 (13:55 ~ 14:30 自動執行一次)
-            if not is_weekend and (1355 <= current_time_num <= 1430) and (last_sent_date != current_date_str):
-                print("🔍 [戰場鑑識] 時間已達 13:55，開始執行機構級盤後歸因與生成 HTML 戰情網頁...", flush=True)
-                
-                total_scans = 0
-                sent_count = 0
-                win_count = 0
-                lose_count = 0
-                giveback_count = 0  # 曾漲超 2% 但最終獲利回吐的檔數
-                
-                net_returns = []
-                mfe_list = []
-                mae_list = []
-                zone_stats = {
-                    "早盤": {"total": 0, "win": 0, "ret_sum": 0.0},
-                    "盤中": {"total": 0, "win": 0, "ret_sum": 0.0},
-                    "尾盤": {"total": 0, "win": 0, "ret_sum": 0.0}
-                }
-                
-                chart_stock_names = []
-                chart_mfe_data = []
-                chart_mae_data = []
-                chart_net_data = []
-                
-                master_table_rows_html = ""
-                sniper_cards_html = ""
-                embedded_kbars = {}      # 日K資料庫
-                embedded_intraday = {}   # 當日5分K資料庫
-                updated_csv_rows = []
-                csv_fieldnames = []
+    # 若近 10 天皆無 CSV 檔案，若今天為週末則退回最近一個週五，否則回傳今日
+    if now.weekday() == 5:  # 週六 -> 週五
+        return (now - datetime.timedelta(days=1)).strftime('%Y%m%d'), True
+    elif now.weekday() == 6:  # 週日 -> 週五
+        return (now - datetime.timedelta(days=2)).strftime('%Y%m%d'), True
+    return today_str, False
 
-                if os.path.exists(csv_filename):
-                    with open(csv_filename, mode='r', encoding='utf-8-sig') as f:
-                        reader = csv.DictReader(f)
-                        csv_fieldnames = list(reader.fieldnames) if reader.fieldnames else []
-                        for extra_col in ["MFE_Pct", "MAE_Pct", "Net_Return_Pct", "Above_Entry_Mins", "Pathology_Tag"]:
-                            if extra_col not in csv_fieldnames:
-                                csv_fieldnames.append(extra_col)
-                                
-                        is_first_card = True
-                        
-                        for row in reader:
-                            total_scans += 1
-                            decision = row.get("System_Decision", "")
-                            stock_n = row.get("Stock_Name", "未知").strip()
-                            stock_c = row.get("Stock_ID", "0000").strip()
-                            t_time = row.get("Trigger_Time", "09:00:00").strip()
-                            t_zone = row.get("Time_Zone", "早盤").strip()
-                            funds_str = row.get("Ignition_Funds", "0").strip()
-                            pct_str = row.get("Price_Change_Pct", "+0.00%").strip()
-                            dev_str = row.get("Deviation_Rate", "+0.0%").strip()
-                            
-                            try:
-                                entry_val = float(row.get("Suggested_Entry", 0) or 0)
-                            except:
-                                entry_val = 0.0
-                            try:
-                                stop_val = float(row.get("Stop_Loss_Line", 0) or 0)
-                            except:
-                                stop_val = 0.0
 
-                            # 逆推觸發當下現價 (進場價減 2 檔)
-                            tick_unit = 0.05 if entry_val < 50 else (0.1 if entry_val < 100 else (0.5 if entry_val < 500 else 1.0))
-                            trig_val = round(entry_val - (tick_unit * 2), 2) if entry_val > 0 else 0.0
-                            slip_pct = round(((entry_val - trig_val) / trig_val) * 100, 2) if trig_val > 0 else 0.0
+def build_war_room_report(target_date_str=None, push_to_groups=False):
+    """
+    🎯 機構級盤後歸因與 HTML 戰情室核心建構引擎
+    支援指定日期 (YYYYMMDD) 或自動回溯最近交易日，並可由 13:55 排程或 LINE 手動指令隨時呼叫。
+    """
+    import time, datetime, csv, os, json, requests
+    global filtered_funds_codes, filtered_overheated_codes, war_room_memory_cache, war_room_summary_cache, global_true_market_top_ind
 
-                            if "強勢達標_發送" in decision and stock_c:
-                                sent_count += 1
-                                
-                                # ==========================================
-                                # 🎯 1. 抓取當日 5 分 K 進行微觀病理歸因
-                                # ==========================================
-                                close_p = 0.0
-                                mfe_pct = 0.0
-                                mae_pct = 0.0
-                                net_ret_pct = 0.0
-                                above_mins = 0
-                                hit_stop = False
-                                pathology_tag = "⏳ 資料同步中"
-                                badge_class = "yellow"
-                                
-                                try:
-                                    url_5m = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_c}.TW?range=1d&interval=5m"
-                                    res_5m = requests.get(url_5m, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
-                                    if not res_5m.get('chart', {}).get('result'):
-                                        url_5m = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_c}.TWO?range=1d&interval=5m"
-                                        res_5m = requests.get(url_5m, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
-                                    
-                                    res_node = res_5m['chart']['result'][0]
-                                    meta_5m = res_node['meta']
-                                    close_p = round(float(meta_5m.get('regularMarketPrice', 0) or 0), 2)
-                                    
-                                    ts_list = res_node.get('timestamp', [])
-                                    q_5m = res_node['indicators']['quote'][0]
-                                    h_list = q_5m.get('high', [])
-                                    l_list = q_5m.get('low', [])
-                                    o_list = q_5m.get('open', [])
-                                    c_list = q_5m.get('close', [])
-                                    v_list = q_5m.get('volume', [])
-                                    
-                                    t_parts = t_time.split(':')
-                                    trig_hhmm = int(t_parts[0]) * 100 + int(t_parts[1]) if len(t_parts) >= 2 else 900
-                                    
-                                    post_highs = []
-                                    post_lows = []
-                                    intraday_bars = []
-                                    
-                                    for idx_bar in range(len(ts_list)):
-                                        c_bar = c_list[idx_bar] if idx_bar < len(c_list) else None
-                                        if c_bar is None:
-                                            continue
-                                        dt_bar = datetime.datetime.fromtimestamp(ts_list[idx_bar], tz_tw)
-                                        bar_hhmm = dt_bar.hour * 100 + dt_bar.minute
-                                        time_label = dt_bar.strftime('%H:%M')
-                                        
-                                        o_bar = round(float(o_list[idx_bar] or c_bar), 2)
-                                        c_bar_f = round(float(c_bar), 2)
-                                        h_bar = round(float(h_list[idx_bar] or c_bar), 2)
-                                        l_bar = round(float(l_list[idx_bar] or c_bar), 2)
-                                        v_bar = int((v_list[idx_bar] or 0) / 1000)
-                                        
-                                        intraday_bars.append({
-                                            "t": time_label, "o": o_bar, "c": c_bar_f, "h": h_bar, "l": l_bar, "v": v_bar
-                                        })
-                                        
-                                        # 只統計觸發時間點之後的極值表現
-                                        if bar_hhmm >= trig_hhmm:
-                                            post_highs.append(h_bar)
-                                            post_lows.append(l_bar)
-                                            if stop_val > 0 and l_bar < stop_val:
-                                                hit_stop = True
-                                            if entry_val > 0 and c_bar_f >= entry_val:
-                                                above_mins += 5
-                                                
-                                    embedded_intraday[stock_c] = {
-                                        "entry": entry_val,
-                                        "stop": stop_val,
-                                        "trig_time": t_time[:5],
-                                        "bars": intraday_bars
-                                    }
-                                    
-                                    if not post_highs and h_list:
-                                        post_highs = [float(x) for x in h_list if x is not None]
-                                    if not post_lows and l_list:
-                                        post_lows = [float(x) for x in l_list if x is not None]
-                                    if close_p == 0 and c_list:
-                                        valid_c = [float(x) for x in c_list if x is not None]
-                                        if valid_c: close_p = round(valid_c[-1], 2)
-                                        
-                                    if entry_val > 0 and post_highs and post_lows:
-                                        mfe_pct = round(((max(post_highs) - entry_val) / entry_val) * 100, 2)
-                                        mae_pct = round(((min(post_lows) - entry_val) / entry_val) * 100, 2)
-                                    if entry_val > 0 and close_p > 0:
-                                        net_ret_pct = round(((close_p - entry_val) / entry_val) * 100, 2)
-                                        
-                                except Exception as e_5m:
-                                    print(f"⚠️ 抓取 {stock_c} 5分K歸因異常: {e_5m}", flush=True)
+    tz_tw = datetime.timezone(datetime.timedelta(hours=8))
+    now = datetime.datetime.now(tz_tw)
 
-                                # ==========================================
-                                # 🎯 2. 抓取近 2 個月日 K 資料 (供波段切換檢視)
-                                # ==========================================
-                                try:
-                                    url_1d = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_c}.TW?range=2mo&interval=1d"
-                                    res_1d = requests.get(url_1d, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
-                                    if not res_1d.get('chart', {}).get('result'):
-                                        url_1d = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_c}.TWO?range=2mo&interval=1d"
-                                        res_1d = requests.get(url_1d, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
-                                    
-                                    res_node_1d = res_1d['chart']['result'][0]
-                                    ts_1d = res_node_1d.get('timestamp', [])
-                                    ind_1d = res_node_1d['indicators']['quote'][0]
-                                    kbars_dict = {}
-                                    for i_d in range(len(ts_1d)):
-                                        if ind_1d.get('close', [])[i_d] is not None:
-                                            dt_str = datetime.datetime.fromtimestamp(ts_1d[i_d], tz_tw).strftime('%Y/%m/%d')
-                                            kbars_dict[dt_str] = {
-                                                "o": ind_1d['open'][i_d],
-                                                "c": ind_1d['close'][i_d],
-                                                "h": ind_1d['high'][i_d],
-                                                "l": ind_1d['low'][i_d],
-                                                "v": ind_1d.get('volume', [])[i_d] if ind_1d.get('volume') else 0
-                                            }
-                                    embedded_kbars[stock_c] = kbars_dict
-                                except Exception as e_1d:
-                                    print(f"⚠️ 抓取 {stock_c} 日K失敗: {e_1d}", flush=True)
+    if not target_date_str:
+        target_date_str, _ = resolve_latest_trading_date()
 
-                                # ==========================================
-                                # 🎯 3. 判定勝負與病理診斷標籤
-                                # ==========================================
-                                is_win = net_ret_pct > 0
-                                if is_win:
-                                    win_count += 1
-                                    trade_res_str = f"🔴 獲利 ({net_ret_pct:+.2f}%)"
-                                    val_color = "red"
-                                    if mfe_pct >= 3.0 and net_ret_pct >= 2.0:
-                                        pathology_tag = "🎯 衝高抱牢大勝 (主升鎖定)"
-                                        badge_class = "red"
-                                    elif hit_stop:
-                                        pathology_tag = f"🛡️ 先洗後拉 (曾破VWAP回撤 {mae_pct:.2f}%)"
-                                        badge_class = "yellow"
-                                    elif mfe_pct >= 2.5 and net_ret_pct < 0.8:
-                                        pathology_tag = f"⚠️ 大幅獲利回吐 (最高曾賺 +{mfe_pct:.2f}%)"
-                                        badge_class = "yellow"
-                                        giveback_count += 1
-                                    else:
-                                        pathology_tag = "🔥 真突破穩健收紅 (守穩均價線)"
-                                        badge_class = "green"
-                                else:
-                                    lose_count += 1
-                                    trade_res_str = f"🟢 虧損 ({net_ret_pct:+.2f}%)"
-                                    val_color = "green"
-                                    if mfe_pct >= 2.0:
-                                        pathology_tag = f"⚠️ 衝高A轉倒貨 (曾賺 +{mfe_pct:.2f}% 未停利)"
-                                        badge_class = "yellow"
-                                        giveback_count += 1
-                                    elif above_mins <= 10:
-                                        pathology_tag = f"🔪 瞬間假突破誘多 (僅撐 {above_mins} 分鐘)"
-                                        badge_class = "red"
-                                    else:
-                                        pathology_tag = "💤 盤中動能衰竭緩跌"
-                                        badge_class = "blue"
+    # 若指定日期本機無資料，先嘗試去 pCloud 下載該日 CSV
+    csv_filename = f"trading_log_{target_date_str}.csv"
+    if not _csv_has_data_rows(csv_filename):
+        try:
+            public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{csv_filename}?t={int(time.time())}"
+            res = requests.get(public_url, timeout=5)
+            if res.status_code == 200 and ("Trigger_Time" in res.text or "Stock_ID" in res.text):
+                with open(csv_filename, 'wb') as f:
+                    f.write(res.content)
+        except:
+            pass
 
-                                # 統計全局指標
-                                net_returns.append(net_ret_pct)
-                                mfe_list.append(mfe_pct)
-                                mae_list.append(mae_pct)
-                                
-                                if t_zone not in zone_stats:
-                                    zone_stats[t_zone] = {"total": 0, "win": 0, "ret_sum": 0.0}
-                                zone_stats[t_zone]["total"] += 1
-                                if is_win:
-                                    zone_stats[t_zone]["win"] += 1
-                                zone_stats[t_zone]["ret_sum"] += net_ret_pct
+    output_html_name = f"war_room_{target_date_str}.html"
+    target_dt_obj = datetime.datetime.strptime(target_date_str, "%Y%m%d")
+    display_date = target_dt_obj.strftime("%Y.%m.%d (%a)")
+    target_date_slash = target_dt_obj.strftime("%Y/%m/%d")
 
-                                chart_stock_names.append(f"{stock_n}({stock_c})")
-                                chart_mfe_data.append(mfe_pct)
-                                chart_mae_data.append(mae_pct)
-                                chart_net_data.append(net_ret_pct)
+    real_funds_filtered = len(filtered_funds_codes)
+    real_overheated_filtered = len(filtered_overheated_codes)
 
-                                # 更新 CSV 行紀錄
-                                row["Close_Price"] = close_p
-                                row["Trade_Result"] = trade_res_str
-                                row["MFE_Pct"] = f"+{mfe_pct:.2f}%"
-                                row["MAE_Pct"] = f"{mae_pct:.2f}%"
-                                row["Net_Return_Pct"] = f"{net_ret_pct:+.2f}%"
-                                row["Above_Entry_Mins"] = f"{above_mins}m"
-                                row["Pathology_Tag"] = pathology_tag
+    total_scans = 0
+    sent_count = 0
+    win_count = 0
+    lose_count = 0
+    giveback_count = 0
 
-                                # 生成戰術總表列 (Master Table Row)
-                                master_table_rows_html += f"""
-                                <tr>
-                                    <td><span style="color:var(--color-yellow); font-weight:bold;">{t_time}</span> <span class="zone-tag" style="margin-left:4px;">{t_zone}</span></td>
-                                    <td><strong style="color:#fff; font-size:1rem;">{stock_n}</strong> <span style="color:var(--text-muted);">({stock_c})</span></td>
-                                    <td style="color:var(--color-yellow); font-weight:bold;">{funds_str} 萬 <span style="color:var(--text-muted); font-size:0.8rem;">(乖離 {dev_str})</span></td>
-                                    <td>{trig_val} ➔ <strong style="color:var(--color-blue);">{entry_val}</strong> <span style="color:var(--text-muted); font-size:0.8rem;">(滑價 {slip_pct:.2f}%)</span></td>
-                                    <td style="color:var(--color-red); font-weight:bold;">{stop_val}</td>
-                                    <td style="color:var(--color-red); font-weight:bold;">+{mfe_pct:.2f}%</td>
-                                    <td style="color:var(--color-green); font-weight:bold;">{mae_pct:.2f}%</td>
-                                    <td><strong class="val {val_color}">{close_p} 元 ({net_ret_pct:+.2f}%)</strong></td>
-                                    <td><span class="status-badge {badge_class}">{pathology_tag}</span></td>
-                                </tr>
-                                """
+    net_returns = []
+    mfe_list = []
+    mae_list = []
+    zone_stats = {
+        "早盤": {"total": 0, "win": 0, "ret_sum": 0.0},
+        "盤中": {"total": 0, "win": 0, "ret_sum": 0.0},
+        "尾盤": {"total": 0, "win": 0, "ret_sum": 0.0}
+    }
 
-                                # 生成疊合抽屜式狙擊卡片 (支援 5分K 與 日K 切換)
-                                open_attr = "open" if is_first_card else ""
-                                is_first_card = False
-                                card_border_color = "var(--color-red)" if is_win else "var(--color-green)"
-                                
-                                sniper_cards_html += f"""
-                                <details class="sniper-card" style="border-left-color: {card_border_color};" {open_attr}>
-                                    <summary class="card-head" style="cursor: pointer; outline: none; list-style: none;">
-                                        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; flex-wrap: wrap; gap: 10px;">
-                                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                                                <span class="stock-name">{stock_n} ({stock_c})</span>
-                                                <span class="time-tag">⏰ {t_time} [{t_zone}]</span>
-                                                <span class="status-badge {badge_class}">{pathology_tag}</span>
-                                            </div>
-                                            <div style="display: flex; align-items: center; gap: 14px;">
-                                                <span style="font-size: 0.9rem; color: var(--text-muted);">最高衝刺 <b style="color:var(--color-red);">+{mfe_pct:.2f}%</b> ｜ 最大回撤 <b style="color:var(--color-green);">{mae_pct:.2f}%</b></span>
-                                                <span class="val {val_color}" style="font-size: 1.15rem;">{trade_res_str}</span>
-                                                <span style="color: var(--text-muted); font-size: 0.8rem;">▼ 展開詳情</span>
-                                            </div>
-                                        </div>
-                                    </summary>
+    chart_stock_names = []
+    chart_mfe_data = []
+    chart_mae_data = []
+    chart_net_data = []
 
-                                    <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
-                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
-                                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                                                <span class="zone-tag">🔥 點火資金：{funds_str} 萬</span>
-                                                <span class="zone-tag">📐 觸發乖離：{dev_str}</span>
-                                                <span class="zone-tag">⏱️ 進場價之上維持：{above_mins} 分鐘</span>
-                                            </div>
-                                            <div style="display: flex; gap: 8px;">
-                                                <button type="button" class="tab-btn active" id="tab_5m_{stock_c}" onclick="switchKMode('{stock_c}', '5m')">⚡ 當日 5 分 K (微觀當沖 + 防線)</button>
-                                                <button type="button" class="tab-btn" id="tab_1d_{stock_c}" onclick="switchKMode('{stock_c}', '1d')">📅 近 2 月日 K (波段均線)</button>
-                                            </div>
-                                        </div>
+    master_table_rows_html = ""
+    sniper_cards_html = ""
+    embedded_kbars = {}
+    embedded_intraday = {}
+    updated_csv_rows = []
+    csv_fieldnames = []
 
-                                        <!-- 📈 ECharts 雙模態全息圖表容器 -->
-                                        <div class="chart-container" id="container_{stock_c}">
-                                            <div id="chart_box_{stock_c}" style="width: 100%; height: 280px;"></div>
-                                        </div>
+    if os.path.exists(csv_filename):
+        with open(csv_filename, mode='r', encoding='utf-8-sig') as f:
+            reader = csv.DictReader(f)
+            csv_fieldnames = list(reader.fieldnames) if reader.fieldnames else []
+            for extra_col in ["MFE_Pct", "MAE_Pct", "Net_Return_Pct", "Above_Entry_Mins", "Pathology_Tag"]:
+                if extra_col not in csv_fieldnames:
+                    csv_fieldnames.append(extra_col)
 
-                                        <div class="detail-metrics-grid">
-                                            <div class="metric-box">
-                                                <div class="m-label">⚡ 訊號觸發價 ➔ 建議進場價 (+2檔)</div>
-                                                <div class="m-val">{trig_val} 元 ➔ <span style="color:var(--color-blue);">{entry_val} 元</span> <small>(滑價 {slip_pct:.2f}%)</small></div>
-                                            </div>
-                                            <div class="metric-box">
-                                                <div class="m-label">🛡️ VWAP 嚴格停損防線</div>
-                                                <div class="m-val" style="color:var(--color-red);">{stop_val} 元 <small>({'⚠️ 盤中曾觸及' if hit_stop else '✅ 盤中未跌破'})</small></div>
-                                            </div>
-                                            <div class="metric-box">
-                                                <div class="m-label">📈 最大有利極值 (MFE) / 📉 最大不利極值 (MAE)</div>
-                                                <div class="m-val"><span style="color:var(--color-red);">+{mfe_pct:.2f}%</span> ／ <span style="color:var(--color-green);">{mae_pct:.2f}%</span></div>
-                                            </div>
-                                            <div class="metric-box">
-                                                <div class="m-label">🏁 13:40 結算收盤價與最終損益</div>
-                                                <div class="m-val {val_color}">{close_p} 元 ｜ {trade_res_str}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </details>
-                                """
-                            updated_csv_rows.append(row)
+            is_first_card = True
 
-                    # 將結算後的完整數據寫回 CSV 並備份至 pCloud
-                    try:
-                        with open(csv_filename, mode='w', newline='', encoding='utf-8-sig') as wf:
-                            writer = csv.DictWriter(wf, fieldnames=csv_fieldnames)
-                            writer.writeheader()
-                            writer.writerows(updated_csv_rows)
-                        backup_csv_to_pcloud_async()
-                    except Exception as e_csv:
-                        print(f"⚠️ 結算回寫 CSV 失敗: {e_csv}", flush=True)
+            for row in reader:
+                total_scans += 1
+                decision = row.get("System_Decision", "")
+                stock_n = row.get("Stock_Name", "未知").strip()
+                stock_c = row.get("Stock_ID", "0000").strip()
+                t_time = row.get("Trigger_Time", "09:00:00").strip()
+                t_zone = row.get("Time_Zone", "早盤").strip()
+                funds_str = row.get("Ignition_Funds", "0").strip()
+                dev_str = row.get("Deviation_Rate", "+0.0%").strip()
 
-                # ==========================================
-                # 🎯 4. 計算頂部 8 大機構級 KPI 統計指標
-                # ==========================================
-                win_rate_num = round((win_count / sent_count) * 100, 1) if sent_count > 0 else 0.0
-                win_rate_pct = f"{win_rate_num:.1f}%"
-                avg_net_ret = round(sum(net_returns) / len(net_returns), 2) if net_returns else 0.0
-                avg_mfe = round(sum(mfe_list) / len(mfe_list), 2) if mfe_list else 0.0
-                avg_mae = round(sum(mae_list) / len(mae_list), 2) if mae_list else 0.0
-                
-                # 計算各時段勝率供 ECharts 與卡片顯示
-                zone_names = ["早盤", "盤中", "尾盤"]
-                zone_win_rates = []
-                zone_totals = []
-                best_zone_str = "尚無數據"
-                best_zone_wr = -1.0
-                for zn in zone_names:
-                    zt = zone_stats.get(zn, {"total": 0, "win": 0})["total"]
-                    zw = zone_stats.get(zn, {"total": 0, "win": 0})["win"]
-                    zwr = round((zw / zt) * 100, 1) if zt > 0 else 0.0
-                    zone_totals.append(zt)
-                    zone_win_rates.append(zwr)
-                    if zt > 0 and zwr > best_zone_wr:
-                        best_zone_wr = zwr
-                        best_zone_str = f"{zn} ({zw}勝/{zt}檔, {zwr}%)"
-
-                # ==========================================
-                # 🎯 5. 連動 monitor_list.json 驗證四大策略分頁收盤表現
-                # ==========================================
-                strat_groups_html = ""
                 try:
-                    res_mon = requests.get(f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?t={int(time.time())}", timeout=6).json()
-                    strat_groups = {
-                        "🎯 MTS 完美共振區": [],
-                        "🎖️ S級肥羊特戰區": [],
-                        "👑 S級核心波段區": [],
-                        "⚡ 當沖/隔日游擊區": []
-                    }
-                    items_to_process = []
-                    if isinstance(res_mon, dict):
-                        for k, v in res_mon.items():
-                            if isinstance(v, dict):
-                                v["code"] = k
-                                items_to_process.append(v)
-                    elif isinstance(res_mon, list):
-                        items_to_process = res_mon
+                    entry_val = float(row.get("Suggested_Entry", 0) or 0)
+                except:
+                    entry_val = 0.0
+                try:
+                    stop_val = float(row.get("Stop_Loss_Line", 0) or 0)
+                except:
+                    stop_val = 0.0
 
-                    for info in items_to_process:
-                        try:
-                            scode = str(info.get("代碼", info.get("code", ""))).strip()
-                            sname = info.get("name", info.get("商品", scode))
-                            stype = str(info.get("type", "general")).lower()
-                            if not scode: continue
+                tick_unit = 0.05 if entry_val < 50 else (0.1 if entry_val < 100 else (0.5 if entry_val < 500 else 1.0))
+                trig_val = round(entry_val - (tick_unit * 2), 2) if entry_val > 0 else 0.0
+                slip_pct = round(((entry_val - trig_val) / trig_val) * 100, 2) if trig_val > 0 else 0.0
 
-                            u_s = f"https://query1.finance.yahoo.com/v8/finance/chart/{scode}.TW?range=1d&interval=1d"
-                            r_s = requests.get(u_s, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
-                            if not r_s.get('chart', {}).get('result'):
-                                u_s = f"https://query1.finance.yahoo.com/v8/finance/chart/{scode}.TWO?range=1d&interval=1d"
-                                r_s = requests.get(u_s, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
+                if "強勢達標_發送" in decision and stock_c:
+                    sent_count += 1
+                    close_p = 0.0
+                    mfe_pct = 0.0
+                    mae_pct = 0.0
+                    net_ret_pct = 0.0
+                    above_mins = 0
+                    hit_stop = False
+                    pathology_tag = "⏳ 資料同步中"
+                    badge_class = "yellow"
 
-                            m_s = r_s['chart']['result'][0]['meta']
-                            cp_s = float(m_s.get('regularMarketPrice', 0) or 0)
-                            prev_s = float(m_s.get('chartPreviousClose', cp_s) or cp_s)
-                            if cp_s > 0 and prev_s > 0:
-                                chg_s = round(((cp_s - prev_s) / prev_s) * 100, 2)
-                                item_d = {"name": sname, "code": scode, "close": round(cp_s, 2), "chg": chg_s}
-                                if stype == "mts": strat_groups["🎯 MTS 完美共振區"].append(item_d)
-                                elif stype == "b": strat_groups["🎖️ S級肥羊特戰區"].append(item_d)
-                                elif stype == "s": strat_groups["👑 S級核心波段區"].append(item_d)
-                                else: strat_groups["⚡ 當沖/隔日游擊區"].append(item_d)
-                        except:
-                            pass
+                    # ==========================================
+                    # 🎯 1. 抓取近 2 個月日 K 資料 (並鎖定該交易日真實收盤價)
+                    # ==========================================
+                    try:
+                        url_1d = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_c}.TW?range=2mo&interval=1d"
+                        res_1d = requests.get(url_1d, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
+                        if not res_1d.get('chart', {}).get('result'):
+                            url_1d = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_c}.TWO?range=2mo&interval=1d"
+                            res_1d = requests.get(url_1d, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
 
-                    for g_title, g_list in strat_groups.items():
-                        if not g_list:
-                            strat_groups_html += f"""
-                            <div class="strat-box">
-                                <div class="strat-head"><span>{g_title}</span><span class="badge">0 檔</span></div>
-                                <div style="color:var(--text-muted); font-size:0.85rem; padding:10px 0;">今日分頁無追蹤標的</div>
+                        res_node_1d = res_1d['chart']['result'][0]
+                        ts_1d = res_node_1d.get('timestamp', [])
+                        ind_1d = res_node_1d['indicators']['quote'][0]
+                        kbars_dict = {}
+                        for i_d in range(len(ts_1d)):
+                            if ind_1d.get('close', [])[i_d] is not None:
+                                dt_str = datetime.datetime.fromtimestamp(ts_1d[i_d], tz_tw).strftime('%Y/%m/%d')
+                                kbars_dict[dt_str] = {
+                                    "o": ind_1d['open'][i_d],
+                                    "c": ind_1d['close'][i_d],
+                                    "h": ind_1d['high'][i_d],
+                                    "l": ind_1d['low'][i_d],
+                                    "v": ind_1d.get('volume', [])[i_d] if ind_1d.get('volume') else 0
+                                }
+                        embedded_kbars[stock_c] = kbars_dict
+                        if target_date_slash in kbars_dict and kbars_dict[target_date_slash]["c"]:
+                            close_p = round(float(kbars_dict[target_date_slash]["c"]), 2)
+                    except Exception as e_1d:
+                        print(f"⚠️ 抓取 {stock_c} 日K失敗: {e_1d}", flush=True)
+
+                    # ==========================================
+                    # 🎯 2. 抓取 5日內 5分K (確保週末或跨日調閱時，精準切出 target_date_str 當天的 5分K)
+                    # ==========================================
+                    try:
+                        url_5m = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_c}.TW?range=5d&interval=5m"
+                        res_5m = requests.get(url_5m, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
+                        if not res_5m.get('chart', {}).get('result'):
+                            url_5m = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_c}.TWO?range=5d&interval=5m"
+                            res_5m = requests.get(url_5m, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
+
+                        res_node = res_5m['chart']['result'][0]
+                        meta_5m = res_node['meta']
+                        if close_p <= 0:
+                            close_p = round(float(meta_5m.get('regularMarketPrice', 0) or 0), 2)
+
+                        ts_list = res_node.get('timestamp', [])
+                        q_5m = res_node['indicators']['quote'][0]
+                        h_list = q_5m.get('high', [])
+                        l_list = q_5m.get('low', [])
+                        o_list = q_5m.get('open', [])
+                        c_list = q_5m.get('close', [])
+                        v_list = q_5m.get('volume', [])
+
+                        t_parts = t_time.split(':')
+                        trig_hhmm = int(t_parts[0]) * 100 + int(t_parts[1]) if len(t_parts) >= 2 else 900
+
+                        # 找出所有可用日期，優先鎖定 target_date_str；若超過5天則取最新一個交易日
+                        available_dates = []
+                        for ts_val in ts_list:
+                            d_s = datetime.datetime.fromtimestamp(ts_val, tz_tw).strftime('%Y%m%d')
+                            if d_s not in available_dates:
+                                available_dates.append(d_s)
+                        active_5m_date = target_date_str if target_date_str in available_dates else (available_dates[-1] if available_dates else target_date_str)
+
+                        post_highs = []
+                        post_lows = []
+                        intraday_bars = []
+
+                        for idx_bar in range(len(ts_list)):
+                            c_bar = c_list[idx_bar] if idx_bar < len(c_list) else None
+                            if c_bar is None:
+                                continue
+                            dt_bar = datetime.datetime.fromtimestamp(ts_list[idx_bar], tz_tw)
+                            if dt_bar.strftime('%Y%m%d') != active_5m_date:
+                                continue
+
+                            bar_hhmm = dt_bar.hour * 100 + dt_bar.minute
+                            time_label = dt_bar.strftime('%H:%M')
+
+                            o_bar = round(float(o_list[idx_bar] or c_bar), 2)
+                            c_bar_f = round(float(c_bar), 2)
+                            h_bar = round(float(h_list[idx_bar] or c_bar), 2)
+                            l_bar = round(float(l_list[idx_bar] or c_bar), 2)
+                            v_bar = int((v_list[idx_bar] or 0) / 1000)
+
+                            intraday_bars.append({
+                                "t": time_label, "o": o_bar, "c": c_bar_f, "h": h_bar, "l": l_bar, "v": v_bar
+                            })
+
+                            if bar_hhmm >= trig_hhmm:
+                                post_highs.append(h_bar)
+                                post_lows.append(l_bar)
+                                if stop_val > 0 and l_bar < stop_val:
+                                    hit_stop = True
+                                if entry_val > 0 and c_bar_f >= entry_val:
+                                    above_mins += 5
+
+                        if intraday_bars:
+                            close_p = intraday_bars[-1]["c"]
+
+                        embedded_intraday[stock_c] = {
+                            "entry": entry_val,
+                            "stop": stop_val,
+                            "trig_time": t_time[:5],
+                            "bars": intraday_bars
+                        }
+
+                        if not post_highs and intraday_bars:
+                            post_highs = [b["h"] for b in intraday_bars]
+                        if not post_lows and intraday_bars:
+                            post_lows = [b["l"] for b in intraday_bars]
+
+                        if entry_val > 0 and post_highs and post_lows:
+                            mfe_pct = round(((max(post_highs) - entry_val) / entry_val) * 100, 2)
+                            mae_pct = round(((min(post_lows) - entry_val) / entry_val) * 100, 2)
+                        if entry_val > 0 and close_p > 0:
+                            net_ret_pct = round(((close_p - entry_val) / entry_val) * 100, 2)
+
+                    except Exception as e_5m:
+                        print(f"⚠️ 抓取 {stock_c} 5分K歸因異常: {e_5m}", flush=True)
+
+                    # ==========================================
+                    # 🎯 3. 判定勝負與病理診斷標籤
+                    # ==========================================
+                    is_win = net_ret_pct > 0
+                    if is_win:
+                        win_count += 1
+                        trade_res_str = f"🔴 獲利 ({net_ret_pct:+.2f}%)"
+                        val_color = "red"
+                        if mfe_pct >= 3.0 and net_ret_pct >= 2.0:
+                            pathology_tag = "🎯 衝高抱牢大勝 (主升鎖定)"
+                            badge_class = "red"
+                        elif hit_stop:
+                            pathology_tag = f"🛡️ 先洗後拉 (曾破VWAP回撤 {mae_pct:.2f}%)"
+                            badge_class = "yellow"
+                        elif mfe_pct >= 2.5 and net_ret_pct < 0.8:
+                            pathology_tag = f"⚠️ 大幅獲利回吐 (最高曾賺 +{mfe_pct:.2f}%)"
+                            badge_class = "yellow"
+                            giveback_count += 1
+                        else:
+                            pathology_tag = "🔥 真突破穩健收紅 (守穩均價線)"
+                            badge_class = "green"
+                    else:
+                        lose_count += 1
+                        trade_res_str = f"🟢 虧損 ({net_ret_pct:+.2f}%)"
+                        val_color = "green"
+                        if mfe_pct >= 2.0:
+                            pathology_tag = f"⚠️ 衝高A轉倒貨 (曾賺 +{mfe_pct:.2f}% 未停利)"
+                            badge_class = "yellow"
+                            giveback_count += 1
+                        elif above_mins <= 10:
+                            pathology_tag = f"🔪 瞬間假突破誘多 (僅撐 {above_mins} 分鐘)"
+                            badge_class = "red"
+                        else:
+                            pathology_tag = "💤 盤中動能衰竭緩跌"
+                            badge_class = "blue"
+
+                    net_returns.append(net_ret_pct)
+                    mfe_list.append(mfe_pct)
+                    mae_list.append(mae_pct)
+
+                    if t_zone not in zone_stats:
+                        zone_stats[t_zone] = {"total": 0, "win": 0, "ret_sum": 0.0}
+                    zone_stats[t_zone]["total"] += 1
+                    if is_win:
+                        zone_stats[t_zone]["win"] += 1
+                    zone_stats[t_zone]["ret_sum"] += net_ret_pct
+
+                    chart_stock_names.append(f"{stock_n}({stock_c})")
+                    chart_mfe_data.append(mfe_pct)
+                    chart_mae_data.append(mae_pct)
+                    chart_net_data.append(net_ret_pct)
+
+                    row["Close_Price"] = close_p
+                    row["Trade_Result"] = trade_res_str
+                    row["MFE_Pct"] = f"+{mfe_pct:.2f}%"
+                    row["MAE_Pct"] = f"{mae_pct:.2f}%"
+                    row["Net_Return_Pct"] = f"{net_ret_pct:+.2f}%"
+                    row["Above_Entry_Mins"] = f"{above_mins}m"
+                    row["Pathology_Tag"] = pathology_tag
+
+                    master_table_rows_html += f"""
+                    <tr>
+                        <td><span style="color:var(--color-yellow); font-weight:bold;">{t_time}</span> <span class="zone-tag" style="margin-left:4px;">{t_zone}</span></td>
+                        <td><strong style="color:#fff; font-size:1rem;">{stock_n}</strong> <span style="color:var(--text-muted);">({stock_c})</span></td>
+                        <td style="color:var(--color-yellow); font-weight:bold;">{funds_str} 萬 <span style="color:var(--text-muted); font-size:0.8rem;">(乖離 {dev_str})</span></td>
+                        <td>{trig_val} ➔ <strong style="color:var(--color-blue);">{entry_val}</strong> <span style="color:var(--text-muted); font-size:0.8rem;">(滑價 {slip_pct:.2f}%)</span></td>
+                        <td style="color:var(--color-red); font-weight:bold;">{stop_val}</td>
+                        <td style="color:var(--color-red); font-weight:bold;">+{mfe_pct:.2f}%</td>
+                        <td style="color:var(--color-green); font-weight:bold;">{mae_pct:.2f}%</td>
+                        <td><strong class="val {val_color}">{close_p} 元 ({net_ret_pct:+.2f}%)</strong></td>
+                        <td><span class="status-badge {badge_class}">{pathology_tag}</span></td>
+                    </tr>
+                    """
+
+                    open_attr = "open" if is_first_card else ""
+                    is_first_card = False
+                    card_border_color = "var(--color-red)" if is_win else "var(--color-green)"
+
+                    sniper_cards_html += f"""
+                    <details class="sniper-card" style="border-left-color: {card_border_color};" {open_attr}>
+                        <summary class="card-head" style="cursor: pointer; outline: none; list-style: none;">
+                            <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; flex-wrap: wrap; gap: 10px;">
+                                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                    <span class="stock-name">{stock_n} ({stock_c})</span>
+                                    <span class="time-tag">⏰ {t_time} [{t_zone}]</span>
+                                    <span class="status-badge {badge_class}">{pathology_tag}</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 14px;">
+                                    <span style="font-size: 0.9rem; color: var(--text-muted);">最高衝刺 <b style="color:var(--color-red);">+{mfe_pct:.2f}%</b> ｜ 最大回撤 <b style="color:var(--color-green);">{mae_pct:.2f}%</b></span>
+                                    <span class="val {val_color}" style="font-size: 1.15rem;">{trade_res_str}</span>
+                                    <span style="color: var(--text-muted); font-size: 0.8rem;">▼ 展開詳情</span>
+                                </div>
                             </div>
-                            """
-                            continue
-                        g_cnt = len(g_list)
-                        g_wins = sum(1 for x in g_list if x["chg"] > 0)
-                        g_wr = round((g_wins / g_cnt) * 100, 1)
-                        g_avg = round(sum(x["chg"] for x in g_list) / g_cnt, 2)
-                        avg_cls = "red" if g_avg >= 0 else "green"
-                        
-                        chips_html = ""
-                        for x in sorted(g_list, key=lambda i: i["chg"], reverse=True):
-                            c_cls = "chip-red" if x["chg"] > 0 else ("chip-green" if x["chg"] < 0 else "chip-flat")
-                            chips_html += f'<div class="stock-chip {c_cls}"><span>{x["name"]}({x["code"]})</span><b>{x["close"]} ({x["chg"]:+.2f}%)</b></div>'
-                            
-                        strat_groups_html += f"""
-                        <div class="strat-box">
-                            <div class="strat-head">
-                                <span>{g_title}</span>
-                                <span style="font-size:0.85rem;">勝率 <b style="color:#fff;">{g_wr}%</b> ｜ 均漲跌 <b class="val {avg_cls}">{g_avg:+.2f}%</b></span>
+                        </summary>
+
+                        <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                    <span class="zone-tag">🔥 點火資金：{funds_str} 萬</span>
+                                    <span class="zone-tag">📐 觸發乖離：{dev_str}</span>
+                                    <span class="zone-tag">⏱️ 進場價之上維持：{above_mins} 分鐘</span>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <button type="button" class="tab-btn active" id="tab_5m_{stock_c}" onclick="switchKMode('{stock_c}', '5m')">⚡ 當日 5 分 K (微觀當沖 + 防線)</button>
+                                    <button type="button" class="tab-btn" id="tab_1d_{stock_c}" onclick="switchKMode('{stock_c}', '1d')">📅 近 2 月日 K (波段均線)</button>
+                                </div>
                             </div>
-                            <div class="chip-container">{chips_html}</div>
+
+                            <div class="chart-container" id="container_{stock_c}">
+                                <div id="chart_box_{stock_c}" style="width: 100%; height: 280px;"></div>
+                            </div>
+
+                            <div class="detail-metrics-grid">
+                                <div class="metric-box">
+                                    <div class="m-label">⚡ 訊號觸發價 ➔ 建議進場價 (+2檔)</div>
+                                    <div class="m-val">{trig_val} 元 ➔ <span style="color:var(--color-blue);">{entry_val} 元</span> <small>(滑價 {slip_pct:.2f}%)</small></div>
+                                </div>
+                                <div class="metric-box">
+                                    <div class="m-label">🛡️ VWAP 嚴格停損防線</div>
+                                    <div class="m-val" style="color:var(--color-red);">{stop_val} 元 <small>({'⚠️ 盤中曾觸及' if hit_stop else '✅ 盤中未跌破'})</small></div>
+                                </div>
+                                <div class="metric-box">
+                                    <div class="m-label">📈 最大有利極值 (MFE) / 📉 最大不利極值 (MAE)</div>
+                                    <div class="m-val"><span style="color:var(--color-red);">+{mfe_pct:.2f}%</span> ／ <span style="color:var(--color-green);">{mae_pct:.2f}%</span></div>
+                                </div>
+                                <div class="metric-box">
+                                    <div class="m-label">🏁 結算收盤價與最終損益</div>
+                                    <div class="m-val {val_color}">{close_p} 元 ｜ {trade_res_str}</div>
+                                </div>
+                            </div>
                         </div>
-                        """
-                except Exception as e_mon:
-                    print(f"⚠️ 選股分頁整合異常: {e_mon}", flush=True)
+                    </details>
+                    """
+                updated_csv_rows.append(row)
 
-                # ==========================================
-                # 🎯 6. 整理防禦黑盒子攔截名單
-                # ==========================================
-                funds_codes_str = "、".join(sorted(list(filtered_funds_codes))[:40]) if filtered_funds_codes else "今日無資金未達標之異常爆量股"
-                overheat_codes_str = "、".join(sorted(list(filtered_overheated_codes))[:40]) if filtered_overheated_codes else "今日無正乖離過熱攔截股"
+        # 將歸因結算寫回 CSV (若為當日則同步備份上 pCloud)
+        try:
+            with open(csv_filename, mode='w', newline='', encoding='utf-8-sig') as wf:
+                writer = csv.DictWriter(wf, fieldnames=csv_fieldnames)
+                writer.writeheader()
+                writer.writerows(updated_csv_rows)
+            if target_date_str == now.strftime('%Y%m%d'):
+                backup_csv_to_pcloud_async()
+        except Exception as e_csv:
+            print(f"⚠️ 結算回寫 CSV 失敗: {e_csv}", flush=True)
 
-                display_date = now.strftime("%Y.%m.%d (%a)")
-                top_sector_str = global_true_market_top_ind if global_true_market_top_ind else "主流監控中"
-                pcloud_public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{output_html_name}"
-                render_live_url = f"https://stock-line-bot-c8em.onrender.com/{output_html_name}"
+    # 計算 8 大 KPI
+    win_rate_num = round((win_count / sent_count) * 100, 1) if sent_count > 0 else 0.0
+    win_rate_pct = f"{win_rate_num:.1f}%"
+    avg_net_ret = round(sum(net_returns) / len(net_returns), 2) if net_returns else 0.0
+    avg_mfe = round(sum(mfe_list) / len(mfe_list), 2) if mfe_list else 0.0
+    avg_mae = round(sum(mae_list) / len(mae_list), 2) if mae_list else 0.0
 
-                kbars_json_str = json.dumps(embedded_kbars, ensure_ascii=False)
-                intraday_json_str = json.dumps(embedded_intraday, ensure_ascii=False)
-                chart_names_json = json.dumps(chart_stock_names, ensure_ascii=False)
-                chart_mfe_json = json.dumps(chart_mfe_data)
-                chart_mae_json = json.dumps(chart_mae_data)
-                chart_net_json = json.dumps(chart_net_data)
-                zone_wr_json = json.dumps(zone_win_rates)
-                zone_tot_json = json.dumps(zone_totals)
+    zone_names = ["早盤", "盤中", "尾盤"]
+    zone_win_rates = []
+    zone_totals = []
+    best_zone_str = "尚無數據"
+    best_zone_wr = -1.0
+    for zn in zone_names:
+        zt = zone_stats.get(zn, {"total": 0, "win": 0})["total"]
+        zw = zone_stats.get(zn, {"total": 0, "win": 0})["win"]
+        zwr = round((zw / zt) * 100, 1) if zt > 0 else 0.0
+        zone_totals.append(zt)
+        zone_win_rates.append(zwr)
+        if zt > 0 and zwr > best_zone_wr:
+            best_zone_wr = zwr
+            best_zone_str = f"{zn} ({zw}勝/{zt}檔, {zwr}%)"
 
-                review_lines = [
-                    "📊 【股海觀浪・機構級戰場鑑識與盤後歸因報告】",
-                    "----------------------",
-                    f"🎯 動能事件掃描：{total_scans} 次 ｜ 嚴選發報：{sent_count} 檔",
-                    f"🏆 收盤實戰勝率：{win_rate_pct} ({win_count}勝 {lose_count}敗)",
-                    f"💰 平均當沖淨損益：{avg_net_ret:+.2f}%",
-                    f"📈 平均最高衝刺 (MFE)：+{avg_mfe:.2f}% ｜ 平均最大回撤 (MAE)：{avg_mae:.2f}%",
-                    f"⏰ 最佳作戰時段：{best_zone_str}",
-                    f"🛡️ 防禦攔截：{real_funds_filtered} 檔資金不足 / {real_overheated_filtered} 檔高檔過熱",
-                    "----------------------",
-                    "🌐 完整互動式 5分K/日K 歸因戰情室已生成！",
-                    f"👉 雲端秒開連結：\n{render_live_url}",
-                    f"👉 pCloud 永久封存：\n{pcloud_public_url}"
-                ]
-                final_report = "\n".join(review_lines)
+    # 連動 monitor_list.json 驗證四大策略分頁
+    strat_groups_html = ""
+    try:
+        res_mon = requests.get(f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?t={int(time.time())}", timeout=6).json()
+        strat_groups = {
+            "🎯 MTS 完美共振區": [],
+            "🎖️ S級肥羊特戰區": [],
+            "👑 S級核心波段區": [],
+            "⚡ 當沖/隔日游擊區": []
+        }
+        items_to_process = []
+        if isinstance(res_mon, dict):
+            for k, v in res_mon.items():
+                if isinstance(v, dict):
+                    v["code"] = k
+                    items_to_process.append(v)
+        elif isinstance(res_mon, list):
+            items_to_process = res_mon
 
-                html_content = f"""<!DOCTYPE html>
+        for info in items_to_process:
+            try:
+                scode = str(info.get("代碼", info.get("code", ""))).strip()
+                sname = info.get("name", info.get("商品", scode))
+                stype = str(info.get("type", "general")).lower()
+                if not scode: continue
+
+                u_s = f"https://query1.finance.yahoo.com/v8/finance/chart/{scode}.TW?range=5d&interval=1d"
+                r_s = requests.get(u_s, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
+                if not r_s.get('chart', {}).get('result'):
+                    u_s = f"https://query1.finance.yahoo.com/v8/finance/chart/{scode}.TWO?range=5d&interval=1d"
+                    r_s = requests.get(u_s, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
+
+                r_node = r_s['chart']['result'][0]
+                q_s = r_node['indicators']['quote'][0]
+                closes_s = [float(x) for x in q_s.get('close', []) if x is not None]
+                if len(closes_s) >= 2:
+                    cp_s = closes_s[-1]
+                    prev_s = closes_s[-2]
+                else:
+                    m_s = r_node['meta']
+                    cp_s = float(m_s.get('regularMarketPrice', 0) or 0)
+                    prev_s = float(m_s.get('chartPreviousClose', cp_s) or cp_s)
+
+                if cp_s > 0 and prev_s > 0:
+                    chg_s = round(((cp_s - prev_s) / prev_s) * 100, 2)
+                    item_d = {"name": sname, "code": scode, "close": round(cp_s, 2), "chg": chg_s}
+                    if stype == "mts": strat_groups["🎯 MTS 完美共振區"].append(item_d)
+                    elif stype == "b": strat_groups["🎖️ S級肥羊特戰區"].append(item_d)
+                    elif stype == "s": strat_groups["👑 S級核心波段區"].append(item_d)
+                    else: strat_groups["⚡ 當沖/隔日游擊區"].append(item_d)
+            except:
+                pass
+
+        for g_title, g_list in strat_groups.items():
+            if not g_list:
+                strat_groups_html += f"""
+                <div class="strat-box">
+                    <div class="strat-head"><span>{g_title}</span><span class="badge">0 檔</span></div>
+                    <div style="color:var(--text-muted); font-size:0.85rem; padding:10px 0;">分頁無追蹤標的</div>
+                </div>
+                """
+                continue
+            g_cnt = len(g_list)
+            g_wins = sum(1 for x in g_list if x["chg"] > 0)
+            g_wr = round((g_wins / g_cnt) * 100, 1)
+            g_avg = round(sum(x["chg"] for x in g_list) / g_cnt, 2)
+            avg_cls = "red" if g_avg >= 0 else "green"
+
+            chips_html = ""
+            for x in sorted(g_list, key=lambda i: i["chg"], reverse=True):
+                c_cls = "chip-red" if x["chg"] > 0 else ("chip-green" if x["chg"] < 0 else "chip-flat")
+                chips_html += f'<div class="stock-chip {c_cls}"><span>{x["name"]}({x["code"]})</span><b>{x["close"]} ({x["chg"]:+.2f}%)</b></div>'
+
+            strat_groups_html += f"""
+            <div class="strat-box">
+                <div class="strat-head">
+                    <span>{g_title}</span>
+                    <span style="font-size:0.85rem;">勝率 <b style="color:#fff;">{g_wr}%</b> ｜ 均漲跌 <b class="val {avg_cls}">{g_avg:+.2f}%</b></span>
+                </div>
+                <div class="chip-container">{chips_html}</div>
+            </div>
+            """
+    except Exception as e_mon:
+        print(f"⚠️ 選股分頁整合異常: {e_mon}", flush=True)
+
+    funds_codes_str = "、".join(sorted(list(filtered_funds_codes))[:40]) if filtered_funds_codes else "無資金未達標之異常爆量股紀錄"
+    overheat_codes_str = "、".join(sorted(list(filtered_overheated_codes))[:40]) if filtered_overheated_codes else "無正乖離過熱攔截股紀錄"
+
+    top_sector_str = global_true_market_top_ind if global_true_market_top_ind else "主流監控中"
+    pcloud_public_url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/history_reports/{output_html_name}"
+    render_live_url = f"https://stock-line-bot-c8em.onrender.com/{output_html_name}"
+
+    kbars_json_str = json.dumps(embedded_kbars, ensure_ascii=False)
+    intraday_json_str = json.dumps(embedded_intraday, ensure_ascii=False)
+    chart_names_json = json.dumps(chart_stock_names, ensure_ascii=False)
+    chart_mfe_json = json.dumps(chart_mfe_data)
+    chart_mae_json = json.dumps(chart_mae_data)
+    chart_net_json = json.dumps(chart_net_data)
+    zone_wr_json = json.dumps(zone_win_rates)
+    zone_tot_json = json.dumps(zone_totals)
+
+    review_lines = [
+        f"📊 【股海觀浪・{display_date} 機構級戰場鑑識報告】",
+        "----------------------",
+        f"🎯 動能事件掃描：{total_scans} 次 ｜ 嚴選發報：{sent_count} 檔",
+        f"🏆 收盤實戰勝率：{win_rate_pct} ({win_count}勝 {lose_count}敗)",
+        f"💰 平均當沖淨損益：{avg_net_ret:+.2f}%",
+        f"📈 平均最高衝刺 (MFE)：+{avg_mfe:.2f}% ｜ 平均最大回撤 (MAE)：{avg_mae:.2f}%",
+        f"⏰ 最佳作戰時段：{best_zone_str}",
+        f"🛡️ 防禦攔截：{real_funds_filtered} 檔資金不足 / {real_overheated_filtered} 檔高檔過熱",
+        "----------------------",
+        "🌐 完整互動式 5分K/日K 歸因戰情室已就緒！",
+        f"👉 雲端秒開連結：\n{render_live_url}",
+        f"👉 pCloud 永久封存：\n{pcloud_public_url}"
+    ]
+    final_report = "\n".join(review_lines)
+
+    html_content = f"""<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
@@ -5153,7 +5246,6 @@ def afternoon_review_loop():
         .badge {{ background: var(--bg-sub); color: var(--text-main); padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; border: 1px solid var(--border-color); font-weight: bold; }}
         .badge.hot {{ background: rgba(239,68,68,0.15); color: #fca5a5; border-color: rgba(239,68,68,0.4); }}
 
-        /* 8維度機構級指標網格 */
         .stats-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 30px; }}
         .stat-card {{ background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 18px 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); }}
         .stat-title {{ color: var(--text-muted); font-size: 0.85rem; margin-bottom: 8px; font-weight: 600; }}
@@ -5162,14 +5254,12 @@ def afternoon_review_loop():
         .stat-value.green {{ color: var(--color-green); }} .stat-value.yellow {{ color: var(--color-yellow); }} .stat-value.red {{ color: var(--color-red); }} .stat-value.purple {{ color: var(--color-purple); }}
         .stat-desc {{ font-size: 0.8rem; color: var(--text-muted); }}
 
-        /* 雙核心圖表艙 */
         .analytics-grid {{ display: grid; grid-template-columns: 1.6fr 1fr; gap: 20px; margin-bottom: 35px; }}
         .panel-card {{ background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 20px; }}
         .panel-title {{ font-size: 1.05rem; font-weight: bold; color: #fff; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }}
 
         .section-title {{ font-size: 1.25rem; color: #fff; margin: 35px 0 18px 0; display: flex; align-items: center; gap: 10px; font-weight: 800; border-left: 4px solid var(--color-blue); padding-left: 12px; }}
 
-        /* 全標的病理診斷總表 */
         .defense-card {{ background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 20px; overflow-x: auto; margin-bottom: 35px; }}
         table {{ width: 100%; border-collapse: collapse; min-width: 900px; }}
         th, td {{ text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border-color); font-size: 0.9rem; }}
@@ -5180,7 +5270,6 @@ def afternoon_review_loop():
         .status-badge.green {{ background: rgba(16,185,129,0.15); color: #6ee7b7; border-color: rgba(16,185,129,0.4); }}
         .status-badge.blue {{ background: rgba(56,189,248,0.15); color: #7dd3fc; border-color: rgba(56,189,248,0.4); }}
 
-        /* 狙擊卡片與雙模態切換按鈕 */
         .sniper-card {{ background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; border-left: 5px solid var(--color-red); padding: 22px; margin-bottom: 22px; box-shadow: 0 4px 15px rgba(0,0,0,0.25); }}
         details > summary {{ list-style: none; }}
         details > summary::-webkit-details-marker {{ display: none; }}
@@ -5200,7 +5289,6 @@ def afternoon_review_loop():
         .val {{ font-weight: bold; }}
         .val.green {{ color: var(--color-green); }} .val.red {{ color: var(--color-red); }} .val.yellow {{ color: var(--color-yellow); }} .val.blue {{ color: var(--color-blue); }}
 
-        /* 四大選股分頁驗證網格 */
         .strat-grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-bottom: 35px; }}
         .strat-box {{ background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 18px; }}
         .strat-head {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 12px; font-weight: bold; color: #fff; font-size: 1rem; }}
@@ -5226,12 +5314,11 @@ def afternoon_review_loop():
     <div class="header">
         <div class="header-title">⚡ 股海觀浪 ｜ 13:40 機構級戰場鑑識與策略歸因總結報告</div>
         <div class="badge-group">
-            <div class="badge hot">🔥 今日主流：{top_sector_str}</div>
-            <div class="badge">📅 {display_date} 盤後自動結算</div>
+            <div class="badge hot">🔥 主流監控：{top_sector_str}</div>
+            <div class="badge">📅 戰報日期：{display_date}</div>
         </div>
     </div>
 
-    <!-- 第一層：8 維度機構級戰情儀表板 -->
     <div class="stats-grid">
         <div class="stat-card">
             <div class="stat-title">1. 盤中動能掃描 / 觸發數</div>
@@ -5275,7 +5362,6 @@ def afternoon_review_loop():
         </div>
     </div>
 
-    <!-- 第二層：ECharts 雙核心全局歸因圖表艙 -->
     <div class="analytics-grid">
         <div class="panel-card">
             <div class="panel-title">
@@ -5293,8 +5379,7 @@ def afternoon_review_loop():
         </div>
     </div>
 
-    <!-- 第三層：全標的戰術鑑識總表 -->
-    <div class="section-title">📋 今日盤中爆量狙擊・全標的病理診斷總表</div>
+    <div class="section-title">📋 盤中爆量狙擊・全標的病理診斷總表 ({display_date})</div>
     <div class="defense-card">
         <table>
             <thead>
@@ -5306,28 +5391,25 @@ def afternoon_review_loop():
                     <th>VWAP 停損線</th>
                     <th>📈 MFE (最高衝刺)</th>
                     <th>📉 MAE (最大回撤)</th>
-                    <th>13:40 收盤價 (淨損益)</th>
+                    <th>收盤價 (淨損益)</th>
                     <th>🩺 策略病理診斷</th>
                 </tr>
             </thead>
             <tbody>
-                {master_table_rows_html if master_table_rows_html else '<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:25px;">今日盤中尚無符合嚴格把關之觸發標的</td></tr>'}
+                {master_table_rows_html if master_table_rows_html else '<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:25px;">該交易日尚無符合嚴格把關之觸發標的</td></tr>'}
             </tbody>
         </table>
     </div>
 
-    <!-- 第四層：雙模態全息 K 線狙擊卡片 (5分K + 日K) -->
     <div class="section-title">🔥 逐筆微觀覆盤卡片 (點擊可切換「當日 5 分 K + 進場防線」與「近 2 月日 K」)</div>
-    {sniper_cards_html if sniper_cards_html else '<div style="color:var(--text-muted); padding:25px; text-align:center; border:1px dashed var(--border-color); border-radius:10px;">今日尚無符合條件標的</div>'}
+    {sniper_cards_html if sniper_cards_html else '<div style="color:var(--text-muted); padding:25px; text-align:center; border:1px dashed var(--border-color); border-radius:10px;">該交易日無符合條件標的</div>'}
 
-    <!-- 第五層：四大選股分頁收盤表現驗證 -->
-    <div class="section-title">👑 戰略選股四大分頁・今日收盤表現獨立驗證</div>
+    <div class="section-title">👑 戰略選股四大分頁・收盤表現獨立驗證</div>
     <div class="strat-grid">
         {strat_groups_html if strat_groups_html else '<div style="color:var(--text-muted);">目前無選股分頁資料</div>'}
     </div>
 
-    <!-- 第六層：防禦黑盒子攔截明細 -->
-    <div class="section-title">🛡️ 防禦黑盒子：今日盤中自動過濾與攔截明細</div>
+    <div class="section-title">🛡️ 防禦黑盒子：盤中自動過濾與攔截明細</div>
     <div class="strat-grid">
         <div class="strat-box">
             <div class="strat-head"><span>🐢 資金不足攔截名單 (共 {real_funds_filtered} 檔)</span><span class="badge">成功避開流動性陷阱</span></div>
@@ -5352,9 +5434,7 @@ def afternoon_review_loop():
 
     let chartsStore = {{}};
 
-    // 1. 頂部全局歸因圖表渲染
     function initGlobalCharts() {{
-        // 左圖：MFE / MAE / 收盤損益三維比較圖
         const domMfe = document.getElementById('mfe_mae_chart');
         if (domMfe) {{
             const chartMfe = echarts.init(domMfe);
@@ -5362,7 +5442,7 @@ def afternoon_review_loop():
                 tooltip: {{ trigger: 'axis', axisPointer: {{ type: 'shadow' }}, backgroundColor: 'rgba(15,23,42,0.95)', borderColor: '#334155', textStyle: {{ color: '#fff' }} }},
                 legend: {{ data: ['MFE 最高衝刺(%)', '收盤實質損益(%)', 'MAE 最大回撤(%)'], textStyle: {{ color: '#cbd5e1', fontSize: 11 }}, top: 0 }},
                 grid: {{ left: '6%', right: '3%', top: '16%', bottom: '18%' }},
-                xAxis: {{ type: 'category', data: CHART_NAMES.length ? CHART_NAMES : ['今日無觸發標的'], axisLabel: {{ color: '#94a3b8', fontSize: 11, rotate: CHART_NAMES.length > 6 ? 20 : 0 }} }},
+                xAxis: {{ type: 'category', data: CHART_NAMES.length ? CHART_NAMES : ['無觸發標的'], axisLabel: {{ color: '#94a3b8', fontSize: 11, rotate: CHART_NAMES.length > 6 ? 20 : 0 }} }},
                 yAxis: {{ type: 'value', splitLine: {{ lineStyle: {{ color: '#1e293b', type: 'dashed' }} }}, axisLabel: {{ color: '#94a3b8', formatter: '{{value}}%' }} }},
                 series: [
                     {{ name: 'MFE 最高衝刺(%)', type: 'bar', data: CHART_MFE, itemStyle: {{ color: '#ef4444' }} }},
@@ -5373,7 +5453,6 @@ def afternoon_review_loop():
             chartsStore['global_mfe'] = chartMfe;
         }}
 
-        // 右圖：早盤/盤中/尾盤時段效率圖
         const domZone = document.getElementById('zone_eff_chart');
         if (domZone) {{
             const chartZone = echarts.init(domZone);
@@ -5395,7 +5474,6 @@ def afternoon_review_loop():
         }}
     }}
 
-    // 2. 渲染個股當日 5 分 K (含建議進場價與停損防線標線)
     function renderIntraday5m(code) {{
         const dom = document.getElementById('chart_box_' + code);
         if (!dom) return;
@@ -5437,8 +5515,8 @@ def afternoon_review_loop():
                     markLine: {{
                         symbol: ['none', 'none'],
                         data: [
-                            {{ yAxis: info.entry, name: '建議進場價', lineStyle: {{ color: '#38bdf8', width: 2, type: 'solid' }}, label: {{ formatter: '進場 {c}', color: '#38bdf8', position: 'insideEndTop' }} }},
-                            {{ yAxis: info.stop, name: 'VWAP停損線', lineStyle: {{ color: '#f59e0b', width: 2, type: 'dashed' }}, label: {{ formatter: 'VWAP防線 {c}', color: '#f59e0b', position: 'insideEndBottom' }} }}
+                            {{ yAxis: info.entry, name: '建議進場價', lineStyle: {{ color: '#38bdf8', width: 2, type: 'solid' }}, label: {{ formatter: '進場 {{c}}', color: '#38bdf8', position: 'insideEndTop' }} }},
+                            {{ yAxis: info.stop, name: 'VWAP停損線', lineStyle: {{ color: '#f59e0b', width: 2, type: 'dashed' }}, label: {{ formatter: 'VWAP防線 {{c}}', color: '#f59e0b', position: 'insideEndBottom' }} }}
                         ]
                     }}
                 }},
@@ -5449,7 +5527,6 @@ def afternoon_review_loop():
         chartsStore['box_' + code] = chart;
     }}
 
-    // 3. 渲染個股近 2 月日 K (含 5/10/20MA)
     function renderDailyK(code) {{
         const dom = document.getElementById('chart_box_' + code);
         if (!dom) return;
@@ -5513,7 +5590,6 @@ def afternoon_review_loop():
         chartsStore['box_' + code] = chart;
     }}
 
-    // 4. 切換 5分K / 日K 模式
     function switchKMode(code, mode) {{
         const btn5m = document.getElementById('tab_5m_' + code);
         const btn1d = document.getElementById('tab_1d_' + code);
@@ -5533,7 +5609,6 @@ def afternoon_review_loop():
         for (let code in INTRADAY_DB) {{
             renderIntraday5m(code);
         }}
-        // 當折疊卡片被打開時，自動重新調整圖表尺寸避免壓縮
         document.querySelectorAll('details.sniper-card').forEach(det => {{
             det.addEventListener('toggle', () => {{
                 if (det.open) {{
@@ -5553,46 +5628,76 @@ def afternoon_review_loop():
 </html>
 """
 
-                # 1. 寫入實體檔案與母艦記憶體快取 (確保 /war_room_<date_str>.html 秒開不 404)
-                war_room_memory_cache[today_str] = html_content
-                with open(output_html_name, "w", encoding="utf-8") as f:
-                    f.write(html_content)
-                with open("daily_review_latest.html", "w", encoding="utf-8") as f:
-                    f.write(html_content)
+    # 1. 存入母艦記憶體與本機硬碟
+    war_room_memory_cache[target_date_str] = html_content
+    war_room_summary_cache[target_date_str] = final_report
+    with open(output_html_name, "w", encoding="utf-8") as f:
+        f.write(html_content)
+    with open("daily_review_latest.html", "w", encoding="utf-8") as f:
+        f.write(html_content)
 
-                # 2. pCloud 雲端備份
-                try:
-                    token = os.environ.get('PCLOUD_AUTH_TOKEN', '')
-                    folder_id_main = os.environ.get('PCLOUD_FOLDER_ID', '31448526072')
-                    folder_id_history = os.environ.get('PCLOUD_HISTORY_FOLDER_ID', '33133582905')
-                    
-                    if token:
-                        if os.path.exists(output_html_name):
-                            with open(output_html_name, 'rb') as f:
-                                requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={folder_id_history}", files={'file': (output_html_name, f, 'text/html')}, timeout=15)
-                        if os.path.exists('daily_review_latest.html'):
-                            with open('daily_review_latest.html', 'rb') as f:
-                                requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={folder_id_main}", files={'file': ('daily_review_latest.html', f, 'text/html')}, timeout=15)
-                except:
-                    pass
+    # 2. pCloud 雲端備份
+    try:
+        token = os.environ.get('PCLOUD_AUTH_TOKEN', '')
+        folder_id_main = os.environ.get('PCLOUD_FOLDER_ID', '31448526072')
+        folder_id_history = os.environ.get('PCLOUD_HISTORY_FOLDER_ID', '33133582905')
 
-                # 3. LINE 群組發送
-                TARGET_GROUP_IDS = [
-                    "C0481b44935888bb1dc20dfd52a675e8a", 
-                    "C47bfa8e16a7216bd54dceb3b5e90cfa0"
-                ]
-                for group_id in TARGET_GROUP_IDS:
-                    try:
-                        smart_push_with_menu(group_id, final_report)
-                    except: 
-                        pass
-                
+        if token:
+            if os.path.exists(output_html_name):
+                with open(output_html_name, 'rb') as f:
+                    requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={folder_id_history}", files={'file': (output_html_name, f, 'text/html')}, timeout=15)
+            if os.path.exists('daily_review_latest.html'):
+                with open('daily_review_latest.html', 'rb') as f:
+                    requests.post(f"https://api.pcloud.com/uploadfile?auth={token}&folderid={folder_id_main}", files={'file': ('daily_review_latest.html', f, 'text/html')}, timeout=15)
+    except:
+        pass
+
+    # 3. 若為排程觸發，主動推播至 LINE 群組
+    if push_to_groups:
+        TARGET_GROUP_IDS = [
+            "C0481b44935888bb1dc20dfd52a675e8a",
+            "C47bfa8e16a7216bd54dceb3b5e90cfa0"
+        ]
+        for group_id in TARGET_GROUP_IDS:
+            try:
+                smart_push_with_menu(group_id, final_report)
+            except:
+                pass
+
+    return html_content, final_report
+
+
+def afternoon_review_loop():
+    import time, datetime
+    print("📡 [收盤檢討哨] 雲端 HTML 戰情室自動生成引擎 (支援跨日回溯) 已就位...", flush=True)
+    last_sent_date = ""
+
+    # 💥 開機時預先在背景把最近一個交易日的戰情室建立起來，確保隨時點擊秒開！
+    try:
+        latest_d, _ = resolve_latest_trading_date()
+        build_war_room_report(target_date_str=latest_d, push_to_groups=False)
+        print(f"✅ [開機預熱完畢] 已自動完成最近交易日 ({latest_d}) 戰情網頁預先編譯！", flush=True)
+    except Exception as e_boot:
+        print(f"⚠️ 開機預熱戰情網頁略過: {e_boot}", flush=True)
+
+    while True:
+        try:
+            tz_tw = datetime.timezone(datetime.timedelta(hours=8))
+            now = datetime.datetime.now(tz_tw)
+            is_weekend = now.weekday() >= 5
+            current_time_num = now.hour * 100 + now.minute
+            current_date_str = now.strftime("%Y-%m-%d")
+            today_str = now.strftime("%Y%m%d")
+
+            if not is_weekend and (1355 <= current_time_num <= 1430) and (last_sent_date != current_date_str):
+                print("🔍 [戰場鑑識] 時間已達 13:55，開始自動結算今日戰情網頁...", flush=True)
+                build_war_room_report(target_date_str=today_str, push_to_groups=True)
                 last_sent_date = current_date_str
-                print(f"🔒 [防護生效] 今日 ({current_date_str}) 機構級結算網頁已完成生成並上鎖。", flush=True)
+                print(f"🔒 [防護生效] 今日 ({current_date_str}) 結算已經完成上鎖。", flush=True)
 
         except Exception as e:
             print(f"⚠️ 雲端收盤鑑識迴圈異常: {e}", flush=True)
-        
+
         time.sleep(300)
 
 
