@@ -776,133 +776,81 @@ def smart_push_with_menu(group_id, message_text):
 # ==========================================================
 
 def create_flex_menu_message(message_text):
-
     flex_content = BubbleContainer(
-
         body=BoxComponent(
-
             layout='vertical',
-
             contents=[
-
                 # 訊息本文
-
                 BoxComponent(
-
                     layout='vertical',
-
                     contents=[{
-
                         "type": "text",
-
                         "text": str(message_text)[:3000],
-
                         "wrap": True,
-
                         "size": "sm",
-
                         "color": "#f8fafc"
-
                     }],
-
                     padding_bottom="12px"
-
                 ),
-
                 # 第一排按鈕 (國際夜盤、尋找買點)
-
                 BoxComponent(
-
                     layout='horizontal',
-
                     spacing='sm',
-
                     contents=[
-
                         ButtonComponent(
-
                             action=MessageAction(label="🌍 國際夜盤", text="夜盤"),
-
                             style="secondary",
-
                             height="sm"
-
                         ),
-
                         ButtonComponent(
-
                             action=MessageAction(label="🎯 尋找買點", text="尋找買點"),
-
                             style="secondary",
-
                             height="sm"
-
                         )
-
                     ]
-
                 ),
-
                 # 第二排按鈕 (AI盤勢講評、盤後選股)
-
                 BoxComponent(
-
                     layout='horizontal',
-
                     spacing='sm',
-
                     margin="sm",
-
                     contents=[
-
                         ButtonComponent(
-
                             action=MessageAction(label="🧠 AI 盤勢講評", text="今日盤勢"),
-
                             style="secondary",
-
                             height="sm"
-
                         ),
-
                         ButtonComponent(
-
                             action=MessageAction(label="📊 盤後選股", text="盤後選股"),
-
                             style="secondary",
-
                             height="sm"
                         )
                     ]
                 ),
-                # 💥 新增第三排按鈕 (專屬盤後覆盤通道)
+                # 第三排按鈕 (擴充為：🛡️ 盤後覆盤 ＋ 📖 全部指令 並排)
                 BoxComponent(
                     layout='horizontal',
                     spacing='sm',
                     margin="sm",
                     contents=[
                         ButtonComponent(
-                            action=MessageAction(label="🛡️ 盤後覆盤 (13:40)", text="盤後覆盤"),
+                            action=MessageAction(label="🛡️ 盤後覆盤", text="盤後覆盤"),
                             style="primary",
-                            color="#2ea043",
+                    color="#2ea043",
                             height="sm"
-
+                        ),
+                        ButtonComponent(
+                            action=MessageAction(label="📖 全部指令", text="指令"),
+                            style="secondary",
+                            height="sm"
                         )
-
                     ]
-
                 )
-
             ],
-
             background_color="#0f172a",
-
             padding_all="15px"
-
         )
-
     )
-
     return FlexSendMessage(alt_text="📊 股海觀浪戰情選單", contents=flex_content)
 
 
@@ -2869,6 +2817,44 @@ def handle_message(event):
         return
 
 
+# 💥 新增模組：全部指令查看選單
+    if user_msg in ["指令", "全部指令", "幫助", "help", "功能"]:
+        try:
+            try:
+                profile = line_bot_api.get_profile(user_id)
+                user_name = profile.display_name
+            except:
+                user_name = "戰友"
+
+            help_lines = [
+                f"📡 【股海觀浪・全方位智能戰情室指令選單】",
+                f"報告 {user_name}，以下為目前母艦支援的所有實戰指令：\n",
+                "======================",
+                "🌍 【即時風向與跨國追蹤】",
+                "• 輸入【夜盤】或【期貨】：即時查看美股指數、ADR、期貨與加密貨幣速報。",
+                "• 輸入【大盤】或【戰報】：即時查看台股大盤漲跌與當日資金主流。",
+                "• 輸入【今日盤勢】：呼喚 AI 操盤手為您解析今日盤勢與明日觀盤重點。\n",
+                "🎯 【個股與買點狙擊】",
+                "• 輸入【股票代號】或【名稱】(如 2330 或 台積電)：即時調閱多維度評分、均線與支撐壓力。",
+                "• 輸入【找買點】或【轉折】：掃描盤中符合均線穩健排列的潛在起漲標的。\n",
+                "📊 【盤後覆盤與戰報驗證】",
+                "• 輸入【盤後覆盤】或【防禦報告】：自動調閱最新 13:40 機構級戰情室網頁與假突破攔截明細。",
+                "• 輸入【覆盤 1023】(或 8碼日期)：指定調閱過去任一歷史交易日的戰情網頁。",
+                "• 輸入【收盤戰報】：即時調閱盤中爆量雷達與四大選股分頁的收盤勝率績效。\n",
+                "⚙️ 【系統狀態與彈藥庫】",
+                "• 輸入【今日雷達】：查看今日盤中已被雷達鎖定的飆股發報歷史。",
+                "• 輸入【子彈】或【額度】：檢查目前 LINE 機器人的剩餘發射額度與雙彈匣狀態。",
+                "======================",
+                "💡 提示：點擊下方快捷面板按鈕亦可快速觸發常用功能！"
+            ]
+            reply_msg = "\n".join(help_lines)
+        except Exception as e:
+            reply_msg = f"⚠️ 查詢指令選單異常：{e}"
+
+        smart_reply_with_menu(event, reply_msg[:4000])
+        return
+
+
 
     # 支援大盤、雷達或戰報的即時行情查詢
 
@@ -3915,140 +3901,88 @@ def handle_message(event):
 
 
 
-    # ==========================================================
+# ==========================================================
 
 # 💎 升級版：雙排高質感戰情快捷面板 (通用的 Flex 產生器)
 
 # ==========================================================
 
 def create_flex_menu_message(message_text):
-
     flex_content = BubbleContainer(
-
         body=BoxComponent(
-
             layout='vertical',
-
             contents=[
-
                 # 訊息本文
-
                 BoxComponent(
-
                     layout='vertical',
-
                     contents=[{
-
                         "type": "text",
-
                         "text": str(message_text)[:3000],
-
                         "wrap": True,
-
                         "size": "sm",
-
                         "color": "#f8fafc"
-
                     }],
-
                     padding_bottom="12px"
-
                 ),
-
                 # 第一排按鈕 (國際夜盤、尋找買點)
-
                 BoxComponent(
-
                     layout='horizontal',
-
                     spacing='sm',
-
                     contents=[
-
                         ButtonComponent(
-
                             action=MessageAction(label="🌍 國際夜盤", text="夜盤"),
-
                             style="secondary",
-
                             height="sm"
-
                         ),
-
                         ButtonComponent(
-
                             action=MessageAction(label="🎯 尋找買點", text="尋找買點"),
-
                             style="secondary",
-
                             height="sm"
-
                         )
-
                     ]
-
                 ),
-
                 # 第二排按鈕 (AI盤勢講評、盤後選股)
-
                 BoxComponent(
-
                     layout='horizontal',
-
                     spacing='sm',
-
                     margin="sm",
-
                     contents=[
-
                         ButtonComponent(
-
                             action=MessageAction(label="🧠 AI 盤勢講評", text="今日盤勢"),
-
                             style="secondary",
-
                             height="sm"
-
                         ),
-
                         ButtonComponent(
-
                             action=MessageAction(label="📊 盤後選股", text="盤後選股"),
-
                             style="secondary",
-
                             height="sm"
                         )
                     ]
                 ),
-                # 💥 新增第三排按鈕 (專屬盤後覆盤通道)
+                # 第三排按鈕 (擴充為：🛡️ 盤後覆盤 ＋ 📖 全部指令 並排)
                 BoxComponent(
                     layout='horizontal',
                     spacing='sm',
                     margin="sm",
                     contents=[
                         ButtonComponent(
-                            action=MessageAction(label="🛡️ 盤後覆盤 (13:40)", text="盤後覆盤"),
+                            action=MessageAction(label="🛡️ 盤後覆盤", text="盤後覆盤"),
                             style="primary",
-                            color="#2ea043",
+                    color="#2ea043",
                             height="sm"
-
+                        ),
+                        ButtonComponent(
+                            action=MessageAction(label="📖 全部指令", text="指令"),
+                            style="secondary",
+                            height="sm"
                         )
-
                     ]
-
                 )
-
             ],
-
             background_color="#0f172a",
-
             padding_all="15px"
-
         )
-
     )
-
     return FlexSendMessage(alt_text="📊 股海觀浪戰情選單", contents=flex_content)
 
 
