@@ -4140,6 +4140,12 @@ def process_tick_data(data, meta_info, top_ind):
         
         chg_pct = round(((z - y) / y) * 100, 2)
         
+        # 🛡️ 【統帥加裝】如果漲幅已經逼近漲停（例如 >= 8.5%），直接過濾不發送！
+        # 避免發報時已經快漲停或買不到，淪為追高風險。
+        if chg_pct >= 8.0:
+            filtered_overheated_codes.add(code)  # 自動歸類到過熱/追高防護網中
+            return None
+        
         try:
             vwap_est = round((o + h + l + (z * v / (v if v > 0 else 1))) / 4, 2) if v > 0 else round((o + h + l + z * 2) / 5, 2)
             if abs(vwap_est - z) / z > 0.07: vwap_est = round((o + h + l + z * 2) / 5, 2)
