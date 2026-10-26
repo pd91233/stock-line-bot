@@ -22,6 +22,10 @@ from linebot.models import (
 
 )
 
+from heatmap_bp import heatmap_bp, get_top_sectors_summary
+# 將熱力圖 Blueprint 註冊進您的 Flask 主程式 (假設您的實例叫 app)
+app.register_blueprint(heatmap_bp)
+
 from bs4 import BeautifulSoup
 
 import json
@@ -3592,7 +3596,22 @@ def handle_message(event):
         pass
 
 
-
+    # ==========================================================
+    # 💥 熱力模組
+    # ==========================================================
+    if user_msg in ["熱力圖", "資金流向", "產業熱力圖"]:
+        # 1. 取得當下真實排行前 5 大吸金產業速報
+        summary_text = get_top_sectors_summary()
+        
+        # 2. 附上您的雲端戰情室網址 (例如您的 Render 網址或伺服器 IP)
+        heatmap_url = "https://您的雲端網址/heatmap"
+        
+        reply_msg = (
+            f"{summary_text}\n\n"
+            f"👇 點擊下方連結開啟【手機互動式熱力圖】（支援點擊產業鑽研與五檔明細）：\n"
+            f"{heatmap_url}"
+        )
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg))
 
 
     # ==========================================================
