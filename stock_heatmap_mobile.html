@@ -13,6 +13,8 @@
         .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
         .tab-btn { background: #1e293b; color: #94a3b8; border: 1px solid #334155; transition: all 0.2s; }
         .tab-btn.active { background: #2563eb; color: #ffffff; border-color: #3b82f6; font-weight: bold; box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
+        .sector-pill { background: #111827; border: 1px solid #374151; color: #9ca3af; transition: all 0.2s; white-space: nowrap; }
+        .sector-pill.active { background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff; border-color: #f59e0b; font-weight: bold; box-shadow: 0 0 10px rgba(245,158,11,0.4); }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden select-none">
@@ -62,7 +64,7 @@
             </div>
         </div>
 
-        <!-- 第二排：權重切換按鍵與產業膠囊選單 -->
+        <!-- 第二排：權重切換按鍵與帶有資金量/漲跌幅的產業膠囊選單 -->
         <div class="flex items-center justify-between overflow-x-auto hide-scroll pt-1 border-t border-gray-800/60">
             <div class="flex items-center space-x-1.5 shrink-0 mr-3">
                 <span class="text-[11px] text-gray-400 mr-1">權重:</span>
@@ -71,7 +73,7 @@
                 <button onclick="setWeightMetric('mcap')" id="weight-mcap" class="tab-btn text-xs px-2.5 py-1 rounded-md">市值</button>
             </div>
 
-            <!-- 產業快速過濾膠囊按鍵容器 -->
+            <!-- 產業快速過濾膠囊按鈕容器 (顯示資金與漲跌幅) -->
             <div id="sector-pill-container" class="flex space-x-2 overflow-x-auto hide-scroll shrink-0">
                 <!-- 動態插入產業按鈕 -->
             </div>
@@ -80,34 +82,29 @@
 
     <!-- 主內容區 -->
     <main class="flex-1 relative overflow-hidden bg-[#07090e]">
-        <!-- 返回總覽浮動按鈕 -->
         <div id="back-bar" class="absolute top-3 left-3 z-10 hidden">
             <button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur">
                 <span>⬅ 返回全部總覽</span>
             </button>
         </div>
 
-        <!-- ECharts 矩形樹圖畫布 -->
         <div id="treemap-container" class="w-full h-full"></div>
-
-        <!-- 手機排行清單容器 -->
         <div id="list-container" class="absolute inset-0 overflow-y-auto p-3 space-y-2 hidden"></div>
     </main>
 
-    <!-- 底部滑出抽屜：單一個股最佳五檔明細 (Bottom Sheet) -->
+    <!-- 底部滑出抽屜：單一個股最佳五檔明細 -->
     <div id="stock-sheet" class="fixed inset-x-0 bottom-0 z-50 transform translate-y-full transition-transform duration-300 ease-out bg-gray-900 border-t border-gray-700 rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col">
         <div class="w-12 h-1.5 bg-gray-700 rounded-full mx-auto my-2 shrink-0"></div>
         <div id="sheet-content" class="p-4 overflow-y-auto space-y-4"></div>
     </div>
 
-    <!-- 遮罩背景 -->
     <div id="backdrop" onclick="closeStockSheet()" class="fixed inset-0 bg-black/60 z-40 hidden backdrop-blur-xs transition-opacity"></div>
 
     <script>
         let rawStocksData = [];
-        let currentViewMode = 'heatmap'; // 'heatmap', 'stock_heatmap', 'list'
-        let currentMarketFilter = 'ALL'; // 'ALL', 'TSE', 'OTC'
-        let currentWeightMetric = 'tradeValue'; // 'tradeValue', 'tradeVolume', 'mcap'
+        let currentViewMode = 'heatmap';
+        let currentMarketFilter = 'ALL';
+        let currentWeightMetric = 'tradeValue';
         let activeSectorFilter = 'ALL';
         let currentDrillSector = null;
         let chartInstance = null;
@@ -172,7 +169,8 @@
         function setMarketFilter(market) {
             currentMarketFilter = market;
             ['all', 'tse', 'otc'].forEach(m => {
-                document.getElementById(`market-${m}`).classList.toggle('active', m === market.toLowerCase());
+                const btn = document.getElementById(`market-${m}`);
+                if (btn) btn.classList.toggle('active', m === market.toLowerCase());
             });
             renderChart();
             if (currentViewMode === 'list') renderListMode();
@@ -182,7 +180,8 @@
             currentViewMode = mode;
             ['heatmap', 'stock_heatmap', 'list'].forEach(m => {
                 const btnId = m === 'stock_heatmap' ? 'btn-mode-stock-heatmap' : (m === 'heatmap' ? 'btn-mode-heatmap' : 'btn-mode-list');
-                document.getElementById(btnId).classList.toggle('active', m === mode);
+                const btn = document.getElementById(btnId);
+                if (btn) btn.classList.toggle('active', m === mode);
             });
 
             const hmContainer = document.getElementById('treemap-container');
@@ -202,27 +201,48 @@
 
         function setWeightMetric(metric) {
             currentWeightMetric = metric;
-            // 修正後的語法：使用明確的物件迴圈
             const weightMap = {'tradeValue': 'val', 'tradeVolume': 'vol', 'mcap': 'mcap'};
             Object.entries(weightMap).forEach(([k, id]) => {
-                document.getElementById(`weight-${id}`).classList.toggle('active', k === metric);
+                const btn = document.getElementById(`weight-${id}`);
+                if (btn) btn.classList.toggle('active', k === metric);
             });
             renderChart();
         }
 
+        // 建立帶有即時資金量與平均漲跌幅的產業膠囊按鈕
         function buildSectorPills() {
             const container = document.getElementById('sector-pill-container');
             const sectorMap = {};
-            rawStocksData.forEach(s => {
-                if (!sectorMap[s.sector]) sectorMap[s.sector] = { val: 0 };
-                sectorMap[s.sector].val += s.tradeValue;
-            });
-            const sortedSectors = Object.keys(sectorMap).sort((a, b) => sectorMap[b].val - sectorMap[a].val);
+            let totalValAll = 0;
+            let weightedChgAll = 0;
 
-            let html = `<button onclick="filterSector('ALL')" class="tab-btn shrink-0 text-xs px-3 py-1 rounded-md ${activeSectorFilter === 'ALL' ? 'active bg-blue-600 text-white' : ''}">🔥 全部產業</button>`;
+            rawStocksData.forEach(s => {
+                if (!sectorMap[s.sector]) sectorMap[s.sector] = { totalVal: 0, weightedChg: 0 };
+                sectorMap[s.sector].totalVal += s.tradeValue;
+                sectorMap[s.sector].weightedChg += s.changePercent * s.tradeValue;
+                totalValAll += s.tradeValue;
+                weightedChgAll += s.changePercent * s.tradeValue;
+            });
+
+            const sortedSectors = Object.keys(sectorMap).sort((a, b) => sectorMap[b].totalVal - sectorMap[a].totalVal);
+
+            const allActive = activeSectorFilter === 'ALL' ? 'active' : '';
+            let html = `<button onclick="filterSector('ALL')" class="sector-pill ${allActive} text-xs px-3 py-1.5 rounded-lg flex items-center space-x-1.5 font-medium"><span>🔥 全部產業</span></button>`;
+            
             sortedSectors.forEach((sec, idx) => {
-                const active = activeSectorFilter === sec;
-                html += `<button onclick="filterSector('${sec}')" class="tab-btn shrink-0 text-xs px-3 py-1 rounded-md ${active ? 'active bg-blue-600 text-white' : ''}">#${idx+1} ${sec}</button>`;
+                const active = activeSectorFilter === sec ? 'active' : '';
+                const grp = sectorMap[sec];
+                const avgChg = grp.totalVal > 0 ? (grp.weightedChg / grp.totalVal).toFixed(2) : 0;
+                const sign = avgChg >= 0 ? '+' : '';
+                const colorClass = avgChg >= 0 ? 'text-red-400' : 'text-emerald-400';
+
+                html += `
+                    <button onclick="filterSector('${sec}')" class="sector-pill ${active} text-xs px-3 py-1.5 rounded-lg flex items-center space-x-1.5">
+                        <span class="font-bold">#${idx+1} ${sec}</span>
+                        <span class="text-gray-400 font-mono text-[11px]">${grp.totalVal.toFixed(1)}億</span>
+                        <span class="font-mono font-bold ${colorClass} text-[11px]">${sign}${avgChg}%</span>
+                    </button>
+                `;
             });
             container.innerHTML = html;
         }
@@ -298,7 +318,7 @@
                     const grp = sectorGroups[sec];
                     const avgChg = grp.totalVal > 0 ? (grp.weightedChg / grp.totalVal).toFixed(2) : 0;
                     const sign = avgChg >= 0 ? '+' : '';
-                    const groupTitle = `#${idx+1} ${sec} ${sign}${avgChg}% (${grp.totalVal.toFixed(1)}億)`;
+                    const groupTitle = `#${idx+1} ${sec}  ${sign}${avgChg}%  (${grp.totalVal.toFixed(1)}億)`;
 
                     let children = grp.stocks.map(st => {
                         let val = st[currentWeightMetric] || st.tradeValue || 1;
@@ -467,7 +487,7 @@
                                     ${(st.bids && st.bids.length > 0) ? st.bids.map(b => `<div class="flex justify-between font-mono py-0.5"><span class="text-red-400 font-bold">${b.price}</span><span class="text-gray-300">${b.size}</span></div>`).join('') : '<div class="text-gray-500 text-center py-2">無委買資料</div>'}
                                 </div>
                                 <div class="bg-gray-800/40 p-2 rounded-lg border border-gray-800">
-                                    <div class="text-[10px] text-emerald-400 font-bold mb-1">委賣價 / 張數</div>
+                                    <div class="text-[10px] text-emerald-400 font-bold mb-1">委賣額 / 張數</div>
                                     ${(st.asks && st.asks.length > 0) ? st.asks.map(a => `<div class="flex justify-between font-mono py-0.5"><span class="text-emerald-400 font-bold">${a.price}</span><span class="text-gray-300">${a.size}</span></div>`).join('') : '<div class="text-gray-500 text-center py-2">無委賣資料</div>'}
                                 </div>
                             </div>
