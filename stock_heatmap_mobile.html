@@ -21,13 +21,13 @@
 </head>
 <body class="flex flex-col h-screen overflow-hidden select-none bg-[#07090e]">
 
-    <!-- 頂部機構級戰情總覽列 -->
+    <!-- 頂部總覽列 -->
     <header class="bg-gray-900 border-b border-gray-800 px-3 py-2 flex items-center justify-between shrink-0">
         <div class="flex items-center space-x-2">
             <span class="text-lg">🔥</span>
             <div>
                 <div class="flex items-center space-x-1.5">
-                    <h1 class="text-xs font-bold tracking-wider text-white">台股即時資金熱力圖</h1>
+                    <h1 class="text-xs font-bold tracking-wider text-white">台股 300 檔戰略熱力圖</h1>
                     <span class="bg-emerald-900/60 text-emerald-300 text-[9px] px-1 py-0.2 rounded border border-emerald-700/50">實盤</span>
                 </div>
                 <div class="flex items-center space-x-2 text-[10px] text-gray-400 mt-0.5 font-mono">
@@ -46,10 +46,10 @@
         </div>
     </header>
 
-    <!-- 頂部控制面板 (設定 shrink-0 確保絕不被壓縮) -->
+    <!-- 控制面板 -->
     <div class="bg-gray-900/95 border-b border-gray-800 px-3 py-2 space-y-1.5 shrink-0 shadow-md z-20">
         
-        <!-- 第一排：市場與模式切換按鍵 -->
+        <!-- 第一排：市場與模式 -->
         <div class="flex items-center justify-between text-xs">
             <div class="flex items-center space-x-1">
                 <span class="text-[11px] text-gray-400 mr-0.5">市場:</span>
@@ -66,7 +66,7 @@
             </div>
         </div>
 
-        <!-- 第二排：權重按鈕 -->
+        <!-- 第二排：權重 -->
         <div class="flex items-center space-x-1 pt-1 border-t border-gray-800/60 text-xs">
             <span class="text-[11px] text-gray-400 mr-1">權重:</span>
             <button onclick="setWeightMetric('tradeValue')" id="weight-val" class="tab-btn active text-[11px] px-2.5 py-0.5 rounded">成交額</button>
@@ -74,43 +74,33 @@
             <button onclick="setWeightMetric('mcap')" id="weight-mcap" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">市值</button>
         </div>
 
-        <!-- 第三排與第四排：雙行對齊佈局 -->
+        <!-- 第三與第四排：雙行對齊佈局 (1~6 / 7~12) -->
         <div class="pt-1 border-t border-gray-800/60 space-y-1">
-            
-            <!-- 第一行：左側【全部產業】 + 右側【1~6產業】(附左右箭頭) -->
             <div class="flex items-center space-x-2">
                 <div id="all-sector-container" class="shrink-0"></div>
-
                 <div class="flex items-center space-x-1 flex-1 overflow-hidden bg-gray-950/40 px-1.5 py-0.5 rounded-lg border border-gray-800/80">
                     <button onclick="scrollBar('row1-wrapper', -200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">◀</button>
-                    
                     <div id="row1-wrapper" class="sector-scroll flex space-x-1.5 overflow-x-auto hide-scroll flex-1 py-0.5">
                         <div id="row1-container" class="flex space-x-1.5 shrink-0"></div>
                     </div>
-
                     <button onclick="scrollBar('row1-wrapper', 200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">▶</button>
                 </div>
             </div>
 
-            <!-- 第二行：左側留白對齊 + 右側【7~12產業】 -->
             <div class="flex items-center space-x-2">
                 <div class="shrink-0 opacity-0 pointer-events-none" style="width: 92px;"></div>
-
                 <div class="flex items-center space-x-1 flex-1 overflow-hidden bg-gray-950/40 px-1.5 py-0.5 rounded-lg border border-gray-800/80">
                     <button onclick="scrollBar('row2-wrapper', -200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">◀</button>
-                    
                     <div id="row2-wrapper" class="sector-scroll flex space-x-1.5 overflow-x-auto hide-scroll flex-1 py-0.5">
                         <div id="row2-container" class="flex space-x-1.5 shrink-0"></div>
                     </div>
-
-                    <button onclick="scrollBar('row2-wrapper', 200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2.5 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">▶</button>
+                    <button onclick="scrollBar('row2-wrapper', 200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">▶</button>
                 </div>
             </div>
-
         </div>
     </div>
 
-    <!-- 主內容區：改為 flex-1 彈性佔滿剩餘所有視窗空間，絕不留白 -->
+    <!-- 主內容區 -->
     <main class="flex-1 relative w-full bg-[#07090e] overflow-hidden">
         <div id="back-bar" class="absolute top-3 left-3 z-10 hidden">
             <button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur cursor-pointer">
@@ -122,7 +112,7 @@
         <div id="list-container" class="absolute inset-0 overflow-y-auto p-3 space-y-2 hidden"></div>
     </main>
 
-    <!-- 底部滑出抽屜 -->
+    <!-- 底部抽屜 -->
     <div id="stock-sheet" class="fixed inset-x-0 bottom-0 z-50 transform translate-y-full transition-transform duration-300 ease-out bg-gray-900 border-t border-gray-700 rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col">
         <div class="w-12 h-1.5 bg-gray-700 rounded-full mx-auto my-2 shrink-0"></div>
         <div id="sheet-content" class="p-4 overflow-y-auto space-y-4"></div>
@@ -399,7 +389,17 @@
                     const sign = avgChg >= 0 ? '+' : '';
                     const groupTitle = `#${idx+1} ${sec}  ${sign}${avgChg}%  (${grp.totalVal.toFixed(1)}億)`;
 
-                    let children = grp.stocks.map(st => {
+                    // 雙層智慧篩選邏輯：
+                    // 若處於「全部產業」總覽，則每個產業取成交額前 12 大菁英，讓畫面清爽大方；
+                    // 若點擊了特定產業鑽研，或處於個股模式，則解鎖顯示該產業所有 25-35 檔完整個股！
+                    let sectorStocks = [...grp.stocks];
+                    sectorStocks.sort((a, b) => b.tradeValue - a.tradeValue);
+                    
+                    if (activeSectorFilter === 'ALL' && !currentDrillSector) {
+                        sectorStocks = sectorStocks.slice(0, 12);
+                    }
+
+                    let children = sectorStocks.map(st => {
                         let val = st[currentWeightMetric] || st.tradeValue || 1;
                         if (val <= 0) val = 0.5;
                         return {
@@ -411,7 +411,6 @@
                             raw: st
                         };
                     });
-                    children.sort((a, b) => b.value - a.value);
 
                     treeSeriesData.push({
                         name: groupTitle,
