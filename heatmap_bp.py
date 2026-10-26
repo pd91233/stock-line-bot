@@ -593,7 +593,7 @@ def api_single_quote(symbol):
     cached_st = _market_cache["stocks_map"].get(symbol)
     if cached_st:
         return jsonify({"status": "ok", "stock": {**cached_st, "bidVol": 50, "askVol": 50, "bids": [], "asks": []}})
-    return jsonify({"status": "error"}}, 500
+    return jsonify({"status": "error"}, 500)
 
 @heatmap_bp.route("/heatmap-image.png")
 def serve_heatmap_image():
