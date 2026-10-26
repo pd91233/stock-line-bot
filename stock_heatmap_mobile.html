@@ -11,20 +11,27 @@
         body { background-color: #0b0f19; color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         .hide-scroll::-webkit-scrollbar { display: none; }
         .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        .tab-btn { background: #1e293b; color: #94a3b8; border: 1px solid #334155; transition: all 0.2s; }
+        .tab-btn.active { background: #2563eb; color: #ffffff; border-color: #3b82f6; font-weight: bold; box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden select-none">
 
-    <!-- 頂部導航與狀態列 -->
-    <header class="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between shrink-0">
-        <div class="flex items-center space-x-2">
+    <!-- 頂部機構級戰情總覽列 -->
+    <header class="bg-gray-900 border-b border-gray-800 px-4 py-2.5 flex items-center justify-between shrink-0">
+        <div class="flex items-center space-x-3">
             <span class="text-xl">🔥</span>
             <div>
-                <h1 class="text-sm font-bold tracking-wider text-white">台股盤中即時資金熱力圖</h1>
-                <div class="flex items-center space-x-2 text-[10px] text-gray-400">
-                    <span id="update-time" class="text-emerald-400 font-mono">載入中...</span>
+                <div class="flex items-center space-x-2">
+                    <h1 class="text-sm font-bold tracking-wider text-white">台股盤中即時資金熱力圖</h1>
+                    <span class="bg-emerald-900/60 text-emerald-300 text-[10px] px-1.5 py-0.5 rounded border border-emerald-700/50">富果 API 實盤</span>
+                </div>
+                <div class="flex items-center space-x-3 text-[11px] text-gray-400 mt-0.5 font-mono">
+                    <span>總額: <strong id="stat-total-val" class="text-white">-- 億</strong></span>
                     <span>•</span>
-                    <span id="data-source-badge" class="bg-emerald-900/60 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-700/50">富果 API 實盤</span>
+                    <span>平均漲跌: <strong id="stat-avg-chg" class="text-red-400">--%</strong></span>
+                    <span>•</span>
+                    <span id="update-time" class="text-emerald-400">載入中...</span>
                 </div>
             </div>
         </div>
@@ -35,52 +42,62 @@
         </div>
     </header>
 
-    <!-- 頂部依實際數據動態排行的產業膠囊選單 -->
-    <nav class="bg-gray-900/80 border-b border-gray-800/80 px-3 py-2 shrink-0">
-        <div id="sector-pill-container" class="flex space-x-2 overflow-x-auto hide-scroll pb-1">
-            <button onclick="filterSector('ALL')" class="sector-pill shrink-0 bg-blue-600 text-white text-xs px-3 py-1.5 rounded-full font-medium transition shadow">🔥 全部產業總覽</button>
-            <!-- 動態插入排序後的產業按鈕 -->
-        </div>
-    </nav>
+    <!-- 頂部全按鍵導航控制面板 (移除下拉選單，全面按鍵化) -->
+    <div class="bg-gray-900/90 border-b border-gray-800 px-3 py-2 space-y-2 shrink-0">
+        
+        <!-- 第一排：市場與模式切換按鍵 -->
+        <div class="flex items-center justify-between overflow-x-auto hide-scroll pb-0.5">
+            <div class="flex items-center space-x-1.5 shrink-0">
+                <span class="text-[11px] text-gray-400 mr-1">市場:</span>
+                <button onclick="setMarketFilter('ALL')" id="market-all" class="tab-btn active text-xs px-2.5 py-1 rounded-md">全部</button>
+                <button onclick="setMarketFilter('TSE')" id="market-tse" class="tab-btn text-xs px-2.5 py-1 rounded-md">上市</button>
+                <button onclick="setMarketFilter('OTC')" id="market-otc" class="tab-btn text-xs px-2.5 py-1 rounded-md">上櫃</button>
+            </div>
 
-    <!-- 檢視模式切換與權重工具列 -->
-    <div class="bg-gray-900/40 px-4 py-2 border-b border-gray-800/50 flex items-center justify-between text-xs shrink-0">
-        <div class="flex items-center space-x-1 bg-gray-800 p-0.5 rounded-lg border border-gray-700">
-            <button onclick="switchViewMode('heatmap')" id="btn-mode-heatmap" class="px-2.5 py-1 rounded-md font-medium bg-blue-600 text-white transition">📊 熱力圖</button>
-            <button onclick="switchViewMode('list')" id="btn-mode-list" class="px-2.5 py-1 rounded-md font-medium text-gray-400 hover:text-white transition">📱 排行清單</button>
+            <div class="flex items-center space-x-1.5 shrink-0">
+                <span class="text-[11px] text-gray-400 mr-1">視角:</span>
+                <button onclick="switchViewMode('heatmap')" id="btn-mode-heatmap" class="tab-btn active text-xs px-2.5 py-1 rounded-md">產業熱力圖</button>
+                <button onclick="switchViewMode('stock_heatmap')" id="btn-mode-stock-heatmap" class="tab-btn text-xs px-2.5 py-1 rounded-md">個股熱力圖</button>
+                <button onclick="switchViewMode('list')" id="btn-mode-list" class="tab-btn text-xs px-2.5 py-1 rounded-md">手機排行表</button>
+            </div>
         </div>
-        <div class="flex items-center space-x-2">
-            <span class="text-gray-400 text-[11px]">權重:</span>
-            <select id="weight-metric" onchange="renderChart()" class="bg-gray-800 text-gray-200 text-xs px-2 py-1 rounded border border-gray-700 focus:outline-none">
-                <option value="tradeValue">成交額 (億)</option>
-                <option value="tradeVolume">成交量 (張)</option>
-                <option value="mcap">市值規模</option>
-            </select>
+
+        <!-- 第二排：權重切換按鍵與產業膠囊選單 -->
+        <div class="flex items-center justify-between overflow-x-auto hide-scroll pt-1 border-t border-gray-800/60">
+            <div class="flex items-center space-x-1.5 shrink-0 mr-3">
+                <span class="text-[11px] text-gray-400 mr-1">權重:</span>
+                <button onclick="setWeightMetric('tradeValue')" id="weight-val" class="tab-btn active text-xs px-2.5 py-1 rounded-md">成交額</button>
+                <button onclick="setWeightMetric('tradeVolume')" id="weight-vol" class="tab-btn text-xs px-2.5 py-1 rounded-md">成交量</button>
+                <button onclick="setWeightMetric('mcap')" id="weight-mcap" class="tab-btn text-xs px-2.5 py-1 rounded-md">市值</button>
+            </div>
+
+            <!-- 產業快速過濾膠囊按鍵容器 -->
+            <div id="sector-pill-container" class="flex space-x-2 overflow-x-auto hide-scroll shrink-0">
+                <!-- 動態插入產業按鈕 -->
+            </div>
         </div>
     </div>
 
-    <!-- 主內容區：ECharts 矩形樹圖或手機排行清單 -->
+    <!-- 主內容區 -->
     <main class="flex-1 relative overflow-hidden bg-[#07090e]">
-        <!-- 返回總覽浮動按鈕 (點擊個股或進入鑽研時顯示) -->
+        <!-- 返回總覽浮動按鈕 -->
         <div id="back-bar" class="absolute top-3 left-3 z-10 hidden">
             <button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur">
-                <span>⬅ 返回全部產業</span>
+                <span>⬅ 返回全部總覽</span>
             </button>
         </div>
 
-        <!-- ECharts 畫布 -->
+        <!-- ECharts 矩形樹圖畫布 -->
         <div id="treemap-container" class="w-full h-full"></div>
 
-        <!-- 手機排行清單容器 (切換到清單模式時顯示) -->
+        <!-- 手機排行清單容器 -->
         <div id="list-container" class="absolute inset-0 overflow-y-auto p-3 space-y-2 hidden"></div>
     </main>
 
-    <!-- 底部滑出抽屜：單一個股最佳五檔與力道明細 (Bottom Sheet) -->
+    <!-- 底部滑出抽屜：單一個股最佳五檔明細 (Bottom Sheet) -->
     <div id="stock-sheet" class="fixed inset-x-0 bottom-0 z-50 transform translate-y-full transition-transform duration-300 ease-out bg-gray-900 border-t border-gray-700 rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col">
         <div class="w-12 h-1.5 bg-gray-700 rounded-full mx-auto my-2 shrink-0"></div>
-        <div id="sheet-content" class="p-4 overflow-y-auto space-y-4">
-            <!-- 動態填入五檔與即時行情 -->
-        </div>
+        <div id="sheet-content" class="p-4 overflow-y-auto space-y-4"></div>
     </div>
 
     <!-- 遮罩背景 -->
@@ -88,12 +105,13 @@
 
     <script>
         let rawStocksData = [];
-        let currentViewMode = 'heatmap'; // 'heatmap' or 'list'
+        let currentViewMode = 'heatmap'; // 'heatmap', 'stock_heatmap', 'list'
+        let currentMarketFilter = 'ALL'; // 'ALL', 'TSE', 'OTC'
+        let currentWeightMetric = 'tradeValue'; // 'tradeValue', 'tradeVolume', 'mcap'
         let activeSectorFilter = 'ALL';
         let currentDrillSector = null;
         let chartInstance = null;
 
-        // 初始化 ECharts
         window.addEventListener('DOMContentLoaded', () => {
             const chartDom = document.getElementById('treemap-container');
             chartInstance = echarts.init(chartDom);
@@ -101,7 +119,7 @@
             chartInstance.on('click', function (params) {
                 if (params.data && params.data.type === 'stock') {
                     openStockSheet(params.data.symbol);
-                } else if (params.data && params.data.type === 'sector') {
+                } else if (params.data && params.data.type === 'sector' && currentViewMode === 'heatmap') {
                     currentDrillSector = params.data.name;
                     document.getElementById('back-bar').classList.remove('hidden');
                     renderChart();
@@ -112,7 +130,6 @@
             loadMarketData();
         });
 
-        // 載入即時快照數據
         async function loadMarketData(force = false) {
             const btn = document.getElementById('refresh-btn');
             btn.innerHTML = '<span>⏳ 更新中...</span>';
@@ -122,7 +139,8 @@
                 const json = await res.json();
                 if (json.status === 'ok') {
                     rawStocksData = json.stocks;
-                    document.getElementById('update-time').innerText = json.updatedAt;
+                    document.getElementById('update-time').innerText = json.updatedAt || new Date().toLocaleTimeString();
+                    updateTopSummaryStats();
                     buildSectorPills();
                     renderChart();
                     if (currentViewMode === 'list') renderListMode();
@@ -134,28 +152,79 @@
             }
         }
 
-        function triggerRefresh() {
-            loadMarketData(true);
+        function triggerRefresh() { loadMarketData(true); }
+
+        function updateTopSummaryStats() {
+            let totalVal = 0;
+            let weightedChgSum = 0;
+            rawStocksData.forEach(s => {
+                totalVal += (s.tradeValue || 0);
+                weightedChgSum += (s.changePercent || 0) * (s.tradeValue || 1);
+            });
+            const avgChg = totalVal > 0 ? (weightedChgSum / totalVal).toFixed(2) : 0;
+            
+            document.getElementById('stat-total-val').innerText = `${totalVal.toFixed(1)} 億`;
+            const avgEl = document.getElementById('stat-avg-chg');
+            avgEl.innerText = `${avgChg > 0 ? '+' : ''}${avgChg}%`;
+            avgEl.className = avgChg >= 0 ? "text-red-400" : "text-emerald-400";
         }
 
-        // 建立依實際成交額動態排行的上方產業導航列
-        function buildSectorPills() {
-            const container = document.getElementById('sector-pill-container');
-            // 計算各產業總成交額以進行動態排序
-            const sectorMap = {};
-            rawStocksData.forEach(s => {
-                if (!sectorMap[s.sector]) sectorMap[s.sector] = { val: 0, count: 0 };
-                sectorMap[s.sector].val += s.tradeValue;
-                sectorMap[s.sector].count++;
+        // 按鍵控制函數群
+        function setMarketFilter(market) {
+            currentMarketFilter = market;
+            ['all', 'tse', 'otc'].forEach(m => {
+                document.getElementById(`market-${m}`).classList.toggle('active', m === market.toLowerCase());
+            });
+            renderChart();
+            if (currentViewMode === 'list') renderListMode();
+        }
+
+        function switchViewMode(mode) {
+            currentViewMode = mode;
+            ['heatmap', 'stock_heatmap', 'list'].forEach(m => {
+                const btnId = m === 'stock_heatmap' ? 'btn-mode-stock-heatmap' : (m === 'heatmap' ? 'btn-mode-heatmap' : 'btn-mode-list');
+                document.getElementById(btnId).classList.toggle('active', m === mode);
             });
 
+            const hmContainer = document.getElementById('treemap-container');
+            const listContainer = document.getElementById('list-container');
+
+            if (mode === 'list') {
+                hmContainer.classList.add('hidden');
+                listContainer.classList.remove('hidden');
+                renderListMode();
+            } else {
+                hmContainer.classList.remove('hidden');
+                listContainer.classList.add('hidden');
+                chartInstance.resize();
+                renderChart();
+            }
+        }
+
+        function setWeightMetric(metric) {
+            currentWeightMetric = metric;
+            {'tradeValue': 'val', 'tradeVolume': 'vol', 'mcap': 'mcap'}.forEach = function(cb) {
+                for(let k in this) cb(k, this[k]);
+            };
+            Object.entries({'tradeValue': 'val', 'tradeVolume': 'vol', 'mcap': 'mcap'}).forEach(([k, id]) => {
+                document.getElementById(`weight-${id}`).classList.toggle('active', k === metric);
+            });
+            renderChart();
+        }
+
+        function buildSectorPills() {
+            const container = document.getElementById('sector-pill-container');
+            const sectorMap = {};
+            rawStocksData.forEach(s => {
+                if (!sectorMap[s.sector]) sectorMap[s.sector] = { val: 0 };
+                sectorMap[s.sector].val += s.tradeValue;
+            });
             const sortedSectors = Object.keys(sectorMap).sort((a, b) => sectorMap[b].val - sectorMap[a].val);
 
-            let html = `<button onclick="filterSector('ALL')" class="sector-pill shrink-0 ${activeSectorFilter === 'ALL' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300'} text-xs px-3 py-1.5 rounded-full font-medium transition shadow">🔥 全部產業</button>`;
-            
+            let html = `<button onclick="filterSector('ALL')" class="tab-btn shrink-0 text-xs px-3 py-1 rounded-md ${activeSectorFilter === 'ALL' ? 'active bg-blue-600 text-white' : ''}">🔥 全部產業</button>`;
             sortedSectors.forEach((sec, idx) => {
                 const active = activeSectorFilter === sec;
-                html += `<button onclick="filterSector('${sec}')" class="sector-pill shrink-0 ${active ? 'bg-blue-600 text-white shadow' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'} text-xs px-3 py-1.5 rounded-full font-medium transition">#${idx+1} ${sec}</button>`;
+                html += `<button onclick="filterSector('${sec}')" class="tab-btn shrink-0 text-xs px-3 py-1 rounded-md ${active ? 'active bg-blue-600 text-white' : ''}">#${idx+1} ${sec}</button>`;
             });
             container.innerHTML = html;
         }
@@ -175,67 +244,40 @@
             renderChart();
         }
 
-        function switchViewMode(mode) {
-            currentViewMode = mode;
-            const hmContainer = document.getElementById('treemap-container');
-            const listContainer = document.getElementById('list-container');
-            const btnHm = document.getElementById('btn-mode-heatmap');
-            const btnList = document.getElementById('btn-mode-list');
-
-            if (mode === 'heatmap') {
-                hmContainer.classList.remove('hidden');
-                listContainer.classList.add('hidden');
-                btnHm.className = "px-2.5 py-1 rounded-md font-medium bg-blue-600 text-white transition";
-                btnList.className = "px-2.5 py-1 rounded-md font-medium text-gray-400 hover:text-white transition";
-                chartInstance.resize();
-            } else {
-                hmContainer.classList.add('hidden');
-                listContainer.classList.remove('hidden');
-                btnList.className = "px-2.5 py-1 rounded-md font-medium bg-blue-600 text-white transition";
-                btnHm.className = "px-2.5 py-1 rounded-md font-medium text-gray-400 hover:text-white transition";
-                renderListMode();
-            }
-        }
-
-        // 根據漲跌幅決定 Finviz 經典紅綠色階
         function getColorByChange(pct) {
-            if (pct >= 5) return '#991b1b';     // 深紅 (大漲)
+            if (pct >= 5) return '#991b1b';     // 深紅
             if (pct >= 2) return '#dc2626';     // 紅
             if (pct > 0) return '#b91c1c';      // 淺紅
-            if (pct === 0) return '#374151';    // 灰 (平盤)
+            if (pct === 0) return '#374151';    // 平盤灰
             if (pct > -2) return '#047857';     // 淺綠
             if (pct > -5) return '#059669';     // 綠
-            return '#065f46';                   // 深綠 (重挫)
+            return '#065f46';                   // 深綠
         }
 
-        // 渲染 ECharts 矩形樹圖 (支援動態排行與鑽研)
+        // 核心繪圖邏輯 (支援產業熱力圖、個股熱力圖、市場上市上櫃篩選、標題帶成交額與漲跌幅)
         function renderChart() {
-            const metric = document.getElementById('weight-metric').value;
-            let dataFiltered = rawStocksData;
+            let dataFiltered = [...rawStocksData];
 
+            // 市場篩選
+            if (currentMarketFilter !== 'ALL') {
+                dataFiltered = dataFiltered.filter(s => s.market === currentMarketFilter);
+            }
             if (activeSectorFilter !== 'ALL') {
                 dataFiltered = dataFiltered.filter(s => s.sector === activeSectorFilter);
             }
-
-            if (currentDrillSector) {
+            if (currentDrillSector && currentViewMode === 'heatmap') {
                 document.getElementById('back-bar').classList.remove('hidden');
                 dataFiltered = dataFiltered.filter(s => s.sector === currentDrillSector);
             } else {
                 document.getElementById('back-bar').classList.add('hidden');
             }
 
-            // 依產業群組化
-            const sectorGroups = {};
-            dataFiltered.forEach(s => {
-                if (!sectorGroups[s.sector]) sectorGroups[s.sector] = [];
-                sectorGroups[s.sector].push(s);
-            });
-
             let treeSeriesData = [];
-            Object.keys(sectorGroups).forEach(sec => {
-                const stocks = sectorGroups[sec];
-                let children = stocks.map(st => {
-                    let val = st[metric] || st.tradeValue || 1;
+
+            if (currentViewMode === 'stock_heatmap') {
+                // 個股熱力圖模式：直接平鋪所有個股
+                let children = dataFiltered.map(st => {
+                    let val = st[currentWeightMetric] || st.tradeValue || 1;
                     if (val <= 0) val = 0.5;
                     return {
                         name: `${st.name}\n${st.price} (${st.changePercent >= 0 ? '+' : ''}${st.changePercent}%)`,
@@ -246,15 +288,44 @@
                         raw: st
                     };
                 });
-
-                // 依選定權重由大到小排序個股
                 children.sort((a, b) => b.value - a.value);
-
-                treeSeriesData.push({
-                    name: sec,
-                    children: children
+                treeSeriesData = [{ name: '個股熱力總覽', children: children }];
+            } else {
+                // 產業熱力圖模式：依產業群組化，並在群組標題帶出產業整體漲跌與成交額
+                const sectorGroups = {};
+                dataFiltered.forEach(s => {
+                    if (!sectorGroups[s.sector]) sectorGroups[s.sector] = { stocks: [], totalVal: 0, weightedChg: 0 };
+                    sectorGroups[s.sector].stocks.push(s);
+                    sectorGroups[s.sector].totalVal += s.tradeValue;
+                    sectorGroups[s.sector].weightedChg += s.changePercent * s.tradeValue;
                 });
-            });
+
+                Object.keys(sectorGroups).forEach((sec, idx) => {
+                    const grp = sectorGroups[sec];
+                    const avgChg = grp.totalVal > 0 ? (grp.weightedChg / grp.totalVal).toFixed(2) : 0;
+                    const sign = avgChg >= 0 ? '+' : '';
+                    const groupTitle = `#${idx+1} ${sec} ${sign}${avgChg}% (${grp.totalVal.toFixed(1)}億)`;
+
+                    let children = grp.stocks.map(st => {
+                        let val = st[currentWeightMetric] || st.tradeValue || 1;
+                        if (val <= 0) val = 0.5;
+                        return {
+                            name: `${st.name}\n${st.price} (${st.changePercent >= 0 ? '+' : ''}${st.changePercent}%)`,
+                            value: val,
+                            itemStyle: { color: getColorByChange(st.changePercent) },
+                            symbol: st.symbol,
+                            type: 'stock',
+                            raw: st
+                        };
+                    });
+                    children.sort((a, b) => b.value - a.value);
+
+                    treeSeriesData.push({
+                        name: groupTitle,
+                        children: children
+                    });
+                });
+            }
 
             const option = {
                 tooltip: {
@@ -278,7 +349,7 @@
                     width: '100%',
                     height: '100%',
                     roam: false,
-                    nodeClick: currentDrillSector ? false : 'zoomToNode',
+                    nodeClick: (currentDrillSector || currentViewMode === 'stock_heatmap') ? false : 'zoomToNode',
                     breadcrumb: { show: false },
                     label: {
                         show: true,
@@ -289,11 +360,11 @@
                     },
                     upperLabel: {
                         show: true,
-                        height: 22,
+                        height: 24,
                         fontSize: 12,
                         fontWeight: 'bold',
                         color: '#fff',
-                        backgroundColor: 'rgba(0,0,0,0.4)'
+                        backgroundColor: 'rgba(15,23,42,0.85)'
                     },
                     itemStyle: {
                         borderColor: '#0b0f19',
@@ -307,13 +378,11 @@
             chartInstance.setOption(option);
         }
 
-        // 渲染手機排行清單模式
         function renderListMode() {
             const container = document.getElementById('list-container');
             let list = [...rawStocksData];
-            if (activeSectorFilter !== 'ALL') {
-                list = list.filter(s => s.sector === activeSectorFilter);
-            }
+            if (currentMarketFilter !== 'ALL') list = list.filter(s => s.market === currentMarketFilter);
+            if (activeSectorFilter !== 'ALL') list = list.filter(s => s.sector === activeSectorFilter);
             list.sort((a, b) => b.tradeValue - a.tradeValue);
 
             let html = '';
@@ -343,7 +412,6 @@
             container.innerHTML = html;
         }
 
-        // 開啟單一個股即時五檔抽屜
         async function openStockSheet(symbol) {
             const sheet = document.getElementById('stock-sheet');
             const backdrop = document.getElementById('backdrop');
@@ -360,8 +428,6 @@
                     const st = json.stock;
                     const sign = st.changePercent >= 0 ? '+' : '';
                     const colorStyle = st.changePercent > 0 ? 'text-red-400' : (st.changePercent < 0 ? 'text-emerald-400' : 'text-gray-350');
-
-                    // 計算內外盤委買委賣比例
                     const totalVol = (st.bidVol || 1) + (st.askVol || 1);
                     const bidPct = Math.round((st.bidVol / totalVol) * 100);
                     const askPct = 100 - bidPct;
@@ -377,8 +443,6 @@
                             </div>
                             <button onclick="closeStockSheet()" class="text-gray-400 hover:text-white p-1">✕</button>
                         </div>
-
-                        <!-- 價格大卡片 -->
                         <div class="bg-gray-800/60 border border-gray-700/60 rounded-xl p-3 flex items-center justify-between">
                             <div>
                                 <div class="text-xs text-gray-400">現價 / 漲跌</div>
@@ -391,8 +455,6 @@
                                 <div>成交額: <span class="text-blue-400 font-bold">${st.tradeValue}億</span></div>
                             </div>
                         </div>
-
-                        <!-- 攻擊力道條 (內外盤) -->
                         <div>
                             <div class="flex justify-between text-xs text-gray-400 mb-1">
                                 <span>🔴 內盤買盤 (${bidPct}%)</span>
@@ -403,30 +465,16 @@
                                 <div style="width: ${askPct}%" class="bg-emerald-600 h-full"></div>
                             </div>
                         </div>
-
-                        <!-- 最佳五檔明細表格 -->
                         <div class="space-y-1">
                             <div class="text-xs font-bold text-gray-400 mb-1">📊 最佳五檔委託即時報價</div>
                             <div class="grid grid-cols-2 gap-2 text-xs">
-                                <!-- 委買 -->
                                 <div class="bg-gray-800/40 p-2 rounded-lg border border-gray-800">
                                     <div class="text-[10px] text-red-400 font-bold mb-1">委買價 / 張數</div>
-                                    ${(st.bids && st.bids.length > 0) ? st.bids.map(b => `
-                                        <div class="flex justify-between font-mono py-0.5">
-                                            <span class="text-red-400 font-bold">${b.price}</span>
-                                            <span class="text-gray-300">${b.size}</span>
-                                        </div>
-                                    `).join('') : '<div class="text-gray-500 text-center py-2">無委買資料</div>'}
+                                    ${(st.bids && st.bids.length > 0) ? st.bids.map(b => `<div class="flex justify-between font-mono py-0.5"><span class="text-red-400 font-bold">${b.price}</span><span class="text-gray-300">${b.size}</span></div>`).join('') : '<div class="text-gray-500 text-center py-2">無委買資料</div>'}
                                 </div>
-                                <!-- 委賣 -->
                                 <div class="bg-gray-800/40 p-2 rounded-lg border border-gray-800">
                                     <div class="text-[10px] text-emerald-400 font-bold mb-1">委賣價 / 張數</div>
-                                    ${(st.asks && st.asks.length > 0) ? st.asks.map(a => `
-                                        <div class="flex justify-between font-mono py-0.5">
-                                            <span class="text-emerald-400 font-bold">${a.price}</span>
-                                            <span class="text-gray-300">${a.size}</span>
-                                        </div>
-                                    `).join('') : '<div class="text-gray-500 text-center py-2">無委賣資料</div>'}
+                                    ${(st.asks && st.asks.length > 0) ? st.asks.map(a => `<div class="flex justify-between font-mono py-0.5"><span class="text-emerald-400 font-bold">${a.price}</span><span class="text-gray-300">${a.size}</span></div>`).join('') : '<div class="text-gray-500 text-center py-2">無委賣資料</div>'}
                                 </div>
                             </div>
                         </div>
