@@ -111,7 +111,7 @@
         <div id="treemap-container" class="w-full flex-1 min-h-0"></div>
         <div id="list-container" class="absolute inset-0 overflow-y-auto p-3 space-y-2 hidden"></div>
 
-        <!-- 底部專業漲跌幅色階圖例列 (完全對齊參考網站的 2% ~ -2% 數值與色帶) -->
+        <!-- 底部專業漲跌幅色階圖例列 -->
         <div class="bg-gray-900 border-t border-gray-800 px-3 py-2 shrink-0 flex flex-col space-y-1 z-10">
             <div class="flex w-full h-5 rounded overflow-hidden shadow font-mono text-[11px] font-bold text-white text-center">
                 <div class="flex-1 bg-[#891826] flex items-center justify-center">2%</div>
@@ -152,11 +152,12 @@
             const chartDom = document.getElementById('treemap-container');
             chartInstance = echarts.init(chartDom);
             
+            // 精準修復點擊事件：如果是個股就開五檔，如果是產業群組才允許下鑽
             chartInstance.on('click', function (params) {
                 if (params.data && params.data.type === 'stock') {
                     openStockSheet(params.data.symbol);
-                } else if (params.data && params.data.type === 'sector' && currentViewMode === 'heatmap') {
-                    currentDrillSector = params.data.name;
+                } else if (params.data && params.data.type === 'sector' && currentViewMode === 'heatmap' && !currentDrillSector) {
+                    currentDrillSector = params.data.name.replace(/#\d+\s/, '').split(' ')[0]; // 擷取純產業名稱
                     document.getElementById('back-bar').classList.remove('hidden');
                     renderChart();
                 }
@@ -196,7 +197,6 @@
             wrapper.scrollLeft += offset;
         }
 
-        // 格式化取得完整 年月日 時分秒
         function getFullTimestamp() {
             const now = new Date();
             const yyyy = now.getFullYear();
@@ -365,7 +365,6 @@
             renderChart();
         }
 
-        // 精準對應圖例百分比刻度的色彩分級
         function getColorByChange(pct) {
             if (pct >= 2.0) return '#891826';
             if (pct >= 1.5) return '#992029';
@@ -451,6 +450,7 @@
 
                     treeSeriesData.push({
                         name: groupTitle,
+                        type: 'sector',
                         children: children
                     });
                 });
@@ -478,7 +478,7 @@
                     width: '100%',
                     height: '100%',
                     roam: false,
-                    nodeClick: (currentDrillSector || currentViewMode === 'stock_heatmap') ? false : 'zoomToNode',
+                    nodeClick: false, // 關閉預設點擊下鑽，改由自定義點擊事件掌控，徹底解決卡死問題
                     breadcrumb: { show: false },
                     label: {
                         show: true,
@@ -504,7 +504,7 @@
                 }]
             };
 
-            chartInstance.setOption(option);
+            chartInstance.setOption(option, true);
         }
 
         function renderListMode() {
@@ -602,7 +602,7 @@
                                     ${(st.bids && st.bids.length > 0) ? st.bids.map(b => `<div class="flex justify-between font-mono py-0.5"><span class="text-red-400 font-bold">${b.price}</span><span class="text-gray-300">${b.size}</span></div>`).join('') : '<div class="text-gray-500 text-center py-2">無委買資料</div>'}
                                 </div>
                                 <div class="bg-gray-800/40 p-2 rounded-lg border border-gray-800">
-                                    <div class="text-[10px] text-emerald-400 font-bold mb-1">委賣價 / 張數</div>
+                                    <div class="text-[10px] text-emerald-400 font-bold mb-1">委賣 / 張數</div>
                                     ${(st.asks && st.asks.length > 0) ? st.asks.map(a => `<div class="flex justify-between font-mono py-0.5"><span class="text-emerald-400 font-bold">${a.price}</span><span class="text-gray-300">${a.size}</span></div>`).join('') : '<div class="text-gray-500 text-center py-2">無委賣資料</div>'}
                                 </div>
                             </div>
@@ -618,6 +618,9 @@
         function closeStockSheet() {
             document.getElementById('stock-sheet').classList.add('translate-y-full');
             document.getElementById('backdrop').classList.add('hidden');
+            setTimeout(() => {
+                if (chartInstance) chartInstance.resize();
+            }, 250);
         }
     </script>
 </body>
