@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>股價漲跌即時熱力圖</title>
+    <title>台股 32 大產業戰略熱力圖戰情室</title>
     <!-- 引入 Tailwind CSS 與 ECharts -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
@@ -74,7 +74,7 @@
             <button onclick="setWeightMetric('mcap')" id="weight-mcap" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">市值</button>
         </div>
 
-        <!-- 第三與第四排：動態成交額排行對齊佈局 (32大產業依即時成交額自動排序平分兩行) -->
+        <!-- 第三與第四排：動態成交額排行對齊佈局 -->
         <div class="pt-1 border-t border-gray-800/60 space-y-1">
             <div class="flex items-center space-x-2">
                 <div id="all-sector-container" class="shrink-0"></div>
@@ -101,15 +101,35 @@
     </div>
 
     <!-- 主內容區 -->
-    <main class="flex-1 relative w-full bg-[#07090e] overflow-hidden">
+    <main class="flex-1 relative w-full bg-[#07090e] overflow-hidden flex flex-col">
         <div id="back-bar" class="absolute top-3 left-3 z-10 hidden">
             <button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur cursor-pointer">
                 <span>⬅ 返回全部總覽</span>
             </button>
         </div>
 
-        <div id="treemap-container" class="w-full h-full"></div>
+        <div id="treemap-container" class="w-full flex-1"></div>
         <div id="list-container" class="absolute inset-0 overflow-y-auto p-3 space-y-2 hidden"></div>
+
+        <!-- 底部專業漲跌幅色階圖例條 (與專業看盤軟體完美對齊) -->
+        <div class="bg-gray-900/90 border-t border-gray-800 px-2 py-1 shrink-0 flex items-center justify-between text-[10px] text-gray-400">
+            <div class="flex items-center space-x-1 font-mono">
+                <span>跌幅過重</span>
+                <div class="flex h-3 w-48 rounded overflow-hidden">
+                    <div class="flex-1 bg-[#086231]" title="< -9%"></div>
+                    <div class="flex-1 bg-[#096537]" title="-6% ~ -9%"></div>
+                    <div class="flex-1 bg-[#05994f]" title="-3% ~ -6%"></div>
+                    <div class="flex-1 bg-[#43bc7f]" title="0% ~ -3%"></div>
+                    <div class="flex-1 bg-[#c2c4cd]" title="0%"></div>
+                    <div class="flex-1 bg-[#f67d80]" title="0% ~ 3%"></div>
+                    <div class="flex-1 bg-[#f23645]" title="3% ~ 6%"></div>
+                    <div class="flex-1 bg-[#992029]" title="6% ~ 9%"></div>
+                    <div class="flex-1 bg-[#891826]" title="> 9%"></div>
+                </div>
+                <span>強勢漲停</span>
+            </div>
+            <div class="font-mono text-[11px]" id="legend-update-time">--:--:--</div>
+        </div>
     </main>
 
     <!-- 底部抽屜 -->
@@ -186,7 +206,9 @@
                 const json = await res.json();
                 if (json.status === 'ok') {
                     rawStocksData = json.stocks;
-                    document.getElementById('update-time').innerText = json.updatedAt || new Date().toLocaleTimeString();
+                    const timeStr = json.updatedAt || new Date().toLocaleTimeString();
+                    document.getElementById('update-time').innerText = timeStr;
+                    document.getElementById('legend-update-time').innerText = `更新時間：${timeStr}`;
                     updateTopSummaryStats();
                     buildSectorPills();
                     renderChart();
@@ -271,10 +293,8 @@
                 sectorMap[s.sector].weightedChg += s.changePercent * s.tradeValue;
             });
 
-            // 依照即時成交金額由大到小動態排序所有產業
             const sortedSectors = Object.keys(sectorMap).sort((a, b) => sectorMap[b].totalVal - sectorMap[a].totalVal);
 
-            // 平分動態排序後的產業至上下兩行
             const mid = Math.ceil(sortedSectors.length / 2);
             const row1Sectors = sortedSectors.slice(0, mid);
             const row2Sectors = sortedSectors.slice(mid);
@@ -334,14 +354,17 @@
             renderChart();
         }
 
+        // 精準對應底部色階圖例的專業色彩分級
         function getColorByChange(pct) {
-            if (pct >= 5) return '#991b1b';
-            if (pct >= 2) return '#dc2626';
-            if (pct > 0) return '#b91c1c';
-            if (pct === 0) return '#374151';
-            if (pct > -2) return '#047857';
-            if (pct > -5) return '#059669';
-            return '#065f46';
+            if (pct >= 9) return '#891826';
+            if (pct >= 6) return '#992029';
+            if (pct >= 3) return '#f23645';
+            if (pct > 0) return '#f67d80';
+            if (pct === 0) return '#c2c4cd';
+            if (pct >= -3) return '#43bc7f';
+            if (pct >= -6) return '#05994f';
+            if (pct >= -9) return '#096537';
+            return '#086231';
         }
 
         function renderChart() {
