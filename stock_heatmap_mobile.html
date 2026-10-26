@@ -42,7 +42,7 @@
         </div>
     </header>
 
-    <!-- 頂部全按鍵導航控制面板 (移除下拉選單，全面按鍵化) -->
+    <!-- 頂部全按鍵導航控制面板 -->
     <div class="bg-gray-900/90 border-b border-gray-800 px-3 py-2 space-y-2 shrink-0">
         
         <!-- 第一排：市場與模式切換按鍵 -->
@@ -169,7 +169,6 @@
             avgEl.className = avgChg >= 0 ? "text-red-400" : "text-emerald-400";
         }
 
-        // 按鍵控制函數群
         function setMarketFilter(market) {
             currentMarketFilter = market;
             ['all', 'tse', 'otc'].forEach(m => {
@@ -203,10 +202,9 @@
 
         function setWeightMetric(metric) {
             currentWeightMetric = metric;
-            {'tradeValue': 'val', 'tradeVolume': 'vol', 'mcap': 'mcap'}.forEach = function(cb) {
-                for(let k in this) cb(k, this[k]);
-            };
-            Object.entries({'tradeValue': 'val', 'tradeVolume': 'vol', 'mcap': 'mcap'}).forEach(([k, id]) => {
+            // 修正後的語法：使用明確的物件迴圈
+            const weightMap = {'tradeValue': 'val', 'tradeVolume': 'vol', 'mcap': 'mcap'};
+            Object.entries(weightMap).forEach(([k, id]) => {
                 document.getElementById(`weight-${id}`).classList.toggle('active', k === metric);
             });
             renderChart();
@@ -254,11 +252,9 @@
             return '#065f46';                   // 深綠
         }
 
-        // 核心繪圖邏輯 (支援產業熱力圖、個股熱力圖、市場上市上櫃篩選、標題帶成交額與漲跌幅)
         function renderChart() {
             let dataFiltered = [...rawStocksData];
 
-            // 市場篩選
             if (currentMarketFilter !== 'ALL') {
                 dataFiltered = dataFiltered.filter(s => s.market === currentMarketFilter);
             }
@@ -275,7 +271,6 @@
             let treeSeriesData = [];
 
             if (currentViewMode === 'stock_heatmap') {
-                // 個股熱力圖模式：直接平鋪所有個股
                 let children = dataFiltered.map(st => {
                     let val = st[currentWeightMetric] || st.tradeValue || 1;
                     if (val <= 0) val = 0.5;
@@ -291,7 +286,6 @@
                 children.sort((a, b) => b.value - a.value);
                 treeSeriesData = [{ name: '個股熱力總覽', children: children }];
             } else {
-                // 產業熱力圖模式：依產業群組化，並在群組標題帶出產業整體漲跌與成交額
                 const sectorGroups = {};
                 dataFiltered.forEach(s => {
                     if (!sectorGroups[s.sector]) sectorGroups[s.sector] = { stocks: [], totalVal: 0, weightedChg: 0 };
