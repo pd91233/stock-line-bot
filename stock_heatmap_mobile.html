@@ -15,7 +15,9 @@
         .tab-btn.active { background: #2563eb; color: #ffffff; border-color: #3b82f6; font-weight: bold; box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
         .sector-pill { background: #111827; border: 1px solid #374151; color: #9ca3af; transition: all 0.2s; white-space: nowrap; cursor: pointer; user-select: none; }
         .sector-pill.active { background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff; border-color: #f59e0b; font-weight: bold; box-shadow: 0 0 10px rgba(245,158,11,0.4); }
-        #sector-scroll-wrapper { scroll-behavior: smooth; }
+        /* 啟用電腦桌機滑鼠拖曳與滾動支援 */
+        #sector-scroll-wrapper { scroll-behavior: smooth; cursor: grab; }
+        #sector-scroll-wrapper:active { cursor: grabbing; }
     </style>
 </head>
 <body class="flex flex-col min-h-screen select-none bg-[#07090e]">
@@ -73,7 +75,7 @@
             <button onclick="setWeightMetric('mcap')" id="weight-mcap" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">市值</button>
         </div>
 
-        <!-- 第三排：12大產業膠囊按鈕列 (獨立移到下一行，完美橫向滑動) -->
+        <!-- 第三排：12大產業膠囊按鈕列 (已完整啟用滑鼠滾輪與拖曳支援) -->
         <div class="flex items-center overflow-x-auto hide-scroll pt-1 border-t border-gray-800/60 py-1" id="sector-scroll-wrapper">
             <div id="sector-pill-container" class="flex space-x-1.5 shrink-0">
                 <!-- 動態插入產業按鈕 -->
@@ -125,6 +127,32 @@
             });
 
             window.addEventListener('resize', () => chartInstance.resize());
+
+            // 啟用電腦桌機滑鼠滾輪橫向滾動支援
+            const scrollWrapper = document.getElementById('sector-scroll-wrapper');
+            scrollWrapper.addEventListener('wheel', (evt) => {
+                evt.preventDefault();
+                scrollWrapper.scrollLeft += evt.deltaY;
+            });
+
+            // 啟用滑鼠左鍵按住拖曳滾動支援
+            let isDown = false;
+            let startX, scrollLeft;
+            scrollWrapper.addEventListener('mousedown', (e) => {
+                isDown = true;
+                startX = e.pageX - scrollWrapper.offsetLeft;
+                scrollLeft = scrollWrapper.scrollLeft;
+            });
+            scrollWrapper.addEventListener('mouseleave', () => isDown = false);
+            scrollWrapper.addEventListener('mouseup', () => isDown = false);
+            scrollWrapper.addEventListener('mousemove', (e) => {
+                if(!isDown) return;
+                e.preventDefault();
+                const x = e.pageX - scrollWrapper.offsetLeft;
+                const walk = (x - startX) * 1.5;
+                scrollWrapper.scrollLeft = scrollLeft - walk;
+            });
+
             loadMarketData();
         });
 
