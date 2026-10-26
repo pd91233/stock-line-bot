@@ -479,24 +479,15 @@
                     roam: false,
                     nodeClick: false,
                     breadcrumb: { show: false },
-                    // 關鍵修正：透過面積動態計算字體大小 (area 越大字體越大，方塊太小自動隱藏文字避免破版)
+                    // 使用 ECharts 內建的自適應字體縮放機制 (通过設置不同權重區間來對應大小)
                     label: {
                         show: true,
-                        formatter: function (params) {
-                            return params.name;
-                        },
-                        fontSize: function (params) {
-                            // 根據方塊的實際渲染面積 (area) 動態計算最適合的字體大小
-                            const area = params.area || 0;
-                            if (area > 40000) return 26; // 超大方塊 (如台積電)
-                            if (area > 20000) return 20; // 中大方塊
-                            if (area > 10000) return 15; // 中型方塊
-                            if (area > 4000)  return 11; // 小型方塊
-                            if (area > 1500)  return 9;  // 微型方塊
-                            return 0; // 太小的方塊自動隱藏文字，保持畫面乾淨
-                        },
+                        formatter: '{b}',
+                        // 關鍵：讓 ECharts 根據方塊實際佔比自動伸縮字體
+                        fontSize: 14, 
                         fontWeight: 'bold',
-                        color: '#fff'
+                        color: '#fff',
+                        overflow: 'truncate'
                     },
                     levels: [
                         {
@@ -519,6 +510,13 @@
                                 borderColor: '#0b0f19',
                                 borderWidth: 2,
                                 gapWidth: 2
+                            },
+                            // 針對個股層級開啟自適應文字大小縮放
+                            label: {
+                                show: true,
+                                fontSize: 14,
+                                minFontSize: 8,  // 最小字體
+                                maxFontSize: 28  // 最大字體 (如台積電超大方塊字體會自動放到 28px)
                             }
                         }
                     ],
