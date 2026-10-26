@@ -100,7 +100,7 @@
         </div>
     </div>
 
-    <!-- 主內容區 (使用 flex 確保圖表與底部色階條完美塞進畫面內) -->
+    <!-- 主內容區 -->
     <main class="flex-1 relative w-full bg-[#07090e] overflow-hidden flex flex-col">
         <div id="back-bar" class="absolute top-3 left-3 z-10 hidden">
             <button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur cursor-pointer">
@@ -108,26 +108,25 @@
             </button>
         </div>
 
-        <!-- 樹狀圖容器 (設定 flex-1 彈性佔滿剩餘高度) -->
         <div id="treemap-container" class="w-full flex-1 min-h-0"></div>
         <div id="list-container" class="absolute inset-0 overflow-y-auto p-3 space-y-2 hidden"></div>
 
-        <!-- 底部專業漲跌幅色階圖例條 (鎖死在畫面最下方，手機絕對看得到) -->
-        <div class="bg-gray-900 border-t border-gray-800 px-3 py-1.5 shrink-0 flex items-center justify-between text-[10px] text-gray-400 z-10">
-            <div class="flex items-center space-x-1.5 font-mono w-full justify-center sm:justify-between">
-                <span class="hidden sm:inline">跌幅過重</span>
-                <div class="flex h-3 w-full max-w-xs sm:w-48 rounded overflow-hidden shadow">
-                    <div class="flex-1 bg-[#086231]" title="< -9%"></div>
-                    <div class="flex-1 bg-[#096537]" title="-6% ~ -9%"></div>
-                    <div class="flex-1 bg-[#05994f]" title="-3% ~ -6%"></div>
-                    <div class="flex-1 bg-[#43bc7f]" title="0% ~ -3%"></div>
-                    <div class="flex-1 bg-[#c2c4cd]" title="0%"></div>
-                    <div class="flex-1 bg-[#f67d80]" title="0% ~ 3%"></div>
-                    <div class="flex-1 bg-[#f23645]" title="3% ~ 6%"></div>
-                    <div class="flex-1 bg-[#992029]" title="6% ~ 9%"></div>
-                    <div class="flex-1 bg-[#891826]" title="> 9%"></div>
-                </div>
-                <span class="hidden sm:inline">強勢漲停</span>
+        <!-- 底部專業漲跌幅色階圖例列 (完全對齊參考網站的 2% ~ -2% 數值與色帶) -->
+        <div class="bg-gray-900 border-t border-gray-800 px-3 py-2 shrink-0 flex flex-col space-y-1 z-10">
+            <div class="flex w-full h-5 rounded overflow-hidden shadow font-mono text-[11px] font-bold text-white text-center">
+                <div class="flex-1 bg-[#891826] flex items-center justify-center">2%</div>
+                <div class="flex-1 bg-[#992029] flex items-center justify-center">1.5%</div>
+                <div class="flex-1 bg-[#f23645] flex items-center justify-center">1%</div>
+                <div class="flex-1 bg-[#f67d80] flex items-center justify-center">0.5%</div>
+                <div class="flex-1 bg-[#c2c4cd] text-gray-900 flex items-center justify-center">0%</div>
+                <div class="flex-1 bg-[#43bc7f] flex items-center justify-center">-0.5%</div>
+                <div class="flex-1 bg-[#05994f] flex items-center justify-center">-1%</div>
+                <div class="flex-1 bg-[#096537] flex items-center justify-center">-1.5%</div>
+                <div class="flex-1 bg-[#086231] flex items-center justify-center">-2%</div>
+            </div>
+            <div class="flex justify-between items-center text-[10px] text-gray-400 font-mono px-1">
+                <span>🔴 紅漲綠跌專業色階</span>
+                <span id="legend-update-time">更新時間：--</span>
             </div>
         </div>
     </main>
@@ -197,6 +196,18 @@
             wrapper.scrollLeft += offset;
         }
 
+        // 格式化取得完整 年月日 時分秒
+        function getFullTimestamp() {
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            const hh = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            const ss = String(now.getSeconds()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+        }
+
         async function loadMarketData(force = false) {
             const btn = document.getElementById('refresh-btn');
             btn.innerHTML = '<span>⏳...</span>';
@@ -206,8 +217,9 @@
                 const json = await res.json();
                 if (json.status === 'ok') {
                     rawStocksData = json.stocks;
-                    const timeStr = json.updatedAt || new Date().toLocaleTimeString();
-                    document.getElementById('update-time').innerText = timeStr;
+                    const fullTimeStr = getFullTimestamp();
+                    document.getElementById('update-time').innerText = fullTimeStr;
+                    document.getElementById('legend-update-time').innerText = `更新時間：${fullTimeStr}`;
                     updateTopSummaryStats();
                     buildSectorPills();
                     renderChart();
@@ -353,15 +365,17 @@
             renderChart();
         }
 
+        // 精準對應圖例百分比刻度的色彩分級
         function getColorByChange(pct) {
-            if (pct >= 9) return '#891826';
-            if (pct >= 6) return '#992029';
-            if (pct >= 3) return '#f23645';
-            if (pct > 0) return '#f67d80';
+            if (pct >= 2.0) return '#891826';
+            if (pct >= 1.5) return '#992029';
+            if (pct >= 1.0) return '#f23645';
+            if (pct >= 0.5) return '#f67d80';
+            if (pct > 0) return '#fa9698';
             if (pct === 0) return '#c2c4cd';
-            if (pct >= -3) return '#43bc7f';
-            if (pct >= -6) return '#05994f';
-            if (pct >= -9) return '#096537';
+            if (pct >= -0.5) return '#43bc7f';
+            if (pct >= -1.0) return '#05994f';
+            if (pct >= -1.5) return '#096537';
             return '#086231';
         }
 
