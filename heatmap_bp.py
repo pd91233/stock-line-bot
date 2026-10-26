@@ -25,7 +25,7 @@ _market_cache = {
     "stocks_map": {}
 }
 
-# 27 大標準產業分類核心戰略池
+# 32 大全方位產業分類核心戰略池
 SECTOR_STOCKS = [
     # 1. 半導體
     {"symbol": "2330", "name": "台積電", "sector": "半導體", "market": "TSE", "mcap": 265000},
@@ -186,7 +186,27 @@ SECTOR_STOCKS = [
     # 26. 玻璃
     {"symbol": "1802", "name": "台玻", "sector": "玻璃", "market": "TSE", "mcap": 450},
 
-    # 27. 其他
+    # 27. 觀光
+    {"symbol": "2727", "name": "王品", "sector": "觀光", "market": "TSE", "mcap": 120},
+    {"symbol": "2707", "name": "晶華", "sector": "觀光", "market": "TSE", "mcap": 250},
+    {"symbol": "2723", "name": "美食-KY", "sector": "觀光", "market": "TSE", "mcap": 180},
+
+    # 28. 居家生活
+    {"symbol": "9938", "name": "百和", "sector": "居家生活", "market": "TSE", "mcap": 210},
+    {"symbol": "8926", "name": "台汽電", "sector": "居家生活", "market": "TSE", "mcap": 150},
+
+    # 29. 數位雲端
+    {"symbol": "6016", "name": "康和證", "sector": "數位雲端", "market": "OTC", "mcap": 150},
+
+    # 30. 資訊服務
+    {"symbol": "2471", "name": "資通", "sector": "資訊服務", "market": "TSE", "mcap": 110},
+    {"symbol": "3029", "name": "零壹", "sector": "資訊服務", "market": "OTC", "mcap": 220},
+
+    # 31. 造紙
+    {"symbol": "1905", "name": "華紙", "sector": "造紙", "market": "TSE", "mcap": 150},
+    {"symbol": "1907", "name": "永豐餘", "sector": "造紙", "market": "TSE", "mcap": 550},
+
+    # 32. 其他
     {"symbol": "2317", "name": "鴻海", "sector": "其他", "market": "TSE", "mcap": 29800},
     {"symbol": "2208", "name": "台船", "sector": "其他", "market": "TSE", "mcap": 195},
     {"symbol": "2634", "name": "漢翔", "sector": "其他", "market": "TSE", "mcap": 460},
@@ -372,7 +392,7 @@ def get_top_sectors_summary():
         })
 
     ranked.sort(key=lambda x: x["tradeValue"], reverse=True)
-    lines = [f"🔥 【盤中即時資金熱力速報】(共 27 大產業 / {len(stocks)} 檔核心指標股)"]
+    lines = [f"🔥 【盤中即時資金熱力速報】(共 32 大產業 / {len(stocks)} 檔核心指標股)"]
     for idx, r in enumerate(ranked[:6], 1):
         sign = "+" if r["avgChange"] > 0 else ""
         icon = "🔴" if r["avgChange"] > 0 else ("🟢" if r["avgChange"] < 0 else "⚪")
