@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>台股盤中即時資金熱力圖戰情室</title>
+    <title>台股 16 大產業戰略熱力圖戰情室</title>
     <!-- 引入 Tailwind CSS 與 ECharts -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
@@ -27,7 +27,7 @@
             <span class="text-lg">🔥</span>
             <div>
                 <div class="flex items-center space-x-1.5">
-                    <h1 class="text-xs font-bold tracking-wider text-white">台股 300 檔戰略熱力圖</h1>
+                    <h1 class="text-xs font-bold tracking-wider text-white">台股 16 大產業戰略熱力圖</h1>
                     <span class="bg-emerald-900/60 text-emerald-300 text-[9px] px-1 py-0.2 rounded border border-emerald-700/50">實盤</span>
                 </div>
                 <div class="flex items-center space-x-2 text-[10px] text-gray-400 mt-0.5 font-mono">
@@ -74,7 +74,7 @@
             <button onclick="setWeightMetric('mcap')" id="weight-mcap" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">市值</button>
         </div>
 
-        <!-- 第三與第四排：雙行對齊佈局 (1~6 / 7~12) -->
+        <!-- 第三與第四排：雙行對齊佈局 (1~8 產業 / 9~16 產業) -->
         <div class="pt-1 border-t border-gray-800/60 space-y-1">
             <div class="flex items-center space-x-2">
                 <div id="all-sector-container" class="shrink-0"></div>
@@ -273,8 +273,10 @@
 
             const sortedSectors = Object.keys(sectorMap).sort((a, b) => sectorMap[b].totalVal - sectorMap[a].totalVal);
 
-            const row1Sectors = sortedSectors.slice(0, 6);
-            const row2Sectors = sortedSectors.slice(6, 12);
+            // 將 16 大產業平分為兩行 (每行 8 個)
+            const mid = Math.ceil(sortedSectors.length / 2);
+            const row1Sectors = sortedSectors.slice(0, mid);
+            const row2Sectors = sortedSectors.slice(mid);
 
             const row1Container = document.getElementById('row1-container');
             let row1Html = '';
@@ -298,7 +300,7 @@
             const row2Container = document.getElementById('row2-container');
             let row2Html = '';
             row2Sectors.forEach((sec, idx) => {
-                const actualIdx = idx + 6;
+                const actualIdx = idx + mid;
                 const active = activeSectorFilter === sec ? 'active' : '';
                 const grp = sectorMap[sec];
                 const avgChg = grp.totalVal > 0 ? (grp.weightedChg / grp.totalVal).toFixed(2) : 0;
@@ -389,14 +391,11 @@
                     const sign = avgChg >= 0 ? '+' : '';
                     const groupTitle = `#${idx+1} ${sec}  ${sign}${avgChg}%  (${grp.totalVal.toFixed(1)}億)`;
 
-                    // 雙層智慧篩選邏輯：
-                    // 若處於「全部產業」總覽，則每個產業取成交額前 12 大菁英，讓畫面清爽大方；
-                    // 若點擊了特定產業鑽研，或處於個股模式，則解鎖顯示該產業所有 25-35 檔完整個股！
                     let sectorStocks = [...grp.stocks];
                     sectorStocks.sort((a, b) => b.tradeValue - a.tradeValue);
                     
                     if (activeSectorFilter === 'ALL' && !currentDrillSector) {
-                        sectorStocks = sectorStocks.slice(0, 12);
+                        sectorStocks = sectorStocks.slice(0, 10); // 總覽時每個產業取前 10 大菁英
                     }
 
                     let children = sectorStocks.map(st => {
