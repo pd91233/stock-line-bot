@@ -3598,34 +3598,29 @@ def handle_message(event):
     # 💥 產業資金熱力圖 (Flex 互動圖文卡片版)
     # ==========================================================
     if user_msg in ["熱力圖", "資金流向", "產業熱力圖"]:
-        # 1. 取得當下真實排行速報文字
         summary_text = get_top_sectors_summary()
         heatmap_url = "https://stock-line-bot-c8em.onrender.com/heatmap"
+        # 讓圖片帶有時間戳記參數 (?t=...) 確保 LINE 每次都抓取最新繪製的圖表而不被快取
+        heatmap_img_url = f"https://stock-line-bot-c8em.onrender.com/heatmap-image.png?t={int(time.time())}"
         
-        # 2. 構建高質感的 LINE Flex Message 圖文卡片
         flex_content = BubbleContainer(
+            # 💥 關鍵：加入 hero 圖片區塊，呈現紅色/綠色方塊熱力圖！
+            hero={
+                "type": "image",
+                "url": heatmap_img_url,
+                "size": "full",
+                "aspectRatio": "20:12",
+                "aspectMode": "cover",
+                "action": {
+                    "type": "uri",
+                    "uri": heatmap_url
+                }
+            },
             body=BoxComponent(
                 layout='vertical',
                 contents=[
-                    # 標題區
-                    BoxComponent(
-                        layout='horizontal',
-                        contents=[
-                            {
-                                "type": "text",
-                                "text": "🔥 盤中即時資金熱力圖",
-                                "weight": "bold",
-                                "size": "md",
-                                "color": "#ffffff"
-                            }
-                        ]
-                    ),
-                    # 分隔線
-                    {"type": "separator", "margin": "md", "color": "#334155"},
-                    # 即時速報內文
                     BoxComponent(
                         layout='vertical',
-                        margin="md",
                         contents=[{
                             "type": "text",
                             "text": summary_text,
@@ -3634,7 +3629,6 @@ def handle_message(event):
                             "color": "#f8fafc"
                         }]
                     ),
-                    # 點擊按鈕區 (點擊即可無縫開啟手機互動戰情室)
                     BoxComponent(
                         layout='vertical',
                         margin="lg",
@@ -3653,8 +3647,7 @@ def handle_message(event):
             )
         )
         
-        # 包裝成 Flex 訊息並透過統一中繼站發射 (自動帶有下方的快捷面板)
-        flex_msg = FlexSendMessage(alt_text="🔥 盤中即時資金熱力速報", contents=flex_content)
+        flex_msg = FlexSendMessage(alt_text="🔥 盤中即時資金熱力圖", contents=flex_content)
         smart_reply_with_menu(event, flex_msg)
         return
 
