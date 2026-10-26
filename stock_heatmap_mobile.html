@@ -15,7 +15,6 @@
         .tab-btn.active { background: #2563eb; color: #ffffff; border-color: #3b82f6; font-weight: bold; box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
         .sector-pill { background: #111827; border: 1px solid #374151; color: #9ca3af; transition: all 0.2s; white-space: nowrap; cursor: pointer; user-select: none; }
         .sector-pill.active { background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff; border-color: #f59e0b; font-weight: bold; box-shadow: 0 0 10px rgba(245,158,11,0.4); }
-        /* 手機滑鼠滾動支援 */
         #sector-scroll-wrapper { scroll-behavior: smooth; }
     </style>
 </head>
@@ -47,45 +46,43 @@
     </header>
 
     <!-- 頂部控制面板 -->
-    <div class="bg-gray-900/95 border-b border-gray-800 px-3 py-2 space-y-2 shrink-0 shadow-md z-20">
+    <div class="bg-gray-900/95 border-b border-gray-800 px-3 py-2.5 space-y-2.5 shrink-0 shadow-md z-20">
         
         <!-- 第一排：市場與模式切換按鍵 -->
         <div class="flex items-center justify-between text-xs">
             <div class="flex items-center space-x-1">
                 <span class="text-[11px] text-gray-400 mr-0.5">市場:</span>
-                <button onclick="setMarketFilter('ALL')" id="market-all" class="tab-btn active text-[11px] px-2 py-0.5 rounded">全部</button>
-                <button onclick="setMarketFilter('TSE')" id="market-tse" class="tab-btn text-[11px] px-2 py-0.5 rounded">上市</button>
-                <button onclick="setMarketFilter('OTC')" id="market-otc" class="tab-btn text-[11px] px-2 py-0.5 rounded">上櫃</button>
+                <button onclick="setMarketFilter('ALL')" id="market-all" class="tab-btn active text-[11px] px-2.5 py-0.5 rounded">全部</button>
+                <button onclick="setMarketFilter('TSE')" id="market-tse" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">上市</button>
+                <button onclick="setMarketFilter('OTC')" id="market-otc" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">上櫃</button>
             </div>
 
             <div class="flex items-center space-x-1">
                 <span class="text-[11px] text-gray-400 mr-0.5">視角:</span>
-                <button onclick="switchViewMode('heatmap')" id="btn-mode-heatmap" class="tab-btn active text-[11px] px-2 py-0.5 rounded">產業</button>
-                <button onclick="switchViewMode('stock_heatmap')" id="btn-mode-stock-heatmap" class="tab-btn text-[11px] px-2 py-0.5 rounded">個股</button>
-                <button onclick="switchViewMode('list')" id="btn-mode-list" class="tab-btn text-[11px] px-2 py-0.5 rounded">排行</button>
+                <button onclick="switchViewMode('heatmap')" id="btn-mode-heatmap" class="tab-btn active text-[11px] px-2.5 py-0.5 rounded">產業</button>
+                <button onclick="switchViewMode('stock_heatmap')" id="btn-mode-stock-heatmap" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">個股</button>
+                <button onclick="switchViewMode('list')" id="btn-mode-list" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">排行</button>
             </div>
         </div>
 
-        <!-- 第二排：權重與手機端最適合的單行橫向滑動產業膠囊列 -->
-        <div class="flex items-center justify-between pt-1 border-t border-gray-800/60 text-xs">
-            <div class="flex items-center space-x-1 shrink-0 mr-2">
-                <span class="text-[11px] text-gray-400 mr-0.5">權重:</span>
-                <button onclick="setWeightMetric('tradeValue')" id="weight-val" class="tab-btn active text-[11px] px-2 py-0.5 rounded">成交額</button>
-                <button onclick="setWeightMetric('tradeVolume')" id="weight-vol" class="tab-btn text-[11px] px-2 py-0.5 rounded">量</button>
-                <button onclick="setWeightMetric('mcap')" id="weight-mcap" class="tab-btn text-[11px] px-2 py-0.5 rounded">市值</button>
-            </div>
+        <!-- 第二排：權重按鈕 (獨立一行) -->
+        <div class="flex items-center space-x-1 pt-1.5 border-t border-gray-800/60 text-xs">
+            <span class="text-[11px] text-gray-400 mr-1">權重:</span>
+            <button onclick="setWeightMetric('tradeValue')" id="weight-val" class="tab-btn active text-[11px] px-2.5 py-0.5 rounded">成交額</button>
+            <button onclick="setWeightMetric('tradeVolume')" id="weight-vol" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">量</button>
+            <button onclick="setWeightMetric('mcap')" id="weight-mcap" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">市值</button>
+        </div>
 
-            <!-- 手機橫向平滑滾動列 (不佔用垂直空間) -->
-            <div class="flex items-center space-x-1 overflow-x-auto hide-scroll flex-1 py-0.5" id="sector-scroll-wrapper">
-                <div id="sector-pill-container" class="flex space-x-1.5 shrink-0">
-                    <!-- 動態插入產業按鈕 -->
-                </div>
+        <!-- 第三排：12大產業膠囊按鈕列 (獨立移到下一行，完美橫向滑動) -->
+        <div class="flex items-center overflow-x-auto hide-scroll pt-1 border-t border-gray-800/60 py-1" id="sector-scroll-wrapper">
+            <div id="sector-pill-container" class="flex space-x-1.5 shrink-0">
+                <!-- 動態插入產業按鈕 -->
             </div>
         </div>
     </div>
 
-    <!-- 主內容區：保證手機與電腦都能完美顯示與瀏覽熱力圖 -->
-    <main class="flex-1 relative w-full h-[72vh] min-h-[500px] bg-[#07090e]">
+    <!-- 主內容區 -->
+    <main class="flex-1 relative w-full h-[70vh] min-h-[500px] bg-[#07090e]">
         <div id="back-bar" class="absolute top-3 left-3 z-10 hidden">
             <button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur cursor-pointer">
                 <span>⬅ 返回全部總覽</span>
@@ -484,7 +481,7 @@
                                     <div class="text-[10px] text-red-400 font-bold mb-1">委買價 / 張數</div>
                                     ${(st.bids && st.bids.length > 0) ? st.bids.map(b => `<div class="flex justify-between font-mono py-0.5"><span class="text-red-400 font-bold">${b.price}</span><span class="text-gray-300">${b.size}</span></div>`).join('') : '<div class="text-gray-500 text-center py-2">無委買資料</div>'}
                                 </div>
-                                <div class="bg-gray-800/40 p-2 removed-lg border border-gray-800">
+                                <div class="bg-gray-800/40 p-2 rounded-lg border border-gray-800">
                                     <div class="text-[10px] text-emerald-400 font-bold mb-1">委賣價 / 張數</div>
                                     ${(st.asks && st.asks.length > 0) ? st.asks.map(a => `<div class="flex justify-between font-mono py-0.5"><span class="text-emerald-400 font-bold">${a.price}</span><span class="text-gray-300">${a.size}</span></div>`).join('') : '<div class="text-gray-500 text-center py-2">無委賣資料</div>'}
                                 </div>
