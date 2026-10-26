@@ -19,7 +19,7 @@
         .sector-scroll:active { cursor: grabbing; }
     </style>
 </head>
-<body class="flex flex-col min-h-screen select-none bg-[#07090e]">
+<body class="flex flex-col h-screen overflow-hidden select-none bg-[#07090e]">
 
     <!-- 頂部機構級戰情總覽列 -->
     <header class="bg-gray-900 border-b border-gray-800 px-3 py-2 flex items-center justify-between shrink-0">
@@ -46,8 +46,8 @@
         </div>
     </header>
 
-    <!-- 頂部控制面板 -->
-    <div class="bg-gray-900/95 border-b border-gray-800 px-3 py-2 space-y-2 shrink-0 shadow-md z-20">
+    <!-- 頂部控制面板 (設定 shrink-0 確保絕不被壓縮) -->
+    <div class="bg-gray-900/95 border-b border-gray-800 px-3 py-2 space-y-1.5 shrink-0 shadow-md z-20">
         
         <!-- 第一排：市場與模式切換按鍵 -->
         <div class="flex items-center justify-between text-xs">
@@ -67,7 +67,7 @@
         </div>
 
         <!-- 第二排：權重按鈕 -->
-        <div class="flex items-center space-x-1 pt-1.5 border-t border-gray-800/60 text-xs">
+        <div class="flex items-center space-x-1 pt-1 border-t border-gray-800/60 text-xs">
             <span class="text-[11px] text-gray-400 mr-1">權重:</span>
             <button onclick="setWeightMetric('tradeValue')" id="weight-val" class="tab-btn active text-[11px] px-2.5 py-0.5 rounded">成交額</button>
             <button onclick="setWeightMetric('tradeVolume')" id="weight-vol" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">量</button>
@@ -75,41 +75,32 @@
         </div>
 
         <!-- 第三排與第四排：雙行對齊佈局 -->
-        <div class="pt-1.5 border-t border-gray-800/60 space-y-1.5">
+        <div class="pt-1 border-t border-gray-800/60 space-y-1">
             
             <!-- 第一行：左側【全部產業】 + 右側【1~6產業】(附左右箭頭) -->
             <div class="flex items-center space-x-2">
-                <div id="all-sector-container" class="shrink-0">
-                    <!-- 動態插入全部產業按鈕 -->
-                </div>
+                <div id="all-sector-container" class="shrink-0"></div>
 
-                <div class="flex items-center space-x-1 flex-1 overflow-hidden bg-gray-950/40 p-1 rounded-lg border border-gray-800/80">
-                    <button onclick="scrollBar('row1-wrapper', -200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2.5 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">◀</button>
+                <div class="flex items-center space-x-1 flex-1 overflow-hidden bg-gray-950/40 px-1.5 py-0.5 rounded-lg border border-gray-800/80">
+                    <button onclick="scrollBar('row1-wrapper', -200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">◀</button>
                     
                     <div id="row1-wrapper" class="sector-scroll flex space-x-1.5 overflow-x-auto hide-scroll flex-1 py-0.5">
-                        <div id="row1-container" class="flex space-x-1.5 shrink-0">
-                            <!-- 動態插入 1~6 產業 -->
-                        </div>
+                        <div id="row1-container" class="flex space-x-1.5 shrink-0"></div>
                     </div>
 
-                    <button onclick="scrollBar('row1-wrapper', 200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2.5 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">▶</button>
+                    <button onclick="scrollBar('row1-wrapper', 200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">▶</button>
                 </div>
             </div>
 
-            <!-- 第二行：左側留白對齊 + 右側【7~12產業】(附左右箭頭，與上方完全對齊) -->
+            <!-- 第二行：左側留白對齊 + 右側【7~12產業】 -->
             <div class="flex items-center space-x-2">
-                <!-- 佔位符，讓右側群組精準對齊上方 -->
-                <div class="shrink-0 opacity-0 pointer-events-none" style="width: 92px;">
-                    <button class="text-[11px] px-3 py-1.5">佔位</button>
-                </div>
+                <div class="shrink-0 opacity-0 pointer-events-none" style="width: 92px;"></div>
 
-                <div class="flex items-center space-x-1 flex-1 overflow-hidden bg-gray-950/40 p-1 rounded-lg border border-gray-800/80">
-                    <button onclick="scrollBar('row2-wrapper', -200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2.5 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">◀</button>
+                <div class="flex items-center space-x-1 flex-1 overflow-hidden bg-gray-950/40 px-1.5 py-0.5 rounded-lg border border-gray-800/80">
+                    <button onclick="scrollBar('row2-wrapper', -200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">◀</button>
                     
                     <div id="row2-wrapper" class="sector-scroll flex space-x-1.5 overflow-x-auto hide-scroll flex-1 py-0.5">
-                        <div id="row2-container" class="flex space-x-1.5 shrink-0">
-                            <!-- 動態插入 7~12 產業 -->
-                        </div>
+                        <div id="row2-container" class="flex space-x-1.5 shrink-0"></div>
                     </div>
 
                     <button onclick="scrollBar('row2-wrapper', 200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2.5 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">▶</button>
@@ -119,8 +110,8 @@
         </div>
     </div>
 
-    <!-- 主內容區 -->
-    <main class="flex-1 relative w-full h-[68vh] min-h-[500px] bg-[#07090e]">
+    <!-- 主內容區：改為 flex-1 彈性佔滿剩餘所有視窗空間，絕不留白 -->
+    <main class="flex-1 relative w-full bg-[#07090e] overflow-hidden">
         <div id="back-bar" class="absolute top-3 left-3 z-10 hidden">
             <button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur cursor-pointer">
                 <span>⬅ 返回全部總覽</span>
@@ -164,7 +155,6 @@
 
             window.addEventListener('resize', () => chartInstance.resize());
 
-            // 啟用兩行捲動區的滑鼠拖曳與滾輪支援
             ['row1-wrapper', 'row2-wrapper'].forEach(id => {
                 const wrapper = document.getElementById(id);
                 wrapper.addEventListener('wheel', (evt) => {
@@ -280,12 +270,10 @@
         }
 
         function buildSectorPills() {
-            // 1. 渲染左側獨立的「全部產業」按鈕
             const allContainer = document.getElementById('all-sector-container');
             const allActive = activeSectorFilter === 'ALL' ? 'active' : '';
             allContainer.innerHTML = `<button onclick="filterSector('ALL')" class="sector-pill ${allActive} text-[11px] px-3 py-1.5 rounded-lg font-medium shrink-0 flex items-center space-x-1"><span>🔥 全部產業</span></button>`;
 
-            // 2. 取得所有產業並依成交額排序
             const sectorMap = {};
             rawStocksData.forEach(s => {
                 if (!sectorMap[s.sector]) sectorMap[s.sector] = { totalVal: 0, weightedChg: 0 };
@@ -295,11 +283,9 @@
 
             const sortedSectors = Object.keys(sectorMap).sort((a, b) => sectorMap[b].totalVal - sectorMap[a].totalVal);
 
-            // 3. 分割為 1~6 產業 (第一行) 與 7~12 產業 (第二行)
             const row1Sectors = sortedSectors.slice(0, 6);
             const row2Sectors = sortedSectors.slice(6, 12);
 
-            // 渲染 Row 1 (1~6)
             const row1Container = document.getElementById('row1-container');
             let row1Html = '';
             row1Sectors.forEach((sec, idx) => {
@@ -319,11 +305,10 @@
             });
             row1Container.innerHTML = row1Html;
 
-            // 渲染 Row 2 (7~12)
             const row2Container = document.getElementById('row2-container');
             let row2Html = '';
             row2Sectors.forEach((sec, idx) => {
-                const actualIdx = idx + 6; // 第 7 到第 12 名
+                const actualIdx = idx + 6;
                 const active = activeSectorFilter === sec ? 'active' : '';
                 const grp = sectorMap[sec];
                 const avgChg = grp.totalVal > 0 ? (grp.weightedChg / grp.totalVal).toFixed(2) : 0;
