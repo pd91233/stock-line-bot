@@ -396,13 +396,22 @@
             let treeSeriesData = [];
 
             if (currentViewMode === 'stock_heatmap') {
+                // 先算出最大權重作為字體大小縮放基準
+                let maxVal = Math.max(...dataFiltered.map(st => st[currentWeightMetric] || st.tradeValue || 1), 1);
+
                 let children = dataFiltered.map(st => {
                     let val = st[currentWeightMetric] || st.tradeValue || 1;
                     if (val <= 0) val = 0.5;
+
+                    // 核心強效計算：根據數值比例動態決定字體大小 (範圍 10px ~ 32px)
+                    let ratio = val / maxVal;
+                    let dynamicFontSize = Math.round(10 + ratio * 22);
+
                     return {
                         name: `${st.name}\n${st.price} (${st.changePercent >= 0 ? '+' : ''}${st.changePercent}%)`,
                         value: val,
                         itemStyle: { color: getColorByChange(st.changePercent) },
+                        label: { fontSize: dynamicFontSize }, // 每個方塊直接賦予獨立字體大小
                         symbol: st.symbol,
                         type: 'stock',
                         raw: st
@@ -434,13 +443,22 @@
                         sectorStocks = sectorStocks.slice(0, 6);
                     }
 
+                    // 算出該產業群組內的最大個股權重，用來精準計算字體級距
+                    let maxStockVal = Math.max(...sectorStocks.map(st => st[currentWeightMetric] || st.tradeValue || 1), 1);
+
                     let children = sectorStocks.map(st => {
                         let val = st[currentWeightMetric] || st.tradeValue || 1;
                         if (val <= 0) val = 0.5;
+
+                        // 核心強效計算：動態賦予字體大小 (範圍 10px ~ 30px)
+                        let ratio = val / maxStockVal;
+                        let dynamicFontSize = Math.round(10 + ratio * 20);
+
                         return {
                             name: `${st.name}\n${st.price} (${st.changePercent >= 0 ? '+' : ''}${st.changePercent}%)`,
                             value: val,
                             itemStyle: { color: getColorByChange(st.changePercent) },
+                            label: { fontSize: dynamicFontSize }, // 獨立寫入字體大小
                             symbol: st.symbol,
                             type: 'stock',
                             raw: st
@@ -479,47 +497,26 @@
                     roam: false,
                     nodeClick: false,
                     breadcrumb: { show: false },
-                    // 使用 ECharts 內建的自適應字體縮放機制 (通过設置不同權重區間來對應大小)
                     label: {
                         show: true,
                         formatter: '{b}',
-                        // 關鍵：讓 ECharts 根據方塊實際佔比自動伸縮字體
-                        fontSize: 14, 
                         fontWeight: 'bold',
                         color: '#fff',
                         overflow: 'truncate'
                     },
-                    levels: [
-                        {
-                            itemStyle: {
-                                borderColor: '#0b0f19',
-                                borderWidth: 3,
-                                gapWidth: 3
-                            },
-                            upperLabel: {
-                                show: true,
-                                height: 26,
-                                fontSize: 13,
-                                fontWeight: 'bold',
-                                color: '#ffffff',
-                                backgroundColor: 'rgba(15,23,42,0.9)'
-                            }
-                        },
-                        {
-                            itemStyle: {
-                                borderColor: '#0b0f19',
-                                borderWidth: 2,
-                                gapWidth: 2
-                            },
-                            // 針對個股層級開啟自適應文字大小縮放
-                            label: {
-                                show: true,
-                                fontSize: 14,
-                                minFontSize: 8,  // 最小字體
-                                maxFontSize: 28  // 最大字體 (如台積電超大方塊字體會自動放到 28px)
-                            }
-                        }
-                    ],
+                    upperLabel: {
+                        show: true,
+                        height: 26,
+                        fontSize: 13,
+                        fontWeight: 'bold',
+                        color: '#ffffff',
+                        backgroundColor: 'rgba(15,23,42,0.9)'
+                    },
+                    itemStyle: {
+                        borderColor: '#0b0f19',
+                        borderWidth: 2,
+                        gapWidth: 2
+                    },
                     data: treeSeriesData
                 }]
             };
