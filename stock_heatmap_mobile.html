@@ -100,7 +100,7 @@
         </div>
     </div>
 
-    <!-- 主內容區 -->
+    <!-- 主內容區 (使用 flex 確保圖表與底部色階條完美塞進畫面內) -->
     <main class="flex-1 relative w-full bg-[#07090e] overflow-hidden flex flex-col">
         <div id="back-bar" class="absolute top-3 left-3 z-10 hidden">
             <button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur cursor-pointer">
@@ -108,14 +108,15 @@
             </button>
         </div>
 
-        <div id="treemap-container" class="w-full flex-1"></div>
+        <!-- 樹狀圖容器 (設定 flex-1 彈性佔滿剩餘高度) -->
+        <div id="treemap-container" class="w-full flex-1 min-h-0"></div>
         <div id="list-container" class="absolute inset-0 overflow-y-auto p-3 space-y-2 hidden"></div>
 
-        <!-- 底部專業漲跌幅色階圖例條 (與專業看盤軟體完美對齊) -->
-        <div class="bg-gray-900/90 border-t border-gray-800 px-2 py-1 shrink-0 flex items-center justify-between text-[10px] text-gray-400">
-            <div class="flex items-center space-x-1 font-mono">
-                <span>跌幅過重</span>
-                <div class="flex h-3 w-48 rounded overflow-hidden">
+        <!-- 底部專業漲跌幅色階圖例條 (鎖死在畫面最下方，手機絕對看得到) -->
+        <div class="bg-gray-900 border-t border-gray-800 px-3 py-1.5 shrink-0 flex items-center justify-between text-[10px] text-gray-400 z-10">
+            <div class="flex items-center space-x-1.5 font-mono w-full justify-center sm:justify-between">
+                <span class="hidden sm:inline">跌幅過重</span>
+                <div class="flex h-3 w-full max-w-xs sm:w-48 rounded overflow-hidden shadow">
                     <div class="flex-1 bg-[#086231]" title="< -9%"></div>
                     <div class="flex-1 bg-[#096537]" title="-6% ~ -9%"></div>
                     <div class="flex-1 bg-[#05994f]" title="-3% ~ -6%"></div>
@@ -126,9 +127,8 @@
                     <div class="flex-1 bg-[#992029]" title="6% ~ 9%"></div>
                     <div class="flex-1 bg-[#891826]" title="> 9%"></div>
                 </div>
-                <span>強勢漲停</span>
+                <span class="hidden sm:inline">強勢漲停</span>
             </div>
-            <div class="font-mono text-[11px]" id="legend-update-time">--:--:--</div>
         </div>
     </main>
 
@@ -208,7 +208,6 @@
                     rawStocksData = json.stocks;
                     const timeStr = json.updatedAt || new Date().toLocaleTimeString();
                     document.getElementById('update-time').innerText = timeStr;
-                    document.getElementById('legend-update-time').innerText = `更新時間：${timeStr}`;
                     updateTopSummaryStats();
                     buildSectorPills();
                     renderChart();
@@ -354,7 +353,6 @@
             renderChart();
         }
 
-        // 精準對應底部色階圖例的專業色彩分級
         function getColorByChange(pct) {
             if (pct >= 9) return '#891826';
             if (pct >= 6) return '#992029';
