@@ -9,77 +9,83 @@
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
         body { background-color: #0b0f19; color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
         .tab-btn { background: #1e293b; color: #94a3b8; border: 1px solid #334155; transition: all 0.2s; cursor: pointer; }
         .tab-btn.active { background: #2563eb; color: #ffffff; border-color: #3b82f6; font-weight: bold; box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
         .sector-pill { background: #111827; border: 1px solid #374151; color: #9ca3af; transition: all 0.2s; white-space: nowrap; cursor: pointer; user-select: none; }
         .sector-pill.active { background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff; border-color: #f59e0b; font-weight: bold; box-shadow: 0 0 10px rgba(245,158,11,0.4); }
+        /* 手機滑鼠滾動支援 */
+        #sector-scroll-wrapper { scroll-behavior: smooth; }
     </style>
 </head>
-<body class="flex flex-col h-screen overflow-hidden select-none">
+<body class="flex flex-col min-h-screen select-none bg-[#07090e]">
 
     <!-- 頂部機構級戰情總覽列 -->
-    <header class="bg-gray-900 border-b border-gray-800 px-4 py-2.5 flex items-center justify-between shrink-0">
-        <div class="flex items-center space-x-3">
-            <span class="text-xl">🔥</span>
+    <header class="bg-gray-900 border-b border-gray-800 px-3 py-2 flex items-center justify-between shrink-0">
+        <div class="flex items-center space-x-2">
+            <span class="text-lg">🔥</span>
             <div>
-                <div class="flex items-center space-x-2">
-                    <h1 class="text-sm font-bold tracking-wider text-white">台股盤中即時資金熱力圖</h1>
-                    <span class="bg-emerald-900/60 text-emerald-300 text-[10px] px-1.5 py-0.5 rounded border border-emerald-700/50">富果 API 實盤</span>
+                <div class="flex items-center space-x-1.5">
+                    <h1 class="text-xs font-bold tracking-wider text-white">台股即時資金熱力圖</h1>
+                    <span class="bg-emerald-900/60 text-emerald-300 text-[9px] px-1 py-0.2 rounded border border-emerald-700/50">實盤</span>
                 </div>
-                <div class="flex items-center space-x-3 text-[11px] text-gray-400 mt-0.5 font-mono">
+                <div class="flex items-center space-x-2 text-[10px] text-gray-400 mt-0.5 font-mono">
                     <span>總額: <strong id="stat-total-val" class="text-white">-- 億</strong></span>
                     <span>•</span>
-                    <span>平均漲跌: <strong id="stat-avg-chg" class="text-red-400">--%</strong></span>
+                    <span>平均: <strong id="stat-avg-chg" class="text-red-400">--%</strong></span>
                     <span>•</span>
-                    <span id="update-time" class="text-emerald-400">載入中...</span>
+                    <span id="update-time" class="text-emerald-400">載入中</span>
                 </div>
             </div>
         </div>
-        <div class="flex items-center space-x-2">
-            <button onclick="triggerRefresh()" id="refresh-btn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition flex items-center space-x-1 shadow-lg shadow-blue-900/30 active:scale-95 cursor-pointer">
+        <div class="flex items-center space-x-1">
+            <button onclick="triggerRefresh()" id="refresh-btn" class="bg-blue-600 hover:bg-blue-500 text-white text-[11px] px-2.5 py-1 rounded-md font-medium transition shadow cursor-pointer">
                 <span>⚡ 重新整理</span>
             </button>
         </div>
     </header>
 
-    <!-- 頂部全按鍵導航控制面板 (改為多行自動換行排版) -->
-    <div class="bg-gray-900/90 border-b border-gray-800 px-3 py-2.5 space-y-2 shrink-0">
+    <!-- 頂部控制面板 -->
+    <div class="bg-gray-900/95 border-b border-gray-800 px-3 py-2 space-y-2 shrink-0 shadow-md z-20">
         
         <!-- 第一排：市場與模式切換按鍵 -->
-        <div class="flex items-center justify-between flex-wrap gap-2">
-            <div class="flex items-center space-x-1.5">
-                <span class="text-[11px] text-gray-400 mr-1">市場:</span>
-                <button onclick="setMarketFilter('ALL')" id="market-all" class="tab-btn active text-xs px-2.5 py-1 rounded-md">全部</button>
-                <button onclick="setMarketFilter('TSE')" id="market-tse" class="tab-btn text-xs px-2.5 py-1 rounded-md">上市</button>
-                <button onclick="setMarketFilter('OTC')" id="market-otc" class="tab-btn text-xs px-2.5 py-1 rounded-md">上櫃</button>
+        <div class="flex items-center justify-between text-xs">
+            <div class="flex items-center space-x-1">
+                <span class="text-[11px] text-gray-400 mr-0.5">市場:</span>
+                <button onclick="setMarketFilter('ALL')" id="market-all" class="tab-btn active text-[11px] px-2 py-0.5 rounded">全部</button>
+                <button onclick="setMarketFilter('TSE')" id="market-tse" class="tab-btn text-[11px] px-2 py-0.5 rounded">上市</button>
+                <button onclick="setMarketFilter('OTC')" id="market-otc" class="tab-btn text-[11px] px-2 py-0.5 rounded">上櫃</button>
             </div>
 
-            <div class="flex items-center space-x-1.5">
-                <span class="text-[11px] text-gray-400 mr-1">視角:</span>
-                <button onclick="switchViewMode('heatmap')" id="btn-mode-heatmap" class="tab-btn active text-xs px-2.5 py-1 rounded-md">產業熱力圖</button>
-                <button onclick="switchViewMode('stock_heatmap')" id="btn-mode-stock-heatmap" class="tab-btn text-xs px-2.5 py-1 rounded-md">個股熱力圖</button>
-                <button onclick="switchViewMode('list')" id="btn-mode-list" class="tab-btn text-xs px-2.5 py-1 rounded-md">手機排行表</button>
+            <div class="flex items-center space-x-1">
+                <span class="text-[11px] text-gray-400 mr-0.5">視角:</span>
+                <button onclick="switchViewMode('heatmap')" id="btn-mode-heatmap" class="tab-btn active text-[11px] px-2 py-0.5 rounded">產業</button>
+                <button onclick="switchViewMode('stock_heatmap')" id="btn-mode-stock-heatmap" class="tab-btn text-[11px] px-2 py-0.5 rounded">個股</button>
+                <button onclick="switchViewMode('list')" id="btn-mode-list" class="tab-btn text-[11px] px-2 py-0.5 rounded">排行</button>
             </div>
         </div>
 
-        <!-- 第二排：權重切換按鍵與多行自動換行的產業膠囊按鈕群 -->
-        <div class="pt-2 border-t border-gray-800/60 space-y-2">
-            <div class="flex items-center space-x-1.5">
-                <span class="text-[11px] text-gray-400 mr-1">權重:</span>
-                <button onclick="setWeightMetric('tradeValue')" id="weight-val" class="tab-btn active text-xs px-2.5 py-1 rounded-md">成交額</button>
-                <button onclick="setWeightMetric('tradeVolume')" id="weight-vol" class="tab-btn text-xs px-2.5 py-1 rounded-md">成交量</button>
-                <button onclick="setWeightMetric('mcap')" id="weight-mcap" class="tab-btn text-xs px-2.5 py-1 rounded-md">市值</button>
+        <!-- 第二排：權重與手機端最適合的單行橫向滑動產業膠囊列 -->
+        <div class="flex items-center justify-between pt-1 border-t border-gray-800/60 text-xs">
+            <div class="flex items-center space-x-1 shrink-0 mr-2">
+                <span class="text-[11px] text-gray-400 mr-0.5">權重:</span>
+                <button onclick="setWeightMetric('tradeValue')" id="weight-val" class="tab-btn active text-[11px] px-2 py-0.5 rounded">成交額</button>
+                <button onclick="setWeightMetric('tradeVolume')" id="weight-vol" class="tab-btn text-[11px] px-2 py-0.5 rounded">量</button>
+                <button onclick="setWeightMetric('mcap')" id="weight-mcap" class="tab-btn text-[11px] px-2 py-0.5 rounded">市值</button>
             </div>
 
-            <!-- 產業膠囊容器：採用 flex-wrap 自動多行排列，所有 12 產業一目了然！ -->
-            <div id="sector-pill-container" class="flex flex-wrap gap-1.5 pt-0.5">
-                <!-- 動態插入產業按鈕 -->
+            <!-- 手機橫向平滑滾動列 (不佔用垂直空間) -->
+            <div class="flex items-center space-x-1 overflow-x-auto hide-scroll flex-1 py-0.5" id="sector-scroll-wrapper">
+                <div id="sector-pill-container" class="flex space-x-1.5 shrink-0">
+                    <!-- 動態插入產業按鈕 -->
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- 主內容區 -->
-    <main class="flex-1 relative overflow-hidden bg-[#07090e]">
+    <!-- 主內容區：保證手機與電腦都能完美顯示與瀏覽熱力圖 -->
+    <main class="flex-1 relative w-full h-[72vh] min-h-[500px] bg-[#07090e]">
         <div id="back-bar" class="absolute top-3 left-3 z-10 hidden">
             <button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur cursor-pointer">
                 <span>⬅ 返回全部總覽</span>
@@ -127,7 +133,7 @@
 
         async function loadMarketData(force = false) {
             const btn = document.getElementById('refresh-btn');
-            btn.innerHTML = '<span>⏳ 更新中...</span>';
+            btn.innerHTML = '<span>⏳...</span>';
             try {
                 const url = force ? '/api/heatmap/snapshot?force=1' : '/api/heatmap/snapshot';
                 const res = await fetch(url);
@@ -219,7 +225,7 @@
             const sortedSectors = Object.keys(sectorMap).sort((a, b) => sectorMap[b].totalVal - sectorMap[a].totalVal);
 
             const allActive = activeSectorFilter === 'ALL' ? 'active' : '';
-            let html = `<button onclick="filterSector('ALL')" class="sector-pill ${allActive} text-xs px-3 py-1.5 rounded-lg flex items-center space-x-1.5 font-medium"><span>🔥 全部產業</span></button>`;
+            let html = `<button onclick="filterSector('ALL')" class="sector-pill ${allActive} text-[11px] px-2.5 py-1 rounded-md shrink-0"><span>🔥 全部產業</span></button>`;
             
             sortedSectors.forEach((sec, idx) => {
                 const active = activeSectorFilter === sec ? 'active' : '';
@@ -229,10 +235,10 @@
                 const colorClass = avgChg >= 0 ? 'text-red-400' : 'text-emerald-400';
 
                 html += `
-                    <button onclick="filterSector('${sec}')" class="sector-pill ${active} text-xs px-3 py-1.5 rounded-lg flex items-center space-x-1.5">
+                    <button onclick="filterSector('${sec}')" class="sector-pill ${active} text-[11px] px-2.5 py-1 rounded-md shrink-0 flex items-center space-x-1">
                         <span class="font-bold">#${idx+1} ${sec}</span>
-                        <span class="text-gray-400 font-mono text-[11px]">${grp.totalVal.toFixed(1)}億</span>
-                        <span class="font-mono font-bold ${colorClass} text-[11px]">${sign}${avgChg}%</span>
+                        <span class="text-gray-400 font-mono">${grp.totalVal.toFixed(1)}億</span>
+                        <span class="font-mono font-bold ${colorClass}">${sign}${avgChg}%</span>
                     </button>
                 `;
             });
@@ -478,7 +484,7 @@
                                     <div class="text-[10px] text-red-400 font-bold mb-1">委買價 / 張數</div>
                                     ${(st.bids && st.bids.length > 0) ? st.bids.map(b => `<div class="flex justify-between font-mono py-0.5"><span class="text-red-400 font-bold">${b.price}</span><span class="text-gray-300">${b.size}</span></div>`).join('') : '<div class="text-gray-500 text-center py-2">無委買資料</div>'}
                                 </div>
-                                <div class="bg-gray-800/40 p-2 rounded-lg border border-gray-800">
+                                <div class="bg-gray-800/40 p-2 removed-lg border border-gray-800">
                                     <div class="text-[10px] text-emerald-400 font-bold mb-1">委賣價 / 張數</div>
                                     ${(st.asks && st.asks.length > 0) ? st.asks.map(a => `<div class="flex justify-between font-mono py-0.5"><span class="text-emerald-400 font-bold">${a.price}</span><span class="text-gray-300">${a.size}</span></div>`).join('') : '<div class="text-gray-500 text-center py-2">無委賣資料</div>'}
                                 </div>
