@@ -9,15 +9,10 @@
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
         body { background-color: #0b0f19; color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        .hide-scroll::-webkit-scrollbar { display: none; }
-        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
         .tab-btn { background: #1e293b; color: #94a3b8; border: 1px solid #334155; transition: all 0.2s; cursor: pointer; }
         .tab-btn.active { background: #2563eb; color: #ffffff; border-color: #3b82f6; font-weight: bold; box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
         .sector-pill { background: #111827; border: 1px solid #374151; color: #9ca3af; transition: all 0.2s; white-space: nowrap; cursor: pointer; user-select: none; }
         .sector-pill.active { background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff; border-color: #f59e0b; font-weight: bold; box-shadow: 0 0 10px rgba(245,158,11,0.4); }
-        /* 讓按鈕容器支援平滑滾動與拖曳 */
-        #sector-scroll-wrapper { scroll-behavior: smooth; cursor: grab; }
-        #sector-scroll-wrapper:active { cursor: grabbing; }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden select-none">
@@ -47,19 +42,19 @@
         </div>
     </header>
 
-    <!-- 頂部全按鍵導航控制面板 -->
-    <div class="bg-gray-900/90 border-b border-gray-800 px-3 py-2 space-y-2 shrink-0">
+    <!-- 頂部全按鍵導航控制面板 (改為多行自動換行排版) -->
+    <div class="bg-gray-900/90 border-b border-gray-800 px-3 py-2.5 space-y-2 shrink-0">
         
         <!-- 第一排：市場與模式切換按鍵 -->
-        <div class="flex items-center justify-between overflow-x-auto hide-scroll pb-0.5">
-            <div class="flex items-center space-x-1.5 shrink-0">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center space-x-1.5">
                 <span class="text-[11px] text-gray-400 mr-1">市場:</span>
                 <button onclick="setMarketFilter('ALL')" id="market-all" class="tab-btn active text-xs px-2.5 py-1 rounded-md">全部</button>
                 <button onclick="setMarketFilter('TSE')" id="market-tse" class="tab-btn text-xs px-2.5 py-1 rounded-md">上市</button>
                 <button onclick="setMarketFilter('OTC')" id="market-otc" class="tab-btn text-xs px-2.5 py-1 rounded-md">上櫃</button>
             </div>
 
-            <div class="flex items-center space-x-1.5 shrink-0">
+            <div class="flex items-center space-x-1.5">
                 <span class="text-[11px] text-gray-400 mr-1">視角:</span>
                 <button onclick="switchViewMode('heatmap')" id="btn-mode-heatmap" class="tab-btn active text-xs px-2.5 py-1 rounded-md">產業熱力圖</button>
                 <button onclick="switchViewMode('stock_heatmap')" id="btn-mode-stock-heatmap" class="tab-btn text-xs px-2.5 py-1 rounded-md">個股熱力圖</button>
@@ -67,26 +62,18 @@
             </div>
         </div>
 
-        <!-- 第二排：權重切換按鍵與帶有導航箭頭的產業膠囊選單 -->
-        <div class="flex items-center justify-between pt-1 border-t border-gray-800/60">
-            <div class="flex items-center space-x-1.5 shrink-0 mr-3">
+        <!-- 第二排：權重切換按鍵與多行自動換行的產業膠囊按鈕群 -->
+        <div class="pt-2 border-t border-gray-800/60 space-y-2">
+            <div class="flex items-center space-x-1.5">
                 <span class="text-[11px] text-gray-400 mr-1">權重:</span>
                 <button onclick="setWeightMetric('tradeValue')" id="weight-val" class="tab-btn active text-xs px-2.5 py-1 rounded-md">成交額</button>
                 <button onclick="setWeightMetric('tradeVolume')" id="weight-vol" class="tab-btn text-xs px-2.5 py-1 rounded-md">成交量</button>
                 <button onclick="setWeightMetric('mcap')" id="weight-mcap" class="tab-btn text-xs px-2.5 py-1 rounded-md">市值</button>
             </div>
 
-            <!-- 電腦滑鼠輔助滾動容器與左右箭頭 -->
-            <div class="flex items-center space-x-1 overflow-hidden flex-1 ml-2">
-                <button onclick="scrollSectorBar(-200)" class="bg-gray-800 hover:bg-gray-700 text-gray-300 px-2 py-1 rounded text-xs shrink-0 cursor-pointer shadow">◀</button>
-                
-                <div id="sector-scroll-wrapper" class="flex space-x-2 overflow-x-auto hide-scroll flex-1 py-0.5">
-                    <div id="sector-pill-container" class="flex space-x-2 shrink-0">
-                        <!-- 動態插入產業按鈕 -->
-                    </div>
-                </div>
-
-                <button onclick="scrollSectorBar(200)" class="bg-gray-800 hover:bg-gray-700 text-gray-300 px-2 py-1 rounded text-xs shrink-0 cursor-pointer shadow">▶</button>
+            <!-- 產業膠囊容器：採用 flex-wrap 自動多行排列，所有 12 產業一目了然！ -->
+            <div id="sector-pill-container" class="flex flex-wrap gap-1.5 pt-0.5">
+                <!-- 動態插入產業按鈕 -->
             </div>
         </div>
     </div>
@@ -135,39 +122,8 @@
             });
 
             window.addEventListener('resize', () => chartInstance.resize());
-
-            // 啟用電腦滑鼠滾輪橫向滾動支援
-            const scrollWrapper = document.getElementById('sector-scroll-wrapper');
-            scrollWrapper.addEventListener('wheel', (evt) => {
-                evt.preventDefault();
-                scrollWrapper.scrollLeft += evt.deltaY;
-            });
-
-            // 啟用滑鼠左鍵按住拖曳滾動
-            let isDown = false;
-            let startX, scrollLeft;
-            scrollWrapper.addEventListener('mousedown', (e) => {
-                isDown = true;
-                startX = e.pageX - scrollWrapper.offsetLeft;
-                scrollLeft = scrollWrapper.scrollLeft;
-            });
-            scrollWrapper.addEventListener('mouseleave', () => isDown = false);
-            scrollWrapper.addEventListener('mouseup', () => isDown = false);
-            scrollWrapper.addEventListener('mousemove', (e) => {
-                if(!isDown) return;
-                e.preventDefault();
-                const x = e.pageX - scrollWrapper.offsetLeft;
-                const walk = (x - startX) * 1.5;
-                scrollWrapper.scrollLeft = scrollLeft - walk;
-            });
-
             loadMarketData();
         });
-
-        function scrollSectorBar(offset) {
-            const wrapper = document.getElementById('sector-scroll-wrapper');
-            wrapper.scrollLeft += offset;
-        }
 
         async function loadMarketData(force = false) {
             const btn = document.getElementById('refresh-btn');
@@ -263,7 +219,7 @@
             const sortedSectors = Object.keys(sectorMap).sort((a, b) => sectorMap[b].totalVal - sectorMap[a].totalVal);
 
             const allActive = activeSectorFilter === 'ALL' ? 'active' : '';
-            let html = `<button onclick="filterSector('ALL')" class="sector-pill ${allActive} text-xs px-3 py-1.5 rounded-lg flex items-center space-x-1.5 font-medium shrink-0"><span>🔥 全部產業</span></button>`;
+            let html = `<button onclick="filterSector('ALL')" class="sector-pill ${allActive} text-xs px-3 py-1.5 rounded-lg flex items-center space-x-1.5 font-medium"><span>🔥 全部產業</span></button>`;
             
             sortedSectors.forEach((sec, idx) => {
                 const active = activeSectorFilter === sec ? 'active' : '';
@@ -273,7 +229,7 @@
                 const colorClass = avgChg >= 0 ? 'text-red-400' : 'text-emerald-400';
 
                 html += `
-                    <button onclick="filterSector('${sec}')" class="sector-pill ${active} text-xs px-3 py-1.5 rounded-lg flex items-center space-x-1.5 shrink-0">
+                    <button onclick="filterSector('${sec}')" class="sector-pill ${active} text-xs px-3 py-1.5 rounded-lg flex items-center space-x-1.5">
                         <span class="font-bold">#${idx+1} ${sec}</span>
                         <span class="text-gray-400 font-mono text-[11px]">${grp.totalVal.toFixed(1)}億</span>
                         <span class="font-mono font-bold ${colorClass} text-[11px]">${sign}${avgChg}%</span>
