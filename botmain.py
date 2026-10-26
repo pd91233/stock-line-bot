@@ -3596,21 +3596,24 @@ def handle_message(event):
 
 
     # ==========================================================
-    # 💥 熱力模組
+    # 💥 熱力圖戰情室指令
     # ==========================================================
     if user_msg in ["熱力圖", "資金流向", "產業熱力圖"]:
         # 1. 取得當下真實排行前 5 大吸金產業速報
         summary_text = get_top_sectors_summary()
         
-        # 2. 附上您的雲端戰情室網址 (例如您的 Render 網址或伺服器 IP)
-        heatmap_url = "https://您的雲端網址/heatmap"
+        # 2. 帶入您的 Render 雲端戰情室正式網址
+        heatmap_url = "https://stock-line-bot-c8em.onrender.com/heatmap"
         
         reply_msg = (
             f"{summary_text}\n\n"
             f"👇 點擊下方連結開啟【手機互動式熱力圖】（支援點擊產業鑽研與五檔明細）：\n"
             f"{heatmap_url}"
         )
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_msg))
+        
+        # 💥 關鍵修正：使用專屬的智慧回覆中繼站，絕不重複消耗 reply_token！
+        smart_reply_with_menu(event, reply_msg)
+        return
 
 
     # ==========================================================
