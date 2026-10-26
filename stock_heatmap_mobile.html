@@ -15,9 +15,8 @@
         .tab-btn.active { background: #2563eb; color: #ffffff; border-color: #3b82f6; font-weight: bold; box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
         .sector-pill { background: #111827; border: 1px solid #374151; color: #9ca3af; transition: all 0.2s; white-space: nowrap; cursor: pointer; user-select: none; }
         .sector-pill.active { background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff; border-color: #f59e0b; font-weight: bold; box-shadow: 0 0 10px rgba(245,158,11,0.4); }
-        /* 啟用電腦桌機滑鼠拖曳與滾動支援 */
-        #sector-scroll-wrapper { scroll-behavior: smooth; cursor: grab; }
-        #sector-scroll-wrapper:active { cursor: grabbing; }
+        .sector-scroll { scroll-behavior: smooth; cursor: grab; }
+        .sector-scroll:active { cursor: grabbing; }
     </style>
 </head>
 <body class="flex flex-col min-h-screen select-none bg-[#07090e]">
@@ -48,7 +47,7 @@
     </header>
 
     <!-- 頂部控制面板 -->
-    <div class="bg-gray-900/95 border-b border-gray-800 px-3 py-2.5 space-y-2.5 shrink-0 shadow-md z-20">
+    <div class="bg-gray-900/95 border-b border-gray-800 px-3 py-2 space-y-2 shrink-0 shadow-md z-20">
         
         <!-- 第一排：市場與模式切換按鍵 -->
         <div class="flex items-center justify-between text-xs">
@@ -67,7 +66,7 @@
             </div>
         </div>
 
-        <!-- 第二排：權重按鈕 (獨立一行) -->
+        <!-- 第二排：權重按鈕 -->
         <div class="flex items-center space-x-1 pt-1.5 border-t border-gray-800/60 text-xs">
             <span class="text-[11px] text-gray-400 mr-1">權重:</span>
             <button onclick="setWeightMetric('tradeValue')" id="weight-val" class="tab-btn active text-[11px] px-2.5 py-0.5 rounded">成交額</button>
@@ -75,16 +74,53 @@
             <button onclick="setWeightMetric('mcap')" id="weight-mcap" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">市值</button>
         </div>
 
-        <!-- 第三排：12大產業膠囊按鈕列 (已完整啟用滑鼠滾輪與拖曳支援) -->
-        <div class="flex items-center overflow-x-auto hide-scroll pt-1 border-t border-gray-800/60 py-1" id="sector-scroll-wrapper">
-            <div id="sector-pill-container" class="flex space-x-1.5 shrink-0">
-                <!-- 動態插入產業按鈕 -->
+        <!-- 第三排與第四排：雙行對齊佈局 -->
+        <div class="pt-1.5 border-t border-gray-800/60 space-y-1.5">
+            
+            <!-- 第一行：左側【全部產業】 + 右側【1~6產業】(附左右箭頭) -->
+            <div class="flex items-center space-x-2">
+                <div id="all-sector-container" class="shrink-0">
+                    <!-- 動態插入全部產業按鈕 -->
+                </div>
+
+                <div class="flex items-center space-x-1 flex-1 overflow-hidden bg-gray-950/40 p-1 rounded-lg border border-gray-800/80">
+                    <button onclick="scrollBar('row1-wrapper', -200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2.5 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">◀</button>
+                    
+                    <div id="row1-wrapper" class="sector-scroll flex space-x-1.5 overflow-x-auto hide-scroll flex-1 py-0.5">
+                        <div id="row1-container" class="flex space-x-1.5 shrink-0">
+                            <!-- 動態插入 1~6 產業 -->
+                        </div>
+                    </div>
+
+                    <button onclick="scrollBar('row1-wrapper', 200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2.5 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">▶</button>
+                </div>
             </div>
+
+            <!-- 第二行：左側留白對齊 + 右側【7~12產業】(附左右箭頭，與上方完全對齊) -->
+            <div class="flex items-center space-x-2">
+                <!-- 佔位符，讓右側群組精準對齊上方 -->
+                <div class="shrink-0 opacity-0 pointer-events-none" style="width: 92px;">
+                    <button class="text-[11px] px-3 py-1.5">佔位</button>
+                </div>
+
+                <div class="flex items-center space-x-1 flex-1 overflow-hidden bg-gray-950/40 p-1 rounded-lg border border-gray-800/80">
+                    <button onclick="scrollBar('row2-wrapper', -200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2.5 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">◀</button>
+                    
+                    <div id="row2-wrapper" class="sector-scroll flex space-x-1.5 overflow-x-auto hide-scroll flex-1 py-0.5">
+                        <div id="row2-container" class="flex space-x-1.5 shrink-0">
+                            <!-- 動態插入 7~12 產業 -->
+                        </div>
+                    </div>
+
+                    <button onclick="scrollBar('row2-wrapper', 200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2.5 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">▶</button>
+                </div>
+            </div>
+
         </div>
     </div>
 
     <!-- 主內容區 -->
-    <main class="flex-1 relative w-full h-[70vh] min-h-[500px] bg-[#07090e]">
+    <main class="flex-1 relative w-full h-[68vh] min-h-[500px] bg-[#07090e]">
         <div id="back-bar" class="absolute top-3 left-3 z-10 hidden">
             <button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur cursor-pointer">
                 <span>⬅ 返回全部總覽</span>
@@ -128,33 +164,38 @@
 
             window.addEventListener('resize', () => chartInstance.resize());
 
-            // 啟用電腦桌機滑鼠滾輪橫向滾動支援
-            const scrollWrapper = document.getElementById('sector-scroll-wrapper');
-            scrollWrapper.addEventListener('wheel', (evt) => {
-                evt.preventDefault();
-                scrollWrapper.scrollLeft += evt.deltaY;
-            });
+            // 啟用兩行捲動區的滑鼠拖曳與滾輪支援
+            ['row1-wrapper', 'row2-wrapper'].forEach(id => {
+                const wrapper = document.getElementById(id);
+                wrapper.addEventListener('wheel', (evt) => {
+                    evt.preventDefault();
+                    wrapper.scrollLeft += evt.deltaY;
+                });
 
-            // 啟用滑鼠左鍵按住拖曳滾動支援
-            let isDown = false;
-            let startX, scrollLeft;
-            scrollWrapper.addEventListener('mousedown', (e) => {
-                isDown = true;
-                startX = e.pageX - scrollWrapper.offsetLeft;
-                scrollLeft = scrollWrapper.scrollLeft;
-            });
-            scrollWrapper.addEventListener('mouseleave', () => isDown = false);
-            scrollWrapper.addEventListener('mouseup', () => isDown = false);
-            scrollWrapper.addEventListener('mousemove', (e) => {
-                if(!isDown) return;
-                e.preventDefault();
-                const x = e.pageX - scrollWrapper.offsetLeft;
-                const walk = (x - startX) * 1.5;
-                scrollWrapper.scrollLeft = scrollLeft - walk;
+                let isDown = false, startX, scrollLeft;
+                wrapper.addEventListener('mousedown', (e) => {
+                    isDown = true;
+                    startX = e.pageX - wrapper.offsetLeft;
+                    scrollLeft = wrapper.scrollLeft;
+                });
+                wrapper.addEventListener('mouseleave', () => isDown = false);
+                wrapper.addEventListener('mouseup', () => isDown = false);
+                wrapper.addEventListener('mousemove', (e) => {
+                    if(!isDown) return;
+                    e.preventDefault();
+                    const x = e.pageX - wrapper.offsetLeft;
+                    const walk = (x - startX) * 1.5;
+                    wrapper.scrollLeft = scrollLeft - walk;
+                });
             });
 
             loadMarketData();
         });
+
+        function scrollBar(wrapperId, offset) {
+            const wrapper = document.getElementById(wrapperId);
+            wrapper.scrollLeft += offset;
+        }
 
         async function loadMarketData(force = false) {
             const btn = document.getElementById('refresh-btn');
@@ -239,7 +280,12 @@
         }
 
         function buildSectorPills() {
-            const container = document.getElementById('sector-pill-container');
+            // 1. 渲染左側獨立的「全部產業」按鈕
+            const allContainer = document.getElementById('all-sector-container');
+            const allActive = activeSectorFilter === 'ALL' ? 'active' : '';
+            allContainer.innerHTML = `<button onclick="filterSector('ALL')" class="sector-pill ${allActive} text-[11px] px-3 py-1.5 rounded-lg font-medium shrink-0 flex items-center space-x-1"><span>🔥 全部產業</span></button>`;
+
+            // 2. 取得所有產業並依成交額排序
             const sectorMap = {};
             rawStocksData.forEach(s => {
                 if (!sectorMap[s.sector]) sectorMap[s.sector] = { totalVal: 0, weightedChg: 0 };
@@ -249,17 +295,21 @@
 
             const sortedSectors = Object.keys(sectorMap).sort((a, b) => sectorMap[b].totalVal - sectorMap[a].totalVal);
 
-            const allActive = activeSectorFilter === 'ALL' ? 'active' : '';
-            let html = `<button onclick="filterSector('ALL')" class="sector-pill ${allActive} text-[11px] px-2.5 py-1 rounded-md shrink-0"><span>🔥 全部產業</span></button>`;
-            
-            sortedSectors.forEach((sec, idx) => {
+            // 3. 分割為 1~6 產業 (第一行) 與 7~12 產業 (第二行)
+            const row1Sectors = sortedSectors.slice(0, 6);
+            const row2Sectors = sortedSectors.slice(6, 12);
+
+            // 渲染 Row 1 (1~6)
+            const row1Container = document.getElementById('row1-container');
+            let row1Html = '';
+            row1Sectors.forEach((sec, idx) => {
                 const active = activeSectorFilter === sec ? 'active' : '';
                 const grp = sectorMap[sec];
                 const avgChg = grp.totalVal > 0 ? (grp.weightedChg / grp.totalVal).toFixed(2) : 0;
                 const sign = avgChg >= 0 ? '+' : '';
                 const colorClass = avgChg >= 0 ? 'text-red-400' : 'text-emerald-400';
 
-                html += `
+                row1Html += `
                     <button onclick="filterSector('${sec}')" class="sector-pill ${active} text-[11px] px-2.5 py-1 rounded-md shrink-0 flex items-center space-x-1">
                         <span class="font-bold">#${idx+1} ${sec}</span>
                         <span class="text-gray-400 font-mono">${grp.totalVal.toFixed(1)}億</span>
@@ -267,7 +317,28 @@
                     </button>
                 `;
             });
-            container.innerHTML = html;
+            row1Container.innerHTML = row1Html;
+
+            // 渲染 Row 2 (7~12)
+            const row2Container = document.getElementById('row2-container');
+            let row2Html = '';
+            row2Sectors.forEach((sec, idx) => {
+                const actualIdx = idx + 6; // 第 7 到第 12 名
+                const active = activeSectorFilter === sec ? 'active' : '';
+                const grp = sectorMap[sec];
+                const avgChg = grp.totalVal > 0 ? (grp.weightedChg / grp.totalVal).toFixed(2) : 0;
+                const sign = avgChg >= 0 ? '+' : '';
+                const colorClass = avgChg >= 0 ? 'text-red-400' : 'text-emerald-400';
+
+                row2Html += `
+                    <button onclick="filterSector('${sec}')" class="sector-pill ${active} text-[11px] px-2.5 py-1 rounded-md shrink-0 flex items-center space-x-1">
+                        <span class="font-bold">#${actualIdx+1} ${sec}</span>
+                        <span class="text-gray-400 font-mono">${grp.totalVal.toFixed(1)}億</span>
+                        <span class="font-mono font-bold ${colorClass}">${sign}${avgChg}%</span>
+                    </button>
+                `;
+            });
+            row2Container.innerHTML = row2Html;
         }
 
         function filterSector(sec) {
