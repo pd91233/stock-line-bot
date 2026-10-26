@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>台股 16 大產業戰略熱力圖戰情室</title>
+    <title>台股 27 大產業戰略熱力圖戰情室</title>
     <!-- 引入 Tailwind CSS 與 ECharts -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
@@ -27,7 +27,7 @@
             <span class="text-lg">🔥</span>
             <div>
                 <div class="flex items-center space-x-1.5">
-                    <h1 class="text-xs font-bold tracking-wider text-white">台股 16 大產業戰略熱力圖</h1>
+                    <h1 class="text-xs font-bold tracking-wider text-white">台股 27 大產業戰略熱力圖</h1>
                     <span class="bg-emerald-900/60 text-emerald-300 text-[9px] px-1 py-0.2 rounded border border-emerald-700/50">實盤</span>
                 </div>
                 <div class="flex items-center space-x-2 text-[10px] text-gray-400 mt-0.5 font-mono">
@@ -74,27 +74,27 @@
             <button onclick="setWeightMetric('mcap')" id="weight-mcap" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">市值</button>
         </div>
 
-        <!-- 第三與第四排：雙行對齊佈局 (1~8 產業 / 9~16 產業) -->
+        <!-- 第三與第四排：雙行對齊佈局 (27 大產業平分兩行) -->
         <div class="pt-1 border-t border-gray-800/60 space-y-1">
             <div class="flex items-center space-x-2">
                 <div id="all-sector-container" class="shrink-0"></div>
                 <div class="flex items-center space-x-1 flex-1 overflow-hidden bg-gray-950/40 px-1.5 py-0.5 rounded-lg border border-gray-800/80">
-                    <button onclick="scrollBar('row1-wrapper', -200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">◀</button>
+                    <button onclick="scrollBar('row1-wrapper', -250)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">◀</button>
                     <div id="row1-wrapper" class="sector-scroll flex space-x-1.5 overflow-x-auto hide-scroll flex-1 py-0.5">
                         <div id="row1-container" class="flex space-x-1.5 shrink-0"></div>
                     </div>
-                    <button onclick="scrollBar('row1-wrapper', 200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">▶</button>
+                    <button onclick="scrollBar('row1-wrapper', 250)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">▶</button>
                 </div>
             </div>
 
             <div class="flex items-center space-x-2">
                 <div class="shrink-0 opacity-0 pointer-events-none" style="width: 92px;"></div>
                 <div class="flex items-center space-x-1 flex-1 overflow-hidden bg-gray-950/40 px-1.5 py-0.5 rounded-lg border border-gray-800/80">
-                    <button onclick="scrollBar('row2-wrapper', -200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">◀</button>
+                    <button onclick="scrollBar('row2-wrapper', -250)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">◀</button>
                     <div id="row2-wrapper" class="sector-scroll flex space-x-1.5 overflow-x-auto hide-scroll flex-1 py-0.5">
                         <div id="row2-container" class="flex space-x-1.5 shrink-0"></div>
                     </div>
-                    <button onclick="scrollBar('row2-wrapper', 200)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">▶</button>
+                    <button onclick="scrollBar('row2-wrapper', 250)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">▶</button>
                 </div>
             </div>
         </div>
@@ -273,7 +273,7 @@
 
             const sortedSectors = Object.keys(sectorMap).sort((a, b) => sectorMap[b].totalVal - sectorMap[a].totalVal);
 
-            // 將 16 大產業平分為兩行 (每行 8 個)
+            // 27 大產業平分上下兩行
             const mid = Math.ceil(sortedSectors.length / 2);
             const row1Sectors = sortedSectors.slice(0, mid);
             const row2Sectors = sortedSectors.slice(mid);
@@ -282,7 +282,7 @@
             let row1Html = '';
             row1Sectors.forEach((sec, idx) => {
                 const active = activeSectorFilter === sec ? 'active' : '';
-                const grp = sectorMap[sec];
+                const grp = sectorMap[sec] || { totalVal: 0, weightedChg: 0 };
                 const avgChg = grp.totalVal > 0 ? (grp.weightedChg / grp.totalVal).toFixed(2) : 0;
                 const sign = avgChg >= 0 ? '+' : '';
                 const colorClass = avgChg >= 0 ? 'text-red-400' : 'text-emerald-400';
@@ -302,7 +302,7 @@
             row2Sectors.forEach((sec, idx) => {
                 const actualIdx = idx + mid;
                 const active = activeSectorFilter === sec ? 'active' : '';
-                const grp = sectorMap[sec];
+                const grp = sectorMap[sec] || { totalVal: 0, weightedChg: 0 };
                 const avgChg = grp.totalVal > 0 ? (grp.weightedChg / grp.totalVal).toFixed(2) : 0;
                 const sign = avgChg >= 0 ? '+' : '';
                 const colorClass = avgChg >= 0 ? 'text-red-400' : 'text-emerald-400';
@@ -395,7 +395,7 @@
                     sectorStocks.sort((a, b) => b.tradeValue - a.tradeValue);
                     
                     if (activeSectorFilter === 'ALL' && !currentDrillSector) {
-                        sectorStocks = sectorStocks.slice(0, 10); // 總覽時每個產業取前 10 大菁英
+                        sectorStocks = sectorStocks.slice(0, 8); // 27大產業總覽時每群組取前8大
                     }
 
                     let children = sectorStocks.map(st => {
