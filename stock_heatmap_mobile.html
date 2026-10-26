@@ -11,10 +11,13 @@
         body { background-color: #0b0f19; color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         .hide-scroll::-webkit-scrollbar { display: none; }
         .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
-        .tab-btn { background: #1e293b; color: #94a3b8; border: 1px solid #334155; transition: all 0.2s; }
+        .tab-btn { background: #1e293b; color: #94a3b8; border: 1px solid #334155; transition: all 0.2s; cursor: pointer; }
         .tab-btn.active { background: #2563eb; color: #ffffff; border-color: #3b82f6; font-weight: bold; box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
-        .sector-pill { background: #111827; border: 1px solid #374151; color: #9ca3af; transition: all 0.2s; white-space: nowrap; }
+        .sector-pill { background: #111827; border: 1px solid #374151; color: #9ca3af; transition: all 0.2s; white-space: nowrap; cursor: pointer; user-select: none; }
         .sector-pill.active { background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff; border-color: #f59e0b; font-weight: bold; box-shadow: 0 0 10px rgba(245,158,11,0.4); }
+        /* 讓按鈕容器支援平滑滾動與拖曳 */
+        #sector-scroll-wrapper { scroll-behavior: smooth; cursor: grab; }
+        #sector-scroll-wrapper:active { cursor: grabbing; }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden select-none">
@@ -38,7 +41,7 @@
             </div>
         </div>
         <div class="flex items-center space-x-2">
-            <button onclick="triggerRefresh()" id="refresh-btn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition flex items-center space-x-1 shadow-lg shadow-blue-900/30 active:scale-95">
+            <button onclick="triggerRefresh()" id="refresh-btn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition flex items-center space-x-1 shadow-lg shadow-blue-900/30 active:scale-95 cursor-pointer">
                 <span>⚡ 重新整理</span>
             </button>
         </div>
@@ -64,8 +67,8 @@
             </div>
         </div>
 
-        <!-- 第二排：權重切換按鍵與帶有資金量/漲跌幅的產業膠囊選單 -->
-        <div class="flex items-center justify-between overflow-x-auto hide-scroll pt-1 border-t border-gray-800/60">
+        <!-- 第二排：權重切換按鍵與帶有導航箭頭的產業膠囊選單 -->
+        <div class="flex items-center justify-between pt-1 border-t border-gray-800/60">
             <div class="flex items-center space-x-1.5 shrink-0 mr-3">
                 <span class="text-[11px] text-gray-400 mr-1">權重:</span>
                 <button onclick="setWeightMetric('tradeValue')" id="weight-val" class="tab-btn active text-xs px-2.5 py-1 rounded-md">成交額</button>
@@ -73,9 +76,17 @@
                 <button onclick="setWeightMetric('mcap')" id="weight-mcap" class="tab-btn text-xs px-2.5 py-1 rounded-md">市值</button>
             </div>
 
-            <!-- 產業快速過濾膠囊按鈕容器 (顯示資金與漲跌幅) -->
-            <div id="sector-pill-container" class="flex space-x-2 overflow-x-auto hide-scroll shrink-0">
-                <!-- 動態插入產業按鈕 -->
+            <!-- 電腦滑鼠輔助滾動容器與左右箭頭 -->
+            <div class="flex items-center space-x-1 overflow-hidden flex-1 ml-2">
+                <button onclick="scrollSectorBar(-200)" class="bg-gray-800 hover:bg-gray-700 text-gray-300 px-2 py-1 rounded text-xs shrink-0 cursor-pointer shadow">◀</button>
+                
+                <div id="sector-scroll-wrapper" class="flex space-x-2 overflow-x-auto hide-scroll flex-1 py-0.5">
+                    <div id="sector-pill-container" class="flex space-x-2 shrink-0">
+                        <!-- 動態插入產業按鈕 -->
+                    </div>
+                </div>
+
+                <button onclick="scrollSectorBar(200)" class="bg-gray-800 hover:bg-gray-700 text-gray-300 px-2 py-1 rounded text-xs shrink-0 cursor-pointer shadow">▶</button>
             </div>
         </div>
     </div>
@@ -83,7 +94,7 @@
     <!-- 主內容區 -->
     <main class="flex-1 relative overflow-hidden bg-[#07090e]">
         <div id="back-bar" class="absolute top-3 left-3 z-10 hidden">
-            <button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur">
+            <button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur cursor-pointer">
                 <span>⬅ 返回全部總覽</span>
             </button>
         </div>
@@ -92,7 +103,7 @@
         <div id="list-container" class="absolute inset-0 overflow-y-auto p-3 space-y-2 hidden"></div>
     </main>
 
-    <!-- 底部滑出抽屜：單一個股最佳五檔明細 -->
+    <!-- 底部滑出抽屜 -->
     <div id="stock-sheet" class="fixed inset-x-0 bottom-0 z-50 transform translate-y-full transition-transform duration-300 ease-out bg-gray-900 border-t border-gray-700 rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col">
         <div class="w-12 h-1.5 bg-gray-700 rounded-full mx-auto my-2 shrink-0"></div>
         <div id="sheet-content" class="p-4 overflow-y-auto space-y-4"></div>
@@ -124,8 +135,39 @@
             });
 
             window.addEventListener('resize', () => chartInstance.resize());
+
+            // 啟用電腦滑鼠滾輪橫向滾動支援
+            const scrollWrapper = document.getElementById('sector-scroll-wrapper');
+            scrollWrapper.addEventListener('wheel', (evt) => {
+                evt.preventDefault();
+                scrollWrapper.scrollLeft += evt.deltaY;
+            });
+
+            // 啟用滑鼠左鍵按住拖曳滾動
+            let isDown = false;
+            let startX, scrollLeft;
+            scrollWrapper.addEventListener('mousedown', (e) => {
+                isDown = true;
+                startX = e.pageX - scrollWrapper.offsetLeft;
+                scrollLeft = scrollWrapper.scrollLeft;
+            });
+            scrollWrapper.addEventListener('mouseleave', () => isDown = false);
+            scrollWrapper.addEventListener('mouseup', () => isDown = false);
+            scrollWrapper.addEventListener('mousemove', (e) => {
+                if(!isDown) return;
+                e.preventDefault();
+                const x = e.pageX - scrollWrapper.offsetLeft;
+                const walk = (x - startX) * 1.5;
+                scrollWrapper.scrollLeft = scrollLeft - walk;
+            });
+
             loadMarketData();
         });
+
+        function scrollSectorBar(offset) {
+            const wrapper = document.getElementById('sector-scroll-wrapper');
+            wrapper.scrollLeft += offset;
+        }
 
         async function loadMarketData(force = false) {
             const btn = document.getElementById('refresh-btn');
@@ -209,25 +251,19 @@
             renderChart();
         }
 
-        // 建立帶有即時資金量與平均漲跌幅的產業膠囊按鈕
         function buildSectorPills() {
             const container = document.getElementById('sector-pill-container');
             const sectorMap = {};
-            let totalValAll = 0;
-            let weightedChgAll = 0;
-
             rawStocksData.forEach(s => {
                 if (!sectorMap[s.sector]) sectorMap[s.sector] = { totalVal: 0, weightedChg: 0 };
                 sectorMap[s.sector].totalVal += s.tradeValue;
                 sectorMap[s.sector].weightedChg += s.changePercent * s.tradeValue;
-                totalValAll += s.tradeValue;
-                weightedChgAll += s.changePercent * s.tradeValue;
             });
 
             const sortedSectors = Object.keys(sectorMap).sort((a, b) => sectorMap[b].totalVal - sectorMap[a].totalVal);
 
             const allActive = activeSectorFilter === 'ALL' ? 'active' : '';
-            let html = `<button onclick="filterSector('ALL')" class="sector-pill ${allActive} text-xs px-3 py-1.5 rounded-lg flex items-center space-x-1.5 font-medium"><span>🔥 全部產業</span></button>`;
+            let html = `<button onclick="filterSector('ALL')" class="sector-pill ${allActive} text-xs px-3 py-1.5 rounded-lg flex items-center space-x-1.5 font-medium shrink-0"><span>🔥 全部產業</span></button>`;
             
             sortedSectors.forEach((sec, idx) => {
                 const active = activeSectorFilter === sec ? 'active' : '';
@@ -237,7 +273,7 @@
                 const colorClass = avgChg >= 0 ? 'text-red-400' : 'text-emerald-400';
 
                 html += `
-                    <button onclick="filterSector('${sec}')" class="sector-pill ${active} text-xs px-3 py-1.5 rounded-lg flex items-center space-x-1.5">
+                    <button onclick="filterSector('${sec}')" class="sector-pill ${active} text-xs px-3 py-1.5 rounded-lg flex items-center space-x-1.5 shrink-0">
                         <span class="font-bold">#${idx+1} ${sec}</span>
                         <span class="text-gray-400 font-mono text-[11px]">${grp.totalVal.toFixed(1)}億</span>
                         <span class="font-mono font-bold ${colorClass} text-[11px]">${sign}${avgChg}%</span>
@@ -263,13 +299,13 @@
         }
 
         function getColorByChange(pct) {
-            if (pct >= 5) return '#991b1b';     // 深紅
-            if (pct >= 2) return '#dc2626';     // 紅
-            if (pct > 0) return '#b91c1c';      // 淺紅
-            if (pct === 0) return '#374151';    // 平盤灰
-            if (pct > -2) return '#047857';     // 淺綠
-            if (pct > -5) return '#059669';     // 綠
-            return '#065f46';                   // 深綠
+            if (pct >= 5) return '#991b1b';
+            if (pct >= 2) return '#dc2626';
+            if (pct > 0) return '#b91c1c';
+            if (pct === 0) return '#374151';
+            if (pct > -2) return '#047857';
+            if (pct > -5) return '#059669';
+            return '#065f46';
         }
 
         function renderChart() {
@@ -404,7 +440,7 @@
                 const sign = st.changePercent >= 0 ? '+' : '';
                 const colorClass = st.changePercent > 0 ? 'text-red-400 bg-red-950/40 border-red-900/50' : (st.changePercent < 0 ? 'text-emerald-400 bg-emerald-950/40 border-emerald-900/50' : 'text-gray-300 bg-gray-800 border-gray-700');
                 html += `
-                    <div onclick="openStockSheet('${st.symbol}')" class="bg-gray-900/90 border border-gray-800 rounded-xl p-3 flex items-center justify-between active:scale-[0.99] transition shadow">
+                    <div onclick="openStockSheet('${st.symbol}')" class="bg-gray-900/90 border border-gray-800 rounded-xl p-3 flex items-center justify-between active:scale-[0.99] transition shadow cursor-pointer">
                         <div class="flex items-center space-x-3">
                             <span class="text-xs font-mono text-gray-500 w-5">#${idx+1}</span>
                             <div>
@@ -455,7 +491,7 @@
                                     <span class="text-xs bg-blue-900/60 text-blue-300 px-2 py-0.5 rounded">${st.sector}</span>
                                 </h2>
                             </div>
-                            <button onclick="closeStockSheet()" class="text-gray-400 hover:text-white p-1">✕</button>
+                            <button onclick="closeStockSheet()" class="text-gray-400 hover:text-white p-1 cursor-pointer">✕</button>
                         </div>
                         <div class="bg-gray-800/60 border border-gray-700/60 rounded-xl p-3 flex items-center justify-between">
                             <div>
@@ -487,7 +523,7 @@
                                     ${(st.bids && st.bids.length > 0) ? st.bids.map(b => `<div class="flex justify-between font-mono py-0.5"><span class="text-red-400 font-bold">${b.price}</span><span class="text-gray-300">${b.size}</span></div>`).join('') : '<div class="text-gray-500 text-center py-2">無委買資料</div>'}
                                 </div>
                                 <div class="bg-gray-800/40 p-2 rounded-lg border border-gray-800">
-                                    <div class="text-[10px] text-emerald-400 font-bold mb-1">委賣額 / 張數</div>
+                                    <div class="text-[10px] text-emerald-400 font-bold mb-1">委賣價 / 張數</div>
                                     ${(st.asks && st.asks.length > 0) ? st.asks.map(a => `<div class="flex justify-between font-mono py-0.5"><span class="text-emerald-400 font-bold">${a.price}</span><span class="text-gray-300">${a.size}</span></div>`).join('') : '<div class="text-gray-500 text-center py-2">無委賣資料</div>'}
                                 </div>
                             </div>
