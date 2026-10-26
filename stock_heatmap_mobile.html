@@ -74,7 +74,7 @@
             <button onclick="setWeightMetric('mcap')" id="weight-mcap" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">市值</button>
         </div>
 
-        <!-- 第三與第四排：雙行對齊佈局 (27 大產業平分兩行) -->
+        <!-- 第三與第四排：動態成交額排行對齊佈局 (依即時成交額自動排序平分兩行) -->
         <div class="pt-1 border-t border-gray-800/60 space-y-1">
             <div class="flex items-center space-x-2">
                 <div id="all-sector-container" class="shrink-0"></div>
@@ -271,9 +271,10 @@
                 sectorMap[s.sector].weightedChg += s.changePercent * s.tradeValue;
             });
 
+            // 依照即時成交金額由大到小動態排序所有產業
             const sortedSectors = Object.keys(sectorMap).sort((a, b) => sectorMap[b].totalVal - sectorMap[a].totalVal);
 
-            // 27 大產業平分上下兩行
+            // 平分動態排序後的產業至上下兩行
             const mid = Math.ceil(sortedSectors.length / 2);
             const row1Sectors = sortedSectors.slice(0, mid);
             const row2Sectors = sortedSectors.slice(mid);
@@ -385,7 +386,10 @@
                     sectorGroups[s.sector].weightedChg += s.changePercent * s.tradeValue;
                 });
 
-                Object.keys(sectorGroups).forEach((sec, idx) => {
+                // 同步熱力圖區塊的排序，使成交額最大的產業優先排在最前面
+                const sortedSecKeys = Object.keys(sectorGroups).sort((a, b) => sectorGroups[b].totalVal - sectorGroups[a].totalVal);
+
+                sortedSecKeys.forEach((sec, idx) => {
                     const grp = sectorGroups[sec];
                     const avgChg = grp.totalVal > 0 ? (grp.weightedChg / grp.totalVal).toFixed(2) : 0;
                     const sign = avgChg >= 0 ? '+' : '';
@@ -395,7 +399,7 @@
                     sectorStocks.sort((a, b) => b.tradeValue - a.tradeValue);
                     
                     if (activeSectorFilter === 'ALL' && !currentDrillSector) {
-                        sectorStocks = sectorStocks.slice(0, 8); // 27大產業總覽時每群組取前8大
+                        sectorStocks = sectorStocks.slice(0, 8);
                     }
 
                     let children = sectorStocks.map(st => {
