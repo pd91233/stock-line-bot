@@ -3596,23 +3596,67 @@ def handle_message(event):
 
 
     # ==========================================================
-    # 💥 熱力圖戰情室指令
+    # 💥 產業資金熱力圖 (Flex 互動圖文卡片版)
     # ==========================================================
     if user_msg in ["熱力圖", "資金流向", "產業熱力圖"]:
-        # 1. 取得當下真實排行前 5 大吸金產業速報
+        # 1. 取得當下真實排行速報文字
         summary_text = get_top_sectors_summary()
-        
-        # 2. 帶入您的 Render 雲端戰情室正式網址
         heatmap_url = "https://stock-line-bot-c8em.onrender.com/heatmap"
         
-        reply_msg = (
-            f"{summary_text}\n\n"
-            f"👇 點擊下方連結開啟【手機互動式熱力圖】（支援點擊產業鑽研與五檔明細）：\n"
-            f"{heatmap_url}"
+        # 2. 構建高質感的 LINE Flex Message 圖文卡片
+        flex_content = BubbleContainer(
+            body=BoxComponent(
+                layout='vertical',
+                contents=[
+                    # 標題區
+                    BoxComponent(
+                        layout='horizontal',
+                        contents=[
+                            {
+                                "type": "text",
+                                "text": "🔥 盤中即時資金熱力圖",
+                                "weight": "bold",
+                                "size": "md",
+                                "color": "#ffffff"
+                            }
+                        ]
+                    ),
+                    # 分隔線
+                    {"type": "separator", "margin": "md", "color": "#334155"},
+                    # 即時速報內文
+                    BoxComponent(
+                        layout='vertical',
+                        margin="md",
+                        contents=[{
+                            "type": "text",
+                            "text": summary_text,
+                            "wrap": True,
+                            "size": "sm",
+                            "color": "#f8fafc"
+                        }]
+                    ),
+                    # 點擊按鈕區 (點擊即可無縫開啟手機互動戰情室)
+                    BoxComponent(
+                        layout='vertical',
+                        margin="lg",
+                        contents=[
+                            ButtonComponent(
+                                action=URIAction(label="📱 開啟手機互動熱力圖", uri=heatmap_url),
+                                style="primary",
+                                color="#2563eb",
+                                height="sm"
+                            )
+                        ]
+                    )
+                ],
+                background_color="#0f172a",
+                padding_all="15px"
+            )
         )
         
-        # 💥 關鍵修正：使用專屬的智慧回覆中繼站，絕不重複消耗 reply_token！
-        smart_reply_with_menu(event, reply_msg)
+        # 包裝成 Flex 訊息並透過統一中繼站發射 (自動帶有下方的快捷面板)
+        flex_msg = FlexSendMessage(alt_text="🔥 盤中即時資金熱力速報", contents=flex_content)
+        smart_reply_with_menu(event, flex_msg)
         return
 
 
