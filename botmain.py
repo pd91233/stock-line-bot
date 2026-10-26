@@ -22,9 +22,6 @@ from linebot.models import (
 
 )
 
-from heatmap_bp import heatmap_bp, get_top_sectors_summary
-# 將熱力圖 Blueprint 註冊進您的 Flask 主程式 (假設您的實例叫 app)
-app.register_blueprint(heatmap_bp)
 
 from bs4 import BeautifulSoup
 
@@ -276,7 +273,9 @@ def get_market_leader():
 
 app = Flask(__name__)
 
-
+from heatmap_bp import heatmap_bp, get_top_sectors_summary
+# 將熱力圖 Blueprint 註冊進您的 Flask 主程式 (假設您的實例叫 app)
+app.register_blueprint(heatmap_bp)
 
 # 💥 啟動戰情大廳通訊樞紐
 
