@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>台股盤中即時資金熱力圖戰情室</title>
+    <!-- 引入 Tailwind CSS 與 ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        body { background-color: #0b0f19; color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden select-none">
+
+    <!-- 頂部導航與狀態列 -->
+    <header class="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between shrink-0">
+        <div class="flex items-center space-x-2">
+            <span class="text-xl">🔥</span>
+            <div>
+                <h1 class="text-sm font-bold tracking-wider text-white">台股盤中即時資金熱力圖</h1>
+                <div class="flex items-center space-x-2 text-[10px] text-gray-400">
+                    <span id="update-time" class="text-emerald-400 font-mono">載入中...</span>
+                    <span>•</span>
+                    <span id="data-source-badge" class="bg-emerald-900/60 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-700/50">富果 API 實盤</span>
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2">
+            <button onclick="triggerRefresh()" id="refresh-btn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition flex items-center space-x-1 shadow-lg shadow-blue-900/30 active:scale-95">
+                <span>⚡ 重新整理</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 頂部依實際數據動態排行的產業膠囊選單 -->
+    <nav class="bg-gray-900/80 border-b border-gray-800/80 px-3 py-2 shrink-0">
+        <div id="sector-pill-container" class="flex space-x-2 overflow-x-auto hide-scroll pb-1">
+            <button onclick="filterSector('ALL')" class="sector-pill shrink-0 bg-blue-600 text-white text-xs px-3 py-1.5 rounded-full font-medium transition shadow">🔥 全部產業總覽</button>
+            <!-- 動態插入排序後的產業按鈕 -->
+        </div>
+    </nav>
+
+    <!-- 檢視模式切換與權重工具列 -->
+    <div class="bg-gray-900/40 px-4 py-2 border-b border-gray-800/50 flex items-center justify-between text-xs shrink-0">
+        <div class="flex items-center space-x-1 bg-gray-800 p-0.5 rounded-lg border border-gray-700">
+            <button onclick="switchViewMode('heatmap')" id="btn-mode-heatmap" class="px-2.5 py-1 rounded-md font-medium bg-blue-600 text-white transition">📊 熱力圖</button>
+            <button onclick="switchViewMode('list')" id="btn-mode-list" class="px-2.5 py-1 rounded-md font-medium text-gray-400 hover:text-white transition">📱 排行清單</button>
+        </div>
+        <div class="flex items-center space-x-2">
+            <span class="text-gray-400 text-[11px]">權重:</span>
+            <select id="weight-metric" onchange="renderChart()" class="bg-gray-800 text-gray-200 text-xs px-2 py-1 rounded border border-gray-700 focus:outline-none">
+                <option value="tradeValue">成交額 (億)</option>
+                <option value="tradeVolume">成交量 (張)</option>
+                <option value="mcap">市值規模</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- 主內容區：ECharts 矩形樹圖或手機排行清單 -->
+    <main class="flex-1 relative overflow-hidden bg-[#07090e]">
+        <!-- 返回總覽浮動按鈕 (點擊個股或進入鑽研時顯示) -->
+        <div id="back-bar" class="absolute top-3 left-3 z-10 hidden">
+            <button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur">
+                <span>⬅ 返回全部產業</span>
+            </button>
+        </div>
+
+        <!-- ECharts 畫布 -->
+        <div id="treemap-container" class="w-full h-full"></div>
+
+        <!-- 手機排行清單容器 (切換到清單模式時顯示) -->
+        <div id="list-container" class="absolute inset-0 overflow-y-auto p-3 space-y-2 hidden"></div>
+    </main>
+
+    <!-- 底部滑出抽屜：單一個股最佳五檔與力道明細 (Bottom Sheet) -->
+    <div id="stock-sheet" class="fixed inset-x-0 bottom-0 z-50 transform translate-y-full transition-transform duration-300 ease-out bg-gray-900 border-t border-gray-700 rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col">
+        <div class="w-12 h-1.5 bg-gray-700 rounded-full mx-auto my-2 shrink-0"></div>
+        <div id="sheet-content" class="p-4 overflow-y-auto space-y-4">
+            <!-- 動態填入五檔與即時行情 -->
+        </div>
+    </div>
+
+    <!-- 遮罩背景 -->
+    <div id="backdrop" onclick="closeStockSheet()" class="fixed inset-0 bg-black/60 z-40 hidden backdrop-blur-xs transition-opacity"></div>
+
+    <script>
+        let rawStocksData = [];
+        let currentViewMode = 'heatmap'; // 'heatmap' or 'list'
+        let activeSectorFilter = 'ALL';
+        let currentDrillSector = null;
+        let chartInstance = null;
+
+        // 初始化 ECharts
+        window.addEventListener('DOMContentLoaded', () => {
+            const chartDom = document.getElementById('treemap-container');
+            chartInstance = echarts.init(chartDom);
+            
+            chartInstance.on('click', function (params) {
+                if (params.data && params.data.type === 'stock') {
+                    openStockSheet(params.data.symbol);
+                } else if (params.data && params.data.type === 'sector') {
+                    currentDrillSector = params.data.name;
+                    document.getElementById('back-bar').classList.remove('hidden');
+                    renderChart();
+                }
+            });
+
+            window.addEventListener('resize', () => chartInstance.resize());
+            loadMarketData();
+        });
+
+        // 載入即時快照數據
+        async function loadMarketData(force = false) {
+            const btn = document.getElementById('refresh-btn');
+            btn.innerHTML = '<span>⏳ 更新中...</span>';
+            try {
+                const url = force ? '/api/heatmap/snapshot?force=1' : '/api/heatmap/snapshot';
+                const res = await fetch(url);
+                const json = await res.json();
+                if (json.status === 'ok') {
+                    rawStocksData = json.stocks;
+                    document.getElementById('update-time').innerText = json.updatedAt;
+                    buildSectorPills();
+                    renderChart();
+                    if (currentViewMode === 'list') renderListMode();
+                }
+            } catch (e) {
+                console.error("載入行情失敗:", e);
+            } finally {
+                btn.innerHTML = '<span>⚡ 重新整理</span>';
+            }
+        }
+
+        function triggerRefresh() {
+            loadMarketData(true);
+        }
+
+        // 建立依實際成交額動態排行的上方產業導航列
+        function buildSectorPills() {
+            const container = document.getElementById('sector-pill-container');
+            // 計算各產業總成交額以進行動態排序
+            const sectorMap = {};
+            rawStocksData.forEach(s => {
+                if (!sectorMap[s.sector]) sectorMap[s.sector] = { val: 0, count: 0 };
+                sectorMap[s.sector].val += s.tradeValue;
+                sectorMap[s.sector].count++;
+            });
+
+            const sortedSectors = Object.keys(sectorMap).sort((a, b) => sectorMap[b].val - sectorMap[a].val);
+
+            let html = `<button onclick="filterSector('ALL')" class="sector-pill shrink-0 ${activeSectorFilter === 'ALL' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300'} text-xs px-3 py-1.5 rounded-full font-medium transition shadow">🔥 全部產業</button>`;
+            
+            sortedSectors.forEach((sec, idx) => {
+                const active = activeSectorFilter === sec;
+                html += `<button onclick="filterSector('${sec}')" class="sector-pill shrink-0 ${active ? 'bg-blue-600 text-white shadow' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'} text-xs px-3 py-1.5 rounded-full font-medium transition">#${idx+1} ${sec}</button>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function filterSector(sec) {
+            activeSectorFilter = sec;
+            currentDrillSector = null;
+            document.getElementById('back-bar').classList.add('hidden');
+            buildSectorPills();
+            renderChart();
+            if (currentViewMode === 'list') renderListMode();
+        }
+
+        function resetDrillDown() {
+            currentDrillSector = null;
+            document.getElementById('back-bar').classList.add('hidden');
+            renderChart();
+        }
+
+        function switchViewMode(mode) {
+            currentViewMode = mode;
+            const hmContainer = document.getElementById('treemap-container');
+            const listContainer = document.getElementById('list-container');
+            const btnHm = document.getElementById('btn-mode-heatmap');
+            const btnList = document.getElementById('btn-mode-list');
+
+            if (mode === 'heatmap') {
+                hmContainer.classList.remove('hidden');
+                listContainer.classList.add('hidden');
+                btnHm.className = "px-2.5 py-1 rounded-md font-medium bg-blue-600 text-white transition";
+                btnList.className = "px-2.5 py-1 rounded-md font-medium text-gray-400 hover:text-white transition";
+                chartInstance.resize();
+            } else {
+                hmContainer.classList.add('hidden');
+                listContainer.classList.remove('hidden');
+                btnList.className = "px-2.5 py-1 rounded-md font-medium bg-blue-600 text-white transition";
+                btnHm.className = "px-2.5 py-1 rounded-md font-medium text-gray-400 hover:text-white transition";
+                renderListMode();
+            }
+        }
+
+        // 根據漲跌幅決定 Finviz 經典紅綠色階
+        function getColorByChange(pct) {
+            if (pct >= 5) return '#991b1b';     // 深紅 (大漲)
+            if (pct >= 2) return '#dc2626';     // 紅
+            if (pct > 0) return '#b91c1c';      // 淺紅
+            if (pct === 0) return '#374151';    // 灰 (平盤)
+            if (pct > -2) return '#047857';     // 淺綠
+            if (pct > -5) return '#059669';     // 綠
+            return '#065f46';                   // 深綠 (重挫)
+        }
+
+        // 渲染 ECharts 矩形樹圖 (支援動態排行與鑽研)
+        function renderChart() {
+            const metric = document.getElementById('weight-metric').value;
+            let dataFiltered = rawStocksData;
+
+            if (activeSectorFilter !== 'ALL') {
+                dataFiltered = dataFiltered.filter(s => s.sector === activeSectorFilter);
+            }
+
+            if (currentDrillSector) {
+                document.getElementById('back-bar').classList.remove('hidden');
+                dataFiltered = dataFiltered.filter(s => s.sector === currentDrillSector);
+            } else {
+                document.getElementById('back-bar').classList.add('hidden');
+            }
+
+            // 依產業群組化
+            const sectorGroups = {};
+            dataFiltered.forEach(s => {
+                if (!sectorGroups[s.sector]) sectorGroups[s.sector] = [];
+                sectorGroups[s.sector].push(s);
+            });
+
+            let treeSeriesData = [];
+            Object.keys(sectorGroups).forEach(sec => {
+                const stocks = sectorGroups[sec];
+                let children = stocks.map(st => {
+                    let val = st[metric] || st.tradeValue || 1;
+                    if (val <= 0) val = 0.5;
+                    return {
+                        name: `${st.name}\n${st.price} (${st.changePercent >= 0 ? '+' : ''}${st.changePercent}%)`,
+                        value: val,
+                        itemStyle: { color: getColorByChange(st.changePercent) },
+                        symbol: st.symbol,
+                        type: 'stock',
+                        raw: st
+                    };
+                });
+
+                // 依選定權重由大到小排序個股
+                children.sort((a, b) => b.value - a.value);
+
+                treeSeriesData.push({
+                    name: sec,
+                    children: children
+                });
+            });
+
+            const option = {
+                tooltip: {
+                    formatter: function (info) {
+                        if (info.data.type === 'stock') {
+                            const st = info.data.raw;
+                            const sign = st.changePercent >= 0 ? '+' : '';
+                            return `<div class="p-2 text-xs">
+                                <div class="font-bold text-sm">${st.name} (${st.symbol})</div>
+                                <div>現價: <span class="font-mono font-bold">${st.price}</span> (${sign}${st.changePercent}%)</div>
+                                <div>成交額: <span class="font-mono text-blue-400">${st.tradeValue}億</span></div>
+                                <div>成交量: <span class="font-mono">${st.tradeVolume}張</span></div>
+                                <div class="text-[10px] text-gray-400 mt-1">👆 點擊查看最佳五檔明細</div>
+                            </div>`;
+                        }
+                        return `<b>${info.name}</b>`;
+                    }
+                },
+                series: [{
+                    type: 'treemap',
+                    width: '100%',
+                    height: '100%',
+                    roam: false,
+                    nodeClick: currentDrillSector ? false : 'zoomToNode',
+                    breadcrumb: { show: false },
+                    label: {
+                        show: true,
+                        formatter: '{b}',
+                        fontSize: 11,
+                        fontWeight: 'bold',
+                        color: '#fff'
+                    },
+                    upperLabel: {
+                        show: true,
+                        height: 22,
+                        fontSize: 12,
+                        fontWeight: 'bold',
+                        color: '#fff',
+                        backgroundColor: 'rgba(0,0,0,0.4)'
+                    },
+                    itemStyle: {
+                        borderColor: '#0b0f19',
+                        borderWidth: 2,
+                        gapWidth: 2
+                    },
+                    data: treeSeriesData
+                }]
+            };
+
+            chartInstance.setOption(option);
+        }
+
+        // 渲染手機排行清單模式
+        function renderListMode() {
+            const container = document.getElementById('list-container');
+            let list = [...rawStocksData];
+            if (activeSectorFilter !== 'ALL') {
+                list = list.filter(s => s.sector === activeSectorFilter);
+            }
+            list.sort((a, b) => b.tradeValue - a.tradeValue);
+
+            let html = '';
+            list.forEach((st, idx) => {
+                const sign = st.changePercent >= 0 ? '+' : '';
+                const colorClass = st.changePercent > 0 ? 'text-red-400 bg-red-950/40 border-red-900/50' : (st.changePercent < 0 ? 'text-emerald-400 bg-emerald-950/40 border-emerald-900/50' : 'text-gray-300 bg-gray-800 border-gray-700');
+                html += `
+                    <div onclick="openStockSheet('${st.symbol}')" class="bg-gray-900/90 border border-gray-800 rounded-xl p-3 flex items-center justify-between active:scale-[0.99] transition shadow">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-xs font-mono text-gray-500 w-5">#${idx+1}</span>
+                            <div>
+                                <div class="font-bold text-sm text-white flex items-center space-x-2">
+                                    <span>${st.name}</span>
+                                    <span class="text-xs text-gray-400 font-mono">${st.symbol}</span>
+                                    <span class="text-[10px] bg-gray-800 text-gray-300 px-1.5 py-0.5 rounded">${st.sector}</span>
+                                </div>
+                                <div class="text-xs text-gray-400 mt-0.5">成交額 <span class="text-blue-400 font-mono">${st.tradeValue}億</span> | 量 ${st.tradeVolume}張</div>
+                            </div>
+                        </div>
+                        <div class="text-right px-3 py-1.5 rounded-lg border ${colorClass}">
+                            <div class="text-sm font-bold font-mono">${st.price}</div>
+                            <div class="text-xs font-mono font-medium">${sign}${st.changePercent}%</div>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        // 開啟單一個股即時五檔抽屜
+        async function openStockSheet(symbol) {
+            const sheet = document.getElementById('stock-sheet');
+            const backdrop = document.getElementById('backdrop');
+            const content = document.getElementById('sheet-content');
+
+            backdrop.classList.remove('hidden');
+            sheet.classList.remove('translate-y-full');
+            content.innerHTML = `<div class="py-12 text-center text-gray-400">⏳ 正在向富果 API 查詢 ${symbol} 最新五檔明細...</div>`;
+
+            try {
+                const res = await fetch(`/api/heatmap/quote/${symbol}`);
+                const json = await res.json();
+                if (json.status === 'ok') {
+                    const st = json.stock;
+                    const sign = st.changePercent >= 0 ? '+' : '';
+                    const colorStyle = st.changePercent > 0 ? 'text-red-400' : (st.changePercent < 0 ? 'text-emerald-400' : 'text-gray-350');
+
+                    // 計算內外盤委買委賣比例
+                    const totalVol = (st.bidVol || 1) + (st.askVol || 1);
+                    const bidPct = Math.round((st.bidVol / totalVol) * 100);
+                    const askPct = 100 - bidPct;
+
+                    let html = `
+                        <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                            <div>
+                                <h2 class="text-lg font-bold text-white flex items-center space-x-2">
+                                    <span>${st.name}</span>
+                                    <span class="text-sm font-mono text-gray-400">${st.symbol}</span>
+                                    <span class="text-xs bg-blue-900/60 text-blue-300 px-2 py-0.5 rounded">${st.sector}</span>
+                                </h2>
+                            </div>
+                            <button onclick="closeStockSheet()" class="text-gray-400 hover:text-white p-1">✕</button>
+                        </div>
+
+                        <!-- 價格大卡片 -->
+                        <div class="bg-gray-800/60 border border-gray-700/60 rounded-xl p-3 flex items-center justify-between">
+                            <div>
+                                <div class="text-xs text-gray-400">現價 / 漲跌</div>
+                                <div class="text-2xl font-bold font-mono ${colorStyle} mt-0.5">${st.price}</div>
+                                <div class="text-xs font-mono ${colorStyle}">${sign}${st.change} (${sign}${st.changePercent}%)</div>
+                            </div>
+                            <div class="text-right space-y-1 font-mono text-xs">
+                                <div>開: <span class="text-white">${st.openPrice}</span> | 高: <span class="text-red-400">${st.highPrice}</span></div>
+                                <div>低: <span class="text-emerald-400">${st.lowPrice}</span> | 均: <span class="text-blue-300">${st.avgPrice}</span></div>
+                                <div>成交額: <span class="text-blue-400 font-bold">${st.tradeValue}億</span></div>
+                            </div>
+                        </div>
+
+                        <!-- 攻擊力道條 (內外盤) -->
+                        <div>
+                            <div class="flex justify-between text-xs text-gray-400 mb-1">
+                                <span>🔴 內盤買盤 (${bidPct}%)</span>
+                                <span>🟢 外盤賣壓 (${askPct}%)</span>
+                            </div>
+                            <div class="w-full bg-gray-800 h-2.5 rounded-full overflow-hidden flex">
+                                <div style="width: ${bidPct}%" class="bg-red-600 h-full"></div>
+                                <div style="width: ${askPct}%" class="bg-emerald-600 h-full"></div>
+                            </div>
+                        </div>
+
+                        <!-- 最佳五檔明細表格 -->
+                        <div class="space-y-1">
+                            <div class="text-xs font-bold text-gray-400 mb-1">📊 最佳五檔委託即時報價</div>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <!-- 委買 -->
+                                <div class="bg-gray-800/40 p-2 rounded-lg border border-gray-800">
+                                    <div class="text-[10px] text-red-400 font-bold mb-1">委買價 / 張數</div>
+                                    ${(st.bids && st.bids.length > 0) ? st.bids.map(b => `
+                                        <div class="flex justify-between font-mono py-0.5">
+                                            <span class="text-red-400 font-bold">${b.price}</span>
+                                            <span class="text-gray-300">${b.size}</span>
+                                        </div>
+                                    `).join('') : '<div class="text-gray-500 text-center py-2">無委買資料</div>'}
+                                </div>
+                                <!-- 委賣 -->
+                                <div class="bg-gray-800/40 p-2 rounded-lg border border-gray-800">
+                                    <div class="text-[10px] text-emerald-400 font-bold mb-1">委賣價 / 張數</div>
+                                    ${(st.asks && st.asks.length > 0) ? st.asks.map(a => `
+                                        <div class="flex justify-between font-mono py-0.5">
+                                            <span class="text-emerald-400 font-bold">${a.price}</span>
+                                            <span class="text-gray-300">${a.size}</span>
+                                        </div>
+                                    `).join('') : '<div class="text-gray-500 text-center py-2">無委賣資料</div>'}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    content.innerHTML = html;
+                }
+            } catch (e) {
+                content.innerHTML = `<div class="py-8 text-center text-red-400">⚠️ 取得五檔資料發生異常</div>`;
+            }
+        }
+
+        function closeStockSheet() {
+            document.getElementById('stock-sheet').classList.add('translate-y-full');
+            document.getElementById('backdrop').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
