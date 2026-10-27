@@ -25,7 +25,7 @@ _market_cache = {
     "stocks_map": {}
 }
 
-# 32 大全方位產業分類核心戰略池（完整對齊證交所官方簡稱、支援跨產業重複對應）
+# 32 大全方位產業分類核心戰略池（電機已擴充至完整陣容）
 RAW_SECTOR_DICT = {
     "半導體": [
         "台積電", "聯電", "世界", "力積電", "旺宏", "華邦電", "南亞科", "群聯", "創見", "威剛", 
@@ -72,7 +72,9 @@ RAW_SECTOR_DICT = {
     ],
     "電機": [
         "中興電", "華城", "士電", "東元", "大同", "亞力", "樂事綠能", "瑞智", "恩德", "鑽全", 
-        "氣立", "上銀", "直得", "全球傳動", "鈞興-KY", "東台", "程泰", "瀧澤科", "百德"
+        "氣立", "上銀", "直得", "全球傳動", "鈞興-KY", "東台", "程泰", "瀧澤科", "百德",
+        "亞德客-KY", "高力", "新代", "大量", "台灣精銳", "大銀微系統", "豐祥-KY", "廣隆", 
+        "時碩工業", "伸興", "中宇", "駐龍", "勤美", "富田-創", "正道", "亞崴"
     ],
     "營建": [
         "華固", "長虹", "興富發", "遠雄", "皇翔", "冠德", "潤弘", "根基", "達麗", "愛山林", 
@@ -184,8 +186,7 @@ RAW_SECTOR_DICT = {
     ]
 }
 
-# 建立名稱到代號/市場的對照表（供爬蟲自動對應）
-# 為了讓前端爬蟲穩定，這裡建立常見代表性標的的代號對應
+# 完整代號與市場對照表（包含電機新增標的）
 NAME_TO_META = {
     "台積電": {"symbol": "2330", "market": "TSE", "mcap": 26500},
     "聯電": {"symbol": "2303", "market": "TSE", "mcap": 6200},
@@ -417,6 +418,21 @@ NAME_TO_META = {
     "程泰": {"symbol": "1583", "market": "TSE", "mcap": 200},
     "瀧澤科": {"symbol": "6609", "market": "TSE", "mcap": 200},
     "百德": {"symbol": "4563", "market": "OTC", "mcap": 200},
+    "亞德客-KY": {"symbol": "1590", "market": "TSE", "mcap": 2100},
+    "高力": {"symbol": "8996", "market": "OTC", "mcap": 500},
+    "新代": {"symbol": "7751", "market": "OTC", "mcap": 400},
+    "大量": {"symbol": "3167", "market": "OTC", "mcap": 300},
+    "台灣精銳": {"symbol": "4583", "market": "TSE", "mcap": 600},
+    "大銀微系統": {"symbol": "4576", "market": "TSE", "mcap": 400},
+    "豐祥-KY": {"symbol": "5288", "market": "TSE", "mcap": 300},
+    "時碩工業": {"symbol": "4566", "market": "TSE", "mcap": 300},
+    "伸興": {"symbol": "1558", "market": "TSE", "mcap": 300},
+    "中宇": {"symbol": "1535", "market": "TSE", "mcap": 300},
+    "駐龍": {"symbol": "4572", "market": "OTC", "mcap": 300},
+    "勤美": {"symbol": "1532", "market": "TSE", "mcap": 400},
+    "富田-創": {"symbol": "4590", "market": "OTC", "mcap": 200},
+    "正道": {"symbol": "1506", "market": "TSE", "mcap": 200},
+    "亞崴": {"symbol": "1530", "market": "TSE", "mcap": 200},
     "華固": {"symbol": "2548", "market": "TSE", "mcap": 350},
     "長虹": {"symbol": "5534", "market": "TSE", "mcap": 400},
     "興富發": {"symbol": "2542", "market": "TSE", "mcap": 880},
@@ -903,11 +919,10 @@ NAME_TO_META = {
     "川飛": {"symbol": "1516", "market": "TSE", "mcap": 200}
 }
 
-# 動態組合為後端爬蟲所需的清單格式（自動帶入跨產業重複個股與對應代號）
 SECTOR_STOCKS = []
 for sector_name, names in RAW_SECTOR_DICT.items():
     for name in names:
-        meta = NAME_TO_META.get(name, {"symbol": "2330", "market": "TSE", "mcap": 300}) # 預設防呆
+        meta = NAME_TO_META.get(name, {"symbol": "2330", "market": "TSE", "mcap": 300})
         SECTOR_STOCKS.append({
             "symbol": meta["symbol"],
             "name": name,
@@ -1069,41 +1084,6 @@ def get_realtime_heatmap_data(force_refresh=False):
     _save_disk_cache()
 
     return list(_market_cache["stocks_map"].values()), False
-
-def get_top_sectors_summary():
-    stocks, _ = get_realtime_heatmap_data()
-    if not stocks:
-        return "⚠️ 行情數據同步中，請稍後再試。"
-
-    sectors = {}
-    for s in stocks:
-        sec = s["sector"]
-        if sec not in sectors:
-            sectors[sec] = {"tradeValue": 0.0, "weightedChange": 0.0, "topStock": s}
-        sectors[sec]["tradeValue"] += s["tradeValue"]
-        sectors[sec]["weightedChange"] += s["changePercent"] * s["tradeValue"]
-        if s["tradeValue"] > sectors[sec]["topStock"]["tradeValue"]:
-            sectors[sec]["topStock"] = s
-
-    ranked = []
-    for sec_name, info in sectors.items():
-        avg_chg = info["weightedChange"] / info["tradeValue"] if info["tradeValue"] > 0 else 0
-        ranked.append({
-            "sector": sec_name,
-            "tradeValue": round(info["tradeValue"], 1),
-            "avgChange": round(avg_chg, 2),
-            "topStock": info["topStock"]
-        })
-
-    ranked.sort(key=lambda x: x["tradeValue"], reverse=True)
-    lines = [f"🔥 【盤中即時資金熱力速報】(共 32 大產業 / {len(stocks)} 檔核心指標股)"]
-    for idx, r in enumerate(ranked[:6], 1):
-        sign = "+" if r["avgChange"] > 0 else ""
-        icon = "🔴" if r["avgChange"] > 0 else ("🟢" if r["avgChange"] < 0 else "⚪")
-        ts = r["topStock"]
-        ts_sign = "+" if ts["changePercent"] > 0 else ""
-        lines.append(f"#{idx} {icon} {r['sector']} ({sign}{r['avgChange']}% | {r['tradeValue']}億)\n    └ 領頭羊：{ts['name']} {ts['price']} ({ts_sign}{ts['changePercent']}%)")
-    return "\n".join(lines)
 
 @heatmap_bp.route("/api/heatmap/snapshot")
 def api_heatmap_snapshot():
