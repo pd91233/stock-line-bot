@@ -104,7 +104,7 @@
     <main class="flex-1 relative w-full bg-[#07090e] overflow-hidden flex flex-col">
         <div id="back-bar" class="absolute top-3 left-3 z-10 hidden">
             <button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur cursor-pointer">
-                <span>⬅ 返回全部總覽</span>
+                <span>⬅ 返回 32 產業總覽</span>
             </button>
         </div>
 
@@ -156,7 +156,7 @@
                 if (params.data && params.data.type === 'stock') {
                     openStockSheet(params.data.symbol);
                 } else if (params.data && params.data.type === 'sector' && currentViewMode === 'heatmap' && !currentDrillSector) {
-                    currentDrillSector = params.data.name.replace(/#\d+\s/, '').split(' ')[0];
+                    currentDrillSector = params.data.sectorName;
                     document.getElementById('back-bar').classList.remove('hidden');
                     renderChart();
                 }
@@ -299,8 +299,8 @@
             const sectorMap = {};
             rawStocksData.forEach(s => {
                 if (!sectorMap[s.sector]) sectorMap[s.sector] = { totalVal: 0, weightedChg: 0 };
-                sectorMap[s.sector].totalVal += s.tradeValue;
-                sectorMap[s.sector].weightedChg += s.changePercent * s.tradeValue;
+                sectorMap[s.sector].totalVal += (s.tradeValue || 0);
+                sectorMap[s.sector].weightedChg += (s.changePercent || 0) * (s.tradeValue || 0);
             });
 
             const sortedSectors = Object.keys(sectorMap).sort((a, b) => sectorMap[b].totalVal - sectorMap[a].totalVal);
@@ -395,15 +395,12 @@
 
             let treeSeriesData = [];
 
+            // 模式 A：個股熱力圖模式 (展示全市場個股平鋪)
             if (currentViewMode === 'stock_heatmap') {
-                // 先算出最大權重作為字體大小縮放基準
                 let maxVal = Math.max(...dataFiltered.map(st => st[currentWeightMetric] || st.tradeValue || 1), 1);
-
                 let children = dataFiltered.map(st => {
                     let val = st[currentWeightMetric] || st.tradeValue || 1;
                     if (val <= 0) val = 0.5;
-
-                    // 核心強效計算：根據數值比例動態決定字體大小 (範圍 10px ~ 32px)
                     let ratio = val / maxVal;
                     let dynamicFontSize = Math.round(10 + ratio * 22);
 
@@ -411,7 +408,7 @@
                         name: `${st.name}\n${st.price} (${st.changePercent >= 0 ? '+' : ''}${st.changePercent}%)`,
                         value: val,
                         itemStyle: { color: getColorByChange(st.changePercent) },
-                        label: { fontSize: dynamicFontSize }, // 每個方塊直接賦予獨立字體大小
+                        label: { fontSize: dynamicFontSize },
                         symbol: st.symbol,
                         type: 'stock',
                         raw: st
@@ -419,13 +416,50 @@
                 });
                 children.sort((a, b) => b.value - a.value);
                 treeSeriesData = [{ name: '個股熱力總覽', children: children }];
-            } else {
+            } 
+            // 模式 B：產業熱力圖模式（如第二張圖：第一層直接顯示 32 個產業大方塊，點擊後鑽研進該產業個股）
+            else if (currentViewMode === 'heatmap' && !currentDrillSector && activeSectorFilter === 'ALL') {
+                const sectorGroups = {};
+                dataFiltered.forEach(s => {
+                    if (!sectorGroups[s.sector]) sectorGroups[s.sector] = { stocks: [], totalVal: 0, weightedChg: 0, totalVol: 0, totalMcap: 0 };
+                    sectorGroups[s.sector].stocks.push(s);
+                    sectorGroups[s.sector].totalVal += (s.tradeValue || 0);
+                    sectorGroups[s.sector].weightedChg += (s.changePercent || 0) * (s.tradeValue || 1);
+                    sectorGroups[s.sector].totalVol += (s.tradeVolume || 0);
+                    sectorGroups[s.sector].totalMcap += (s.mcap || 0);
+                });
+
+                const sortedSecKeys = Object.keys(sectorGroups).sort((a, b) => sectorGroups[b].totalVal - sectorGroups[a].totalVal);
+
+                treeSeriesData = sortedSecKeys.map(sec => {
+                    const grp = sectorGroups[sec];
+                    const avgChg = grp.totalVal > 0 ? (grp.weightedChg / grp.totalVal).toFixed(2) : 0;
+                    const sign = avgChg >= 0 ? '+' : '';
+                    
+                    // 根據使用者選擇的權重（成交額、量、市值）計算產業大方塊面積
+                    let weightVal = grp.totalVal;
+                    if (currentWeightMetric === 'tradeVolume') weightVal = grp.totalVol;
+                    if (currentWeightMetric === 'mcap') weightVal = grp.totalMcap;
+                    if (weightVal <= 0) weightVal = 1;
+
+                    return {
+                        name: `${sec}\n${sign}${avgChg}%`,
+                        value: weightVal,
+                        itemStyle: { color: getColorByChange(parseFloat(avgChg)) },
+                        type: 'sector',
+                        sectorName: sec,
+                        rawGroup: grp
+                    };
+                });
+            } 
+            // 模式 C：點擊某個產業後，展開該產業內部的個股
+            else {
                 const sectorGroups = {};
                 dataFiltered.forEach(s => {
                     if (!sectorGroups[s.sector]) sectorGroups[s.sector] = { stocks: [], totalVal: 0, weightedChg: 0 };
                     sectorGroups[s.sector].stocks.push(s);
-                    sectorGroups[s.sector].totalVal += s.tradeValue;
-                    sectorGroups[s.sector].weightedChg += s.changePercent * s.tradeValue;
+                    sectorGroups[s.sector].totalVal += (s.tradeValue || 0);
+                    sectorGroups[s.sector].weightedChg += (s.changePercent || 0) * (s.tradeValue || 1);
                 });
 
                 const sortedSecKeys = Object.keys(sectorGroups).sort((a, b) => sectorGroups[b].totalVal - sectorGroups[a].totalVal);
@@ -437,20 +471,13 @@
                     const groupTitle = `#${idx+1} ${sec}  ${sign}${avgChg}%  (${grp.totalVal.toFixed(1)}億)`;
 
                     let sectorStocks = [...grp.stocks];
-                    sectorStocks.sort((a, b) => b.tradeValue - a.tradeValue);
-                    
-                    if (activeSectorFilter === 'ALL' && !currentDrillSector) {
-                        sectorStocks = sectorStocks.slice(0, 6);
-                    }
+                    sectorStocks.sort((a, b) => (b[currentWeightMetric] || b.tradeValue) - (a[currentWeightMetric] || a.tradeValue));
 
-                    // 算出該產業群組內的最大個股權重，用來精準計算字體級距
                     let maxStockVal = Math.max(...sectorStocks.map(st => st[currentWeightMetric] || st.tradeValue || 1), 1);
 
                     let children = sectorStocks.map(st => {
                         let val = st[currentWeightMetric] || st.tradeValue || 1;
                         if (val <= 0) val = 0.5;
-
-                        // 核心強效計算：動態賦予字體大小 (範圍 10px ~ 30px)
                         let ratio = val / maxStockVal;
                         let dynamicFontSize = Math.round(10 + ratio * 20);
 
@@ -458,7 +485,7 @@
                             name: `${st.name}\n${st.price} (${st.changePercent >= 0 ? '+' : ''}${st.changePercent}%)`,
                             value: val,
                             itemStyle: { color: getColorByChange(st.changePercent) },
-                            label: { fontSize: dynamicFontSize }, // 獨立寫入字體大小
+                            label: { fontSize: dynamicFontSize },
                             symbol: st.symbol,
                             type: 'stock',
                             raw: st
@@ -467,7 +494,7 @@
 
                     treeSeriesData.push({
                         name: groupTitle,
-                        type: 'sector',
+                        type: 'sectorGroup',
                         children: children
                     });
                 });
@@ -486,6 +513,15 @@
                                 <div>成交量: <span class="font-mono">${st.tradeVolume}張</span></div>
                                 <div class="text-[10px] text-gray-400 mt-1">👆 點擊查看最佳五檔明細</div>
                             </div>`;
+                        } else if (info.data.type === 'sector') {
+                            const grp = info.data.rawGroup;
+                            const avgChg = grp.totalVal > 0 ? (grp.weightedChg / grp.totalVal).toFixed(2) : 0;
+                            return `<div class="p-2 text-xs">
+                                <div class="font-bold text-sm text-amber-400">${info.data.sectorName} 產業板塊</div>
+                                <div>平均漲跌: <span class="font-mono font-bold">${avgChg}%</span></div>
+                                <div>總成交額: <span class="font-mono text-blue-400">${grp.totalVal.toFixed(1)}億</span></div>
+                                <div class="text-[10px] text-gray-400 mt-1">👆 點擊方塊可進入該產業個股明細</div>
+                            </div>`;
                         }
                         return `<b>${info.name}</b>`;
                     }
@@ -502,7 +538,8 @@
                         formatter: '{b}',
                         fontWeight: 'bold',
                         color: '#fff',
-                        overflow: 'truncate'
+                        overflow: 'truncate',
+                        fontSize: 16
                     },
                     upperLabel: {
                         show: true,
@@ -565,7 +602,7 @@
 
             backdrop.classList.remove('hidden');
             sheet.classList.remove('translate-y-full');
-            content.innerHTML = `<div class="py-12 text-center text-gray-400">⏳ 正在向富果 API 查詢 ${symbol} 最新五檔明細...</div>`;
+            content.innerHTML = `<div class="py-12 text-center text-gray-400">⏳ 正在查詢 ${symbol} 最新五檔明細...</div>`;
 
             try {
                 const res = await fetch(`/api/heatmap/quote/${symbol}`);
