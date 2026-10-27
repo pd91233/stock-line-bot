@@ -102,11 +102,12 @@
 
     <!-- 主內容區 -->
     <main class="flex-1 relative w-full bg-[#07090e] overflow-hidden flex flex-col">
+        <!-- 返回按鈕在右上角 right-3 -->
         <div id="back-bar" class="absolute top-3 right-3 z-10 hidden">
-			<button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur cursor-pointer">
-				<span>⬅ 產業總覽</span>
-			</button>
-		</div>
+            <button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur cursor-pointer">
+                <span>⬅ 返回 32 產業總覽</span>
+            </button>
+        </div>
 
         <div id="treemap-container" class="w-full flex-1 min-h-0"></div>
         <div id="list-container" class="absolute inset-0 overflow-y-auto p-3 space-y-2 hidden"></div>
@@ -350,27 +351,27 @@
         }
 
         function filterSector(sec) {
-			activeSectorFilter = sec;
-			if (sec !== 'ALL') {
-				currentDrillSector = sec; // 讓上方按鈕點擊時也視為當前鑽研產業
-				document.getElementById('back-bar').classList.remove('hidden'); // 顯示返回按鈕
-			} else {
-				currentDrillSector = null;
-				document.getElementById('back-bar').classList.add('hidden'); // 隱藏返回按鈕
-			}
-			buildSectorPills();
-			renderChart();
-			if (currentViewMode === 'list') renderListMode();
-		}
+            activeSectorFilter = sec;
+            if (sec !== 'ALL') {
+                currentDrillSector = sec;
+                document.getElementById('back-bar').classList.remove('hidden');
+            } else {
+                currentDrillSector = null;
+                document.getElementById('back-bar').classList.add('hidden');
+            }
+            buildSectorPills();
+            renderChart();
+            if (currentViewMode === 'list') renderListMode();
+        }
 
         function resetDrillDown() {
-			currentDrillSector = null;
-			activeSectorFilter = 'ALL'; // 同步重設上方按鈕為全部產業
-			document.getElementById('back-bar').classList.add('hidden');
-			buildSectorPills();
-			renderChart();
-			if (currentViewMode === 'list') renderListMode();
-		}
+            currentDrillSector = null;
+            activeSectorFilter = 'ALL';
+            document.getElementById('back-bar').classList.add('hidden');
+            buildSectorPills();
+            renderChart();
+            if (currentViewMode === 'list') renderListMode();
+        }
 
         function getColorByChange(pct) {
             if (pct >= 2.0) return '#891826';
@@ -397,13 +398,12 @@
             if (currentDrillSector && currentViewMode === 'heatmap') {
                 document.getElementById('back-bar').classList.remove('hidden');
                 dataFiltered = dataFiltered.filter(s => s.sector === currentDrillSector);
-            } else {
+            } else if (activeSectorFilter === 'ALL' && !currentDrillSector) {
                 document.getElementById('back-bar').classList.add('hidden');
             }
 
             let treeSeriesData = [];
 
-            // 模式 A：個股熱力圖模式 (展示全市場個股平鋪)
             if (currentViewMode === 'stock_heatmap') {
                 let maxVal = Math.max(...dataFiltered.map(st => st[currentWeightMetric] || st.tradeValue || 1), 1);
                 let children = dataFiltered.map(st => {
@@ -425,7 +425,7 @@
                 children.sort((a, b) => b.value - a.value);
                 treeSeriesData = [{ name: '個股熱力總覽', children: children }];
             } 
-            // 模式 B：產業熱力圖模式（如第二張圖：第一層直接顯示 32 個產業大方塊，點擊後鑽研進該產業個股）
+            // 模式 B：全部產業總覽模式 —— 加入動態字體大小計算！
             else if (currentViewMode === 'heatmap' && !currentDrillSector && activeSectorFilter === 'ALL') {
                 const sectorGroups = {};
                 dataFiltered.forEach(s => {
@@ -439,28 +439,41 @@
 
                 const sortedSecKeys = Object.keys(sectorGroups).sort((a, b) => sectorGroups[b].totalVal - sectorGroups[a].totalVal);
 
+                // 計算最大產業的權重，作為字體大小縮放基準
+                let maxSecVal = 1;
+                sortedSecKeys.forEach(sec => {
+                    const grp = sectorGroups[sec];
+                    let wVal = grp.totalVal;
+                    if (currentWeightMetric === 'tradeVolume') wVal = grp.totalVol;
+                    if (currentWeightMetric === 'mcap') wVal = grp.totalMcap;
+                    if (wVal > maxSecVal) maxSecVal = wVal;
+                });
+
                 treeSeriesData = sortedSecKeys.map(sec => {
                     const grp = sectorGroups[sec];
                     const avgChg = grp.totalVal > 0 ? (grp.weightedChg / grp.totalVal).toFixed(2) : 0;
                     const sign = avgChg >= 0 ? '+' : '';
                     
-                    // 根據使用者選擇的權重（成交額、量、市值）計算產業大方塊面積
                     let weightVal = grp.totalVal;
                     if (currentWeightMetric === 'tradeVolume') weightVal = grp.totalVol;
                     if (currentWeightMetric === 'mcap') weightVal = grp.totalMcap;
                     if (weightVal <= 0) weightVal = 1;
 
+                    // 核心強效計算：根據產業方塊大小動態計算字體級距 (範圍 11px ~ 32px)
+                    let ratio = weightVal / maxSecVal;
+                    let dynamicFontSize = Math.round(11 + ratio * 21);
+
                     return {
                         name: `${sec}\n${sign}${avgChg}%`,
                         value: weightVal,
                         itemStyle: { color: getColorByChange(parseFloat(avgChg)) },
+                        label: { fontSize: dynamicFontSize }, // 獨立賦予 32 產業大方塊動態字體大小
                         type: 'sector',
                         sectorName: sec,
                         rawGroup: grp
                     };
                 });
             } 
-            // 模式 C：點擊某個產業後，展開該產業內部的個股
             else {
                 const sectorGroups = {};
                 dataFiltered.forEach(s => {
@@ -546,8 +559,7 @@
                         formatter: '{b}',
                         fontWeight: 'bold',
                         color: '#fff',
-                        overflow: 'truncate',
-                        fontSize: 16
+                        overflow: 'truncate'
                     },
                     upperLabel: {
                         show: true,
