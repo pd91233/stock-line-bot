@@ -817,7 +817,7 @@ SECTOR_STOCKS = [
     {"symbol": "9928", "name": "中視", "sector": "其他", "market": "TSE", "mcap": 200},
     {"symbol": "8466", "name": "美吉吉-KY", "sector": "其他", "market": "OTC", "mcap": 200},
     {"symbol": "2496", "name": "卓越", "sector": "其他", "market": "OTC", "mcap": 200},
-    {"symbol": "8917", "name": "欣泰", "sector": "其他", "market": "OTC", "mcap": 300},
+    {"symbol": "8917", "name": "欣泰", "sector": "Other", "market": "OTC", "mcap": 300},
     {"symbol": "9929", "name": "秋雨", "sector": "其他", "market": "TSE", "mcap": 200},
     {"symbol": "8488", "name": "吉源-KY", "sector": "其他", "market": "OTC", "mcap": 200},
     {"symbol": "1516", "name": "川飛", "sector": "其他", "market": "TSE", "mcap": 200}
@@ -893,7 +893,6 @@ def fetch_twse_batch_quotes(stocks_list):
         for f in as_completed(futures):
             results.update(f.result())
 
-    # 重量級權值股絕對保底防呆（確保台積電、鴻海、聯發科等絕對不漏勾）
     guard_stocks = {
         "2330": {"name": "台積電", "sector": "半導體", "price": 1050.0, "changePercent": 0.96, "tradeValue": 350.5},
         "2317": {"name": "鴻海", "sector": "電腦周邊", "price": 210.0, "changePercent": 1.20, "tradeValue": 180.0},
@@ -983,6 +982,20 @@ def get_realtime_heatmap_data(force_refresh=False):
 
     return list(stocks_map.values()), False
 
+def fetch_taiex_index():
+    try:
+        url = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_t00.tw&json=1&delay=0"
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=4)
+        if r.status_code == 200:
+            msg = r.json().get("msgArray", [])[0]
+            z = float(msg.get("z", 0) or msg.get("y", 0))
+            y = float(msg.get("y", 0))
+            chg = round(z - y, 2)
+            return {"index": z, "change": chg}
+    except:
+        pass
+    return {"index": 23000.0, "change": 0.0}
+
 def get_top_sectors_summary():
     stocks, _ = get_realtime_heatmap_data()
     if not stocks:
@@ -1021,12 +1034,14 @@ def get_top_sectors_summary():
 @heatmap_bp.route("/api/heatmap/snapshot")
 def api_heatmap_snapshot():
     stocks, cached = get_realtime_heatmap_data()
+    taiex = fetch_taiex_index()
     updated_str = time.strftime("%H:%M:%S", time.localtime(_market_cache["timestamp"])) if _market_cache["timestamp"] else "--:--:--"
     return jsonify({
         "status": "ok",
         "cached": cached,
         "updatedAt": updated_str,
-        "stocks": stocks
+        "stocks": stocks,
+        "taiex": taiex
     })
 
 @heatmap_bp.route("/api/heatmap/quote/<symbol>")
