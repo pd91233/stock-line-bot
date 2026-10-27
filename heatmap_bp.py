@@ -16,9 +16,16 @@ FUGLE_API_KEY = os.environ.get(
     "NDkwOGFiN2EtMWRkMC00MmUwLTgzYmUtYTQ0NzdjMDA2MTAzIGY5N2NjMGFlLTk3NjMtNDkyOS04OWI0LTBkZGNlOWI3YTY5Zg=="
 )
 
-CACHE_TTL = 45
+CACHE_TTL = 1  # 縮短為 1 秒，強制每次重刷
 CACHE_FILE = "heatmap_cache.json"
 HEATMAP_IMG_PATH = "static_heatmap.png"
+
+# 啟動時自動刪除舊快取，確保台積電絕對不會被舊快取蓋掉！
+if os.path.exists(CACHE_FILE):
+    try:
+        os.remove(CACHE_FILE)
+    except:
+        pass
 
 _market_cache = {
     "timestamp": 0,
@@ -929,25 +936,6 @@ for sector_name, names in RAW_SECTOR_DICT.items():
             "mcap": meta["mcap"]
         })
 
-def _load_disk_cache():
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                saved = json.load(f)
-                _market_cache["timestamp"] = saved.get("timestamp", 0)
-                _market_cache["stocks_map"] = saved.get("stocks_map", {})
-        except:
-            pass
-
-def _save_disk_cache():
-    try:
-        with open(CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(_market_cache, f, ensure_ascii=False)
-    except:
-        pass
-
-_load_disk_cache()
-
 def _safe_float(val, default=0.0):
     try:
         if val in (None, "-", "", "null"):
@@ -1018,7 +1006,7 @@ def fetch_twse_batch_quotes(stocks_list):
         for f in as_completed(futures):
             results.update(f.result())
 
-    # === 強固防呆：確保台積電絕對存在於結果中（若 API 漏抓，提供安全保底） ===
+    # 護國神山絕對保底強制注入
     tsmc_sym = "2330"
     if tsmc_sym not in results:
         results[tsmc_sym] = {
@@ -1080,28 +1068,26 @@ def fetch_single_fugle_quote(stock_info):
     return None, 500
 
 def get_realtime_heatmap_data(force_refresh=False):
-    now = time.time()
-    if not force_refresh and _market_cache["stocks_map"] and len(_market_cache["stocks_map"]) >= 50 and (now - _market_cache["timestamp"] < CACHE_TTL):
-        return list(_market_cache["stocks_map"].values()), True
-
+    # 強制每次呼叫都重新批次抓取，完全不依賴舊快取
     batch_data = fetch_twse_batch_quotes(SECTOR_STOCKS)
+    stocks_map = {}
     if batch_data:
         for sym, info in batch_data.items():
-            _market_cache["stocks_map"][sym] = info
+            stocks_map[sym] = info
 
-    missing = [item for item in SECTOR_STOCKS if item["symbol"] not in _market_cache["stocks_map"]]
+    missing = [item for item in SECTOR_STOCKS if item["symbol"] not in stocks_map]
     if missing:
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {executor.submit(fetch_single_fugle_quote, item): item for item in missing[:20]}
             for future in as_completed(futures):
                 res_data, _ = future.result()
                 if res_data:
-                    _market_cache["stocks_map"][res_data["symbol"]] = res_data
+                    stocks_map[res_data["symbol"]] = res_data
 
     _market_cache["timestamp"] = time.time()
-    _save_disk_cache()
+    _market_cache["stocks_map"] = stocks_map
 
-    return list(_market_cache["stocks_map"].values()), False
+    return list(stocks_map.values()), False
 
 def get_top_sectors_summary():
     stocks, _ = get_realtime_heatmap_data()
@@ -1141,7 +1127,7 @@ def get_top_sectors_summary():
 @heatmap_bp.route("/api/heatmap/snapshot")
 def api_heatmap_snapshot():
     force = request.args.get("force") == "1"
-    stocks, cached = get_realtime_heatmap_data(force_refresh=force)
+    stocks, cached = get_realtime_heatmap_data(force_refresh=True)
     updated_str = time.strftime("%H:%M:%S", time.localtime(_market_cache["timestamp"])) if _market_cache["timestamp"] else "--:--:--"
     return jsonify({
         "status": "ok",
