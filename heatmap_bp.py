@@ -25,7 +25,7 @@ _market_cache = {
     "stocks_map": {}
 }
 
-# 32 大全方位產業分類核心戰略池（電機已擴充至完整陣容）
+# 32 大全方位產業分類核心戰略池（完整陣容與電機擴充）
 RAW_SECTOR_DICT = {
     "半導體": [
         "台積電", "聯電", "世界", "力積電", "旺宏", "華邦電", "南亞科", "群聯", "創見", "威剛", 
@@ -186,7 +186,6 @@ RAW_SECTOR_DICT = {
     ]
 }
 
-# 完整代號與市場對照表（包含電機新增標的）
 NAME_TO_META = {
     "台積電": {"symbol": "2330", "market": "TSE", "mcap": 26500},
     "聯電": {"symbol": "2303", "market": "TSE", "mcap": 6200},
@@ -1084,6 +1083,41 @@ def get_realtime_heatmap_data(force_refresh=False):
     _save_disk_cache()
 
     return list(_market_cache["stocks_map"].values()), False
+
+def get_top_sectors_summary():
+    stocks, _ = get_realtime_heatmap_data()
+    if not stocks:
+        return "⚠️ 行情數據同步中，請稍後再試。"
+
+    sectors = {}
+    for s in stocks:
+        sec = s["sector"]
+        if sec not in sectors:
+            sectors[sec] = {"tradeValue": 0.0, "weightedChange": 0.0, "topStock": s}
+        sectors[sec]["tradeValue"] += s["tradeValue"]
+        sectors[sec]["weightedChange"] += s["changePercent"] * s["tradeValue"]
+        if s["tradeValue"] > sectors[sec]["topStock"]["tradeValue"]:
+            sectors[sec]["topStock"] = s
+
+    ranked = []
+    for sec_name, info in sectors.items():
+        avg_chg = info["weightedChange"] / info["tradeValue"] if info["tradeValue"] > 0 else 0
+        ranked.append({
+            "sector": sec_name,
+            "tradeValue": round(info["tradeValue"], 1),
+            "avgChange": round(avg_chg, 2),
+            "topStock": info["topStock"]
+        })
+
+    ranked.sort(key=lambda x: x["tradeValue"], reverse=True)
+    lines = [f"🔥 【盤中即時資金熱力速報】(共 32 大產業 / {len(stocks)} 檔核心指標股)"]
+    for idx, r in enumerate(ranked[:6], 1):
+        sign = "+" if r["avgChange"] > 0 else ""
+        icon = "🔴" if r["avgChange"] > 0 else ("🟢" if r["avgChange"] < 0 else "⚪")
+        ts = r["topStock"]
+        ts_sign = "+" if ts["changePercent"] > 0 else ""
+        lines.append(f"#{idx} {icon} {r['sector']} ({sign}{r['avgChange']}% | {r['tradeValue']}億)\n    └ 領頭羊：{ts['name']} {ts['price']} ({ts_sign}{ts['changePercent']}%)")
+    return "\n".join(lines)
 
 @heatmap_bp.route("/api/heatmap/snapshot")
 def api_heatmap_snapshot():
