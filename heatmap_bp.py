@@ -187,7 +187,7 @@ RAW_SECTOR_DICT = {
 }
 
 NAME_TO_META = {
-    "台積電": {"symbol": "2330", "market": "TSE", "mcap": 26500},
+    "台積電": {"symbol": "2330", "market": "TSE", "mcap": 250000},
     "聯電": {"symbol": "2303", "market": "TSE", "mcap": 6200},
     "世界": {"symbol": "5347", "market": "OTC", "mcap": 1200},
     "力積電": {"symbol": "6770", "market": "TSE", "mcap": 800},
