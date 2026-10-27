@@ -39,7 +39,16 @@
                 </div>
             </div>
         </div>
-        <div class="flex items-center space-x-1">
+
+        <!-- 右側：加權指數看板與重新整理 -->
+        <div class="flex items-center space-x-2">
+            <div id="taiex-badge" class="bg-gray-800/90 border border-gray-700 px-2 py-0.5 rounded-md text-right font-mono shadow">
+                <div class="text-[9px] text-gray-400 tracking-wider">加權指數</div>
+                <div class="text-xs font-bold flex items-center justify-end space-x-1">
+                    <span id="taiex-val" class="text-white">--</span>
+                    <span id="taiex-chg" class="text-red-400">--</span>
+                </div>
+            </div>
             <button onclick="triggerRefresh()" id="refresh-btn" class="bg-blue-600 hover:bg-blue-500 text-white text-[11px] px-2.5 py-1 rounded-md font-medium transition shadow cursor-pointer">
                 <span>⚡ 重新整理</span>
             </button>
@@ -217,6 +226,18 @@
                 const json = await res.json();
                 if (json.status === 'ok') {
                     rawStocksData = json.stocks;
+
+                    // 更新加權指數 UI
+                    if (json.taiex) {
+                        const t = json.taiex;
+                        const sign = t.change >= 0 ? '▲' : '▼';
+                        const colorCls = t.change >= 0 ? 'text-red-400' : 'text-emerald-400';
+                        document.getElementById('taiex-val').innerText = t.index.toLocaleString();
+                        const chgEl = document.getElementById('taiex-chg');
+                        chgEl.className = colorCls;
+                        chgEl.innerText = `${sign} ${Math.abs(t.change)}`;
+                    }
+
                     const fullTimeStr = getFullTimestamp();
                     document.getElementById('update-time').innerText = fullTimeStr;
                     document.getElementById('legend-update-time').innerText = `更新時間：${fullTimeStr}`;
@@ -425,7 +446,6 @@
                 children.sort((a, b) => b.value - a.value);
                 treeSeriesData = [{ name: '個股熱力總覽', children: children }];
             } 
-            // 模式 B：全部產業總覽模式 —— 加入動態字體大小計算！
             else if (currentViewMode === 'heatmap' && !currentDrillSector && activeSectorFilter === 'ALL') {
                 const sectorGroups = {};
                 dataFiltered.forEach(s => {
@@ -439,7 +459,6 @@
 
                 const sortedSecKeys = Object.keys(sectorGroups).sort((a, b) => sectorGroups[b].totalVal - sectorGroups[a].totalVal);
 
-                // 計算最大產業的權重，作為字體大小縮放基準
                 let maxSecVal = 1;
                 sortedSecKeys.forEach(sec => {
                     const grp = sectorGroups[sec];
@@ -459,7 +478,6 @@
                     if (currentWeightMetric === 'mcap') weightVal = grp.totalMcap;
                     if (weightVal <= 0) weightVal = 1;
 
-                    // 核心強效計算：根據產業方塊大小動態計算字體級距 (範圍 11px ~ 32px)
                     let ratio = weightVal / maxSecVal;
                     let dynamicFontSize = Math.round(11 + ratio * 21);
 
@@ -467,7 +485,7 @@
                         name: `${sec}\n${sign}${avgChg}%`,
                         value: weightVal,
                         itemStyle: { color: getColorByChange(parseFloat(avgChg)) },
-                        label: { fontSize: dynamicFontSize }, // 獨立賦予 32 產業大方塊動態字體大小
+                        label: { fontSize: dynamicFontSize },
                         type: 'sector',
                         sectorName: sec,
                         rawGroup: grp
