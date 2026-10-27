@@ -31,7 +31,6 @@ _market_cache = {
     "stocks_map": {}
 }
 
-# 直接硬編碼完整的戰略清單（確保台積電絕對在第一位且欄位完整）
 SECTOR_STOCKS = [
     # 護國神山與半導體核心
     {"symbol": "2330", "name": "台積電", "sector": "半導體", "market": "TSE", "mcap": 250000},
@@ -298,7 +297,7 @@ SECTOR_STOCKS = [
     {"symbol": "1506", "name": "正道", "sector": "電機", "market": "TSE", "mcap": 200},
     {"symbol": "1530", "name": "亞崴", "sector": "電機", "market": "TSE", "mcap": 200},
 
-    # 其他 32 產業個股 (確保全數涵蓋不遺漏)
+    # 營建
     {"symbol": "2548", "name": "華固", "sector": "營建", "market": "TSE", "mcap": 350},
     {"symbol": "5534", "name": "長虹", "sector": "營建", "market": "TSE", "mcap": 400},
     {"symbol": "2542", "name": "興富發", "sector": "營建", "market": "TSE", "mcap": 880},
@@ -320,6 +319,7 @@ SECTOR_STOCKS = [
     {"symbol": "5521", "name": "工信", "sector": "營建", "market": "TSE", "mcap": 200},
     {"symbol": "5531", "name": "鄉林", "sector": "營建", "market": "TSE", "mcap": 200},
 
+    # 鋼鐵
     {"symbol": "2002", "name": "中鋼", "sector": "鋼鐵", "market": "TSE", "mcap": 3450},
     {"symbol": "2014", "name": "中鴻", "sector": "鋼鐵", "market": "TSE", "mcap": 310},
     {"symbol": "2006", "name": "東和鋼鐵", "sector": "鋼鐵", "market": "TSE", "mcap": 600},
@@ -340,6 +340,7 @@ SECTOR_STOCKS = [
     {"symbol": "9958", "name": "世紀鋼", "sector": "鋼鐵", "market": "TSE", "mcap": 700},
     {"symbol": "2038", "name": "海光", "sector": "鋼鐵", "market": "TSE", "mcap": 200},
 
+    # 生技
     {"symbol": "4105", "name": "台灣東洋", "sector": "生技", "market": "OTC", "mcap": 500},
     {"symbol": "6472", "name": "保瑞", "sector": "生技", "market": "TSE", "mcap": 820},
     {"symbol": "6446", "name": "藥華藥", "sector": "生技", "market": "OTC", "mcap": 2150},
@@ -366,6 +367,7 @@ SECTOR_STOCKS = [
     {"symbol": "6589", "name": "台康生技", "sector": "生技", "market": "OTC", "mcap": 800},
     {"symbol": "4174", "name": "浩鼎", "sector": "生技", "market": "OTC", "mcap": 400},
 
+    # 食品
     {"symbol": "1216", "name": "統一", "sector": "食品", "market": "TSE", "mcap": 4900},
     {"symbol": "1201", "name": "味全", "sector": "食品", "market": "TSE", "mcap": 150},
     {"symbol": "1210", "name": "大成", "sector": "食品", "market": "TSE", "mcap": 600},
@@ -387,6 +389,7 @@ SECTOR_STOCKS = [
     {"symbol": "2727", "name": "王品", "sector": "食品", "market": "TSE", "mcap": 400},
     {"symbol": "2732", "name": "六角", "sector": "食品", "market": "OTC", "mcap": 300},
 
+    # 汽車
     {"symbol": "2201", "name": "裕隆", "sector": "汽車", "market": "TSE", "mcap": 800},
     {"symbol": "2204", "name": "中華", "sector": "汽車", "market": "TSE", "mcap": 1200},
     {"symbol": "2206", "name": "三陽工業", "sector": "汽車", "market": "TSE", "mcap": 1500},
@@ -424,6 +427,7 @@ SECTOR_STOCKS = [
     {"symbol": "1521", "name": "大億", "sector": "汽車", "market": "TSE", "mcap": 200},
     {"symbol": "1587", "name": "吉茂", "sector": "汽車", "market": "TSE", "mcap": 200},
 
+    # 化學
     {"symbol": "1722", "name": "台肥", "sector": "化學", "market": "TSE", "mcap": 1200},
     {"symbol": "1717", "name": "長興", "sector": "化學", "market": "TSE", "mcap": 360},
     {"symbol": "1727", "name": "中華化", "sector": "化學", "market": "TSE", "mcap": 200},
@@ -456,6 +460,7 @@ SECTOR_STOCKS = [
     {"symbol": "1776", "name": "展宇", "sector": "化學", "market": "TSE", "mcap": 200},
     {"symbol": "1732", "name": "毛寶", "sector": "化學", "market": "TSE", "mcap": 200},
 
+    # 油電
     {"symbol": "6806", "name": "森崴能源", "sector": "油電", "market": "OTC", "mcap": 380},
     {"symbol": "6869", "name": "雲豹能源", "sector": "油電", "market": "TSE", "mcap": 350},
     {"symbol": "6873", "name": "泓德能源", "sector": "油電", "market": "TSE", "mcap": 400},
@@ -470,6 +475,7 @@ SECTOR_STOCKS = [
     {"symbol": "9918", "name": "欣天然", "sector": "油電", "market": "TSE", "mcap": 400},
     {"symbol": "9931", "name": "欣高", "sector": "油電", "market": "OTC", "mcap": 300},
 
+    # 紡織
     {"symbol": "1476", "name": "儒鴻", "sector": "紡織", "market": "TSE", "mcap": 2800},
     {"symbol": "1477", "name": "聚陽", "sector": "紡織", "market": "TSE", "mcap": 1150},
     {"symbol": "1402", "name": "遠東新", "sector": "紡織", "market": "TSE", "mcap": 1700},
@@ -514,6 +520,7 @@ SECTOR_STOCKS = [
     {"symbol": "1445", "name": "大宇", "sector": "紡織", "market": "TSE", "mcap": 200},
     {"symbol": "1418", "name": "東華", "sector": "紡織", "market": "TSE", "mcap": 200},
 
+    # 貿易
     {"symbol": "3702", "name": "大聯大", "sector": "貿易", "market": "TSE", "mcap": 1600},
     {"symbol": "3036", "name": "文曄", "sector": "貿易", "market": "TSE", "mcap": 1200},
     {"symbol": "2347", "name": "聯強", "sector": "貿易", "market": "TSE", "mcap": 1800},
@@ -548,6 +555,7 @@ SECTOR_STOCKS = [
     {"symbol": "2929", "name": "淘帝-KY", "sector": "貿易", "market": "TSE", "mcap": 200},
     {"symbol": "2936", "name": "凱羿-KY", "sector": "貿易", "market": "TSE", "mcap": 200},
 
+    # 電器
     {"symbol": "1604", "name": "聲寶", "sector": "電器", "market": "TSE", "mcap": 400},
     {"symbol": "5283", "name": "禾聯碩", "sector": "電器", "market": "OTC", "mcap": 300},
     {"symbol": "1605", "name": "華新", "sector": "電器", "market": "TSE", "mcap": 1350},
@@ -566,6 +574,7 @@ SECTOR_STOCKS = [
     {"symbol": "1626", "name": "艾美特-KY", "sector": "電器", "market": "KY", "mcap": 200},
     {"symbol": "4930", "name": "燦星網", "sector": "電器", "market": "OTC", "mcap": 200},
 
+    # 水泥
     {"symbol": "1101", "name": "台泥", "sector": "水泥", "market": "TSE", "mcap": 2450},
     {"symbol": "1102", "name": "亞泥", "sector": "水泥", "market": "TSE", "mcap": 1400},
     {"symbol": "1104", "name": "環泥", "sector": "水泥", "market": "TSE", "mcap": 400},
@@ -575,6 +584,7 @@ SECTOR_STOCKS = [
     {"symbol": "2504", "name": "國產", "sector": "水泥", "market": "TSE", "mcap": 580},
     {"symbol": "1110", "name": "東泥", "sector": "水泥", "market": "TSE", "mcap": 200},
 
+    # 電子通路
     {"symbol": "6227", "name": "茂綸", "sector": "電子通路", "market": "OTC", "mcap": 200},
     {"symbol": "8032", "name": "光菱", "sector": "電子通路", "market": "OTC", "mcap": 200},
     {"symbol": "3360", "name": "尚立", "sector": "電子通路", "market": "TSE", "mcap": 200},
@@ -589,6 +599,7 @@ SECTOR_STOCKS = [
     {"symbol": "8072", "name": "陞泰", "sector": "電子通路", "market": "OTC", "mcap": 200},
     {"symbol": "2430", "name": "燦坤", "sector": "電子通路", "market": "TSE", "mcap": 300},
 
+    # 運動休閒
     {"symbol": "9904", "name": "寶成", "sector": "運動休閒", "market": "TSE", "mcap": 1000},
     {"symbol": "9910", "name": "豐泰", "sector": "運動休閒", "market": "TSE", "mcap": 1300},
     {"symbol": "6768", "name": "志強-KY", "sector": "運動休閒", "market": "TSE", "mcap": 500},
@@ -611,6 +622,7 @@ SECTOR_STOCKS = [
     {"symbol": "8467", "name": "波力-KY", "sector": "運動休閒", "market": "TSE", "mcap": 300},
     {"symbol": "1432", "name": "大魯閣", "sector": "運動休閒", "market": "TSE", "mcap": 200},
 
+    # 綠能環保
     {"symbol": "8422", "name": "可寧衛*", "sector": "綠能環保", "market": "TSE", "mcap": 500},
     {"symbol": "6803", "name": "崑鼎", "sector": "綠能環保", "market": "TSE", "mcap": 600},
     {"symbol": "8936", "name": "國統", "sector": "綠能環保", "market": "OTC", "mcap": 400},
@@ -640,6 +652,7 @@ SECTOR_STOCKS = [
     {"symbol": "6771", "name": "平和環保-創", "sector": "綠能環保", "market": "OTC", "mcap": 200},
     {"symbol": "6641", "name": "基士德-KY", "sector": "綠能環保", "market": "OTC", "mcap": 200},
 
+    # 橡膠
     {"symbol": "2103", "name": "台橡", "sector": "橡膠", "market": "TSE", "mcap": 310},
     {"symbol": "2108", "name": "南帝", "sector": "橡膠", "market": "TSE", "mcap": 400},
     {"symbol": "2105", "name": "正新", "sector": "橡膠", "market": "TSE", "mcap": 1350},
@@ -653,12 +666,14 @@ SECTOR_STOCKS = [
     {"symbol": "2104", "name": "國際中橡", "sector": "橡膠", "market": "TSE", "mcap": 400},
     {"symbol": "2114", "name": "鑫永銓", "sector": "橡膠", "market": "OTC", "mcap": 300},
 
+    # 玻璃
     {"symbol": "1802", "name": "台玻", "sector": "玻璃", "market": "TSE", "mcap": 450},
     {"symbol": "1806", "name": "冠軍", "sector": "玻璃", "market": "TSE", "mcap": 200},
     {"symbol": "1810", "name": "和成", "sector": "玻璃", "market": "TSE", "mcap": 300},
     {"symbol": "1817", "name": "凱撒衛", "sector": "玻璃", "market": "TSE", "mcap": 300},
     {"symbol": "1809", "name": "中釉", "sector": "玻璃", "market": "TSE", "mcap": 200},
 
+    # 觀光
     {"symbol": "2707", "name": "晶華", "sector": "觀光", "market": "TSE", "mcap": 250},
     {"symbol": "2748", "name": "雲品", "sector": "觀光", "market": "OTC", "mcap": 300},
     {"symbol": "2739", "name": "寒舍", "sector": "觀光", "market": "TSE", "mcap": 300},
@@ -685,6 +700,7 @@ SECTOR_STOCKS = [
     {"symbol": "7705", "name": "三商餐飲", "sector": "觀光", "market": "TSE", "mcap": 300},
     {"symbol": "8940", "name": "新天地", "sector": "觀光", "market": "OTC", "mcap": 200},
 
+    # 居家生活
     {"symbol": "9939", "name": "櫻花", "sector": "居家生活", "market": "TSE", "mcap": 500},
     {"symbol": "9934", "name": "成霖", "sector": "居家生活", "market": "TSE", "mcap": 300},
     {"symbol": "2062", "name": "橋椿", "sector": "居家生活", "market": "TSE", "mcap": 300},
@@ -703,6 +719,7 @@ SECTOR_STOCKS = [
     {"symbol": "6807", "name": "峰源-KY", "sector": "居家生活", "market": "TSE", "mcap": 300},
     {"symbol": "6671", "name": "三能-KY", "sector": "居家生活", "market": "OTC", "mcap": 200},
 
+    # 數位雲端
     {"symbol": "3029", "name": "零壹", "sector": "數位雲端", "market": "OTC", "mcap": 500},
     {"symbol": "6112", "name": "邁達特", "sector": "數位雲端", "market": "TSE", "mcap": 400},
     {"symbol": "6689", "name": "伊雲谷", "sector": "數位雲端", "market": "TSE", "mcap": 300},
@@ -731,6 +748,7 @@ SECTOR_STOCKS = [
     {"symbol": "8487", "name": "愛爾達-創", "sector": "數位雲端", "market": "OTC", "mcap": 300},
     {"symbol": "7835", "name": "永悅健康-創", "sector": "數位雲端", "market": "OTC", "mcap": 200},
 
+    # 資訊服務
     {"symbol": "2480", "name": "敦陽科", "sector": "資訊服務", "market": "TSE", "mcap": 800},
     {"symbol": "2471", "name": "資通", "sector": "資訊服務", "market": "TSE", "mcap": 300},
     {"symbol": "2468", "name": "華經", "sector": "資訊服務", "market": "TSE", "mcap": 300},
@@ -745,6 +763,7 @@ SECTOR_STOCKS = [
     {"symbol": "4946", "name": "辣椒", "sector": "資訊服務", "market": "OTC", "mcap": 200},
     {"symbol": "6183", "name": "關貿", "sector": "資訊服務", "market": "TSE", "mcap": 800},
 
+    # 造紙
     {"symbol": "1907", "name": "永豐餘", "sector": "造紙", "market": "TSE", "mcap": 900},
     {"symbol": "1904", "name": "正隆", "sector": "造紙", "market": "TSE", "mcap": 600},
     {"symbol": "1909", "name": "榮成", "sector": "造紙", "market": "TSE", "mcap": 500},
@@ -753,6 +772,7 @@ SECTOR_STOCKS = [
     {"symbol": "1903", "name": "士紙", "sector": "造紙", "market": "TSE", "mcap": 300},
     {"symbol": "6790", "name": "永豐實", "sector": "造紙", "market": "TSE", "mcap": 800},
 
+    # 其他
     {"symbol": "9917", "name": "中保科", "sector": "其他", "market": "TSE", "mcap": 2000},
     {"symbol": "9925", "name": "新保", "sector": "其他", "market": "TSE", "mcap": 1000},
     {"symbol": "9918", "name": "欣天然", "sector": "其他", "market": "TSE", "mcap": 400},
@@ -771,7 +791,7 @@ SECTOR_STOCKS = [
     {"symbol": "6464", "name": "台數科", "sector": "其他", "market": "TSE", "mcap": 500},
     {"symbol": "9942", "name": "茂順", "sector": "其他", "market": "TSE", "mcap": 300},
     {"symbol": "6585", "name": "鼎基", "sector": "其他", "market": "TSE", "mcap": 500},
-    {"symbol": "6184", "name": "大豐電", "sector": "Other", "market": "OTC", "mcap": 300},
+    {"symbol": "6184", "name": "大豐電", "sector": "其他", "market": "OTC", "mcap": 300},
     {"symbol": "1437", "name": "勤益控", "sector": "其他", "market": "TSE", "mcap": 300},
     {"symbol": "6901", "name": "鑽石投資", "sector": "其他", "market": "TSE", "mcap": 800},
     {"symbol": "5284", "name": "jpp-KY", "sector": "其他", "market": "OTC", "mcap": 400},
@@ -873,7 +893,6 @@ def fetch_twse_batch_quotes(stocks_list):
         for f in as_completed(futures):
             results.update(f.result())
 
-    # 護國神山絕對保底強制注入
     tsmc_sym = "2330"
     if tsmc_sym not in results:
         results[tsmc_sym] = {
@@ -954,6 +973,41 @@ def get_realtime_heatmap_data(force_refresh=False):
     _market_cache["stocks_map"] = stocks_map
 
     return list(stocks_map.values()), False
+
+def get_top_sectors_summary():
+    stocks, _ = get_realtime_heatmap_data()
+    if not stocks:
+        return "⚠️ 行情數據同步中，請稍後再試。"
+
+    sectors = {}
+    for s in stocks:
+        sec = s["sector"]
+        if sec not in sectors:
+            sectors[sec] = {"tradeValue": 0.0, "weightedChange": 0.0, "topStock": s}
+        sectors[sec]["tradeValue"] += s["tradeValue"]
+        sectors[sec]["weightedChange"] += s["changePercent"] * s["tradeValue"]
+        if s["tradeValue"] > sectors[sec]["topStock"]["tradeValue"]:
+            sectors[sec]["topStock"] = s
+
+    ranked = []
+    for sec_name, info in sectors.items():
+        avg_chg = info["weightedChange"] / info["tradeValue"] if info["tradeValue"] > 0 else 0
+        ranked.append({
+            "sector": sec_name,
+            "tradeValue": round(info["tradeValue"], 1),
+            "avgChange": round(avg_chg, 2),
+            "topStock": info["topStock"]
+        })
+
+    ranked.sort(key=lambda x: x["tradeValue"], reverse=True)
+    lines = [f"🔥 【盤中即時資金熱力速報】(共 32 大產業 / {len(stocks)} 檔核心指標股)"]
+    for idx, r in enumerate(ranked[:6], 1):
+        sign = "+" if r["avgChange"] > 0 else ""
+        icon = "🔴" if r["avgChange"] > 0 else ("🟢" if r["avgChange"] < 0 else "⚪")
+        ts = r["topStock"]
+        ts_sign = "+" if ts["changePercent"] > 0 else ""
+        lines.append(f"#{idx} {icon} {r['sector']} ({sign}{r['avgChange']}% | {r['tradeValue']}億)\n    └ 領頭羊：{ts['name']} {ts['price']} ({ts_sign}{ts['changePercent']}%)")
+    return "\n".join(lines)
 
 @heatmap_bp.route("/api/heatmap/snapshot")
 def api_heatmap_snapshot():
