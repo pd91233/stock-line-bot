@@ -102,11 +102,11 @@
 
     <!-- 主內容區 -->
     <main class="flex-1 relative w-full bg-[#07090e] overflow-hidden flex flex-col">
-        <div id="back-bar" class="absolute top-3 left-3 z-10 hidden">
-            <button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur cursor-pointer">
-                <span>⬅ 返回 32 產業總覽</span>
-            </button>
-        </div>
+        <div id="back-bar" class="absolute top-3 right-3 z-10 hidden">
+			<button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur cursor-pointer">
+				<span>⬅ 產業總覽</span>
+			</button>
+		</div>
 
         <div id="treemap-container" class="w-full flex-1 min-h-0"></div>
         <div id="list-container" class="absolute inset-0 overflow-y-auto p-3 space-y-2 hidden"></div>
@@ -350,19 +350,27 @@
         }
 
         function filterSector(sec) {
-            activeSectorFilter = sec;
-            currentDrillSector = null;
-            document.getElementById('back-bar').classList.add('hidden');
-            buildSectorPills();
-            renderChart();
-            if (currentViewMode === 'list') renderListMode();
-        }
+			activeSectorFilter = sec;
+			if (sec !== 'ALL') {
+				currentDrillSector = sec; // 讓上方按鈕點擊時也視為當前鑽研產業
+				document.getElementById('back-bar').classList.remove('hidden'); // 顯示返回按鈕
+			} else {
+				currentDrillSector = null;
+				document.getElementById('back-bar').classList.add('hidden'); // 隱藏返回按鈕
+			}
+			buildSectorPills();
+			renderChart();
+			if (currentViewMode === 'list') renderListMode();
+		}
 
         function resetDrillDown() {
-            currentDrillSector = null;
-            document.getElementById('back-bar').classList.add('hidden');
-            renderChart();
-        }
+			currentDrillSector = null;
+			activeSectorFilter = 'ALL'; // 同步重設上方按鈕為全部產業
+			document.getElementById('back-bar').classList.add('hidden');
+			buildSectorPills();
+			renderChart();
+			if (currentViewMode === 'list') renderListMode();
+		}
 
         function getColorByChange(pct) {
             if (pct >= 2.0) return '#891826';
