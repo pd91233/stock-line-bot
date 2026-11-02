@@ -115,14 +115,17 @@
 
     <!-- 主內容區 -->
     <main class="flex-1 relative w-full bg-[#07090e] overflow-hidden flex flex-col">
-        <!-- 返回按鈕在右上角 right-3 -->
-        <div id="back-bar" class="absolute top-3 right-3 z-10 hidden">
-            <button onclick="resetDrillDown()" class="bg-gray-900/90 hover:bg-gray-800 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 shadow-xl flex items-center space-x-1 backdrop-blur cursor-pointer">
-                <span>⬅ 返回 產業總覽</span>
+        
+        <!-- 🎯 整合式返回列：當進入單一產業時顯示在頂部，絕不遮擋圖表數據 -->
+        <div id="back-bar" class="bg-gray-900/90 border-b border-gray-800 px-3 py-1.5 hidden flex items-center justify-between shrink-0">
+            <div class="text-xs text-amber-400 font-bold flex items-center space-x-2">
+                <span>📂 正在檢視產業細節</span>
+            </div>
+            <button onclick="resetDrillDown()" class="bg-blue-600 hover:bg-blue-500 text-white text-[11px] px-2.5 py-1 rounded-md transition shadow cursor-pointer flex items-center space-x-1">
+                <span>⬅ 返回產業總覽</span>
             </button>
         </div>
 
-        <!-- 視角容器：確保與控制面板保持安全距離，絕不重疊 -->
         <div id="treemap-container" class="w-full flex-1 min-h-0"></div>
         <div id="list-container" class="w-full flex-1 overflow-y-auto p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 content-start hidden"></div>
 
@@ -176,6 +179,7 @@
                     document.getElementById('back-bar').classList.remove('hidden');
                     buildSectorPills();
                     renderChart();
+                    chartInstance.resize(); // 🎯 重新計算圖表尺寸以適應返回列
                 }
             });
 
@@ -388,6 +392,7 @@
             }
             buildSectorPills();
             renderChart();
+            setTimeout(() => chartInstance.resize(), 50); // 🎯 觸發重新排版
             if (currentViewMode === 'list') renderListMode();
         }
 
@@ -397,6 +402,7 @@
             document.getElementById('back-bar').classList.add('hidden');
             buildSectorPills();
             renderChart();
+            setTimeout(() => chartInstance.resize(), 50); // 🎯 觸發重新排版
             if (currentViewMode === 'list') renderListMode();
         }
 
