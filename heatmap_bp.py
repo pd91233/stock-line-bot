@@ -970,7 +970,41 @@ def fetch_taiex_index():
         pass
     return {"index": 23000.0, "change": 0.0}
 
-# 🎯 新增：合法合規的財經 RSS 新聞抓取函式
+def get_top_sectors_summary():
+    stocks, _ = get_realtime_heatmap_data()
+    if not stocks:
+        return "⚠️ 行情數據同步中，請稍後再試。"
+
+    sectors = {}
+    for s in stocks:
+        sec = s["sector"]
+        if sec not in sectors:
+            sectors[sec] = {"tradeValue": 0.0, "weightedChange": 0.0, "topStock": s}
+        sectors[sec]["tradeValue"] += s["tradeValue"]
+        sectors[sec]["weightedChange"] += s["changePercent"] * s["tradeValue"]
+        if s["tradeValue"] > sectors[sec]["topStock"]["tradeValue"]:
+            sectors[sec]["topStock"] = s
+
+    ranked = []
+    for sec_name, info in sectors.items():
+        avg_chg = info["weightedChange"] / info["tradeValue"] if info["tradeValue"] > 0 else 0
+        ranked.append({
+            "sector": sec_name,
+            "tradeValue": round(info["tradeValue"], 1),
+            "avgChange": round(avg_chg, 2),
+            "topStock": info["topStock"]
+        })
+
+    ranked.sort(key=lambda x: x["tradeValue"], reverse=True)
+    lines = [f"🔥 【盤中即時資金熱力速報】(共 32 大產業 / {len(stocks)} 檔核心指標股)"]
+    for idx, r in enumerate(ranked[:6], 1):
+        sign = "+" if r["avgChange"] > 0 else ""
+        icon = "🔴" if r["avgChange"] > 0 else ("🟢" if r["avgChange"] < 0 else "⚪")
+        ts = r["topStock"]
+        ts_sign = "+" if ts["changePercent"] > 0 else ""
+        lines.append(f"#{idx} {icon} {r['sector']} ({sign}{r['avgChange']}% | {r['tradeValue']}億)\n    └ 領頭羊：{ts['name']} {ts['price']} ({ts_sign}{ts['changePercent']}%)")
+    return "\n".join(lines)
+
 def fetch_financial_news():
     news_list = []
     rss_urls = [
