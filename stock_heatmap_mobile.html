@@ -113,10 +113,10 @@
         </div>
     </div>
 
-    <!-- 主內容區 -->
-    <main class="flex-1 relative w-full bg-[#07090e] overflow-hidden flex flex-col">
+    <!-- 主內容區 (支援上下捲動與下方雙欄佈局) -->
+    <main class="flex-1 relative w-full bg-[#07090e] overflow-y-auto flex flex-col">
         
-        <!-- 整合式返回列 -->
+        <!-- 返回列 -->
         <div id="back-bar" class="bg-gray-900/90 border-b border-gray-800 px-3 py-1.5 hidden flex items-center justify-between shrink-0">
             <div class="text-xs text-amber-400 font-bold flex items-center space-x-2">
                 <span>📂 正在檢視產業細節</span>
@@ -126,11 +126,12 @@
             </button>
         </div>
 
-        <div id="treemap-container" class="w-full flex-1 min-h-0"></div>
-        <div id="list-container" class="w-full flex-1 overflow-y-auto p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 content-start hidden"></div>
+        <!-- 上方熱力圖核心容器 (固定高度確保圖表完美展開) -->
+        <div id="treemap-container" class="w-full h-[650px] shrink-0"></div>
+        <div id="list-container" class="w-full min-h-[500px] p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 content-start hidden"></div>
 
-        <!-- 底部專業漲跌幅色階圖例列 -->
-        <div class="bg-gray-900 border-t border-gray-800 px-3 py-2 shrink-0 flex flex-col space-y-1 z-10">
+        <!-- 專業漲跌幅色階圖例列 -->
+        <div class="bg-gray-900 border-t border-b border-gray-800 px-3 py-2 shrink-0 flex flex-col space-y-1 z-10">
             <div class="flex w-full h-5 rounded overflow-hidden shadow font-mono text-[11px] font-bold text-white text-center">
                 <div class="flex-1 bg-[#891826] flex items-center justify-center">2%</div>
                 <div class="flex-1 bg-[#992029] flex items-center justify-center">1.5%</div>
@@ -147,6 +148,49 @@
                 <span id="legend-update-time">更新時間：--</span>
             </div>
         </div>
+
+        <!-- 下方雙欄區塊：左側大盤新聞、右側多維度排行榜 -->
+        <div class="p-3 grid grid-cols-1 lg:grid-cols-12 gap-4 bg-[#07090e]">
+            
+            <!-- 左側：大盤新聞列表 (佔 7 欄) -->
+            <div class="lg:col-span-7 bg-gray-900/90 border border-gray-800 rounded-xl p-3 flex flex-col space-y-3">
+                <div class="flex items-center justify-between border-b border-gray-800 pb-2">
+                    <h2 class="text-sm font-bold text-white flex items-center space-x-1.5">
+                        <span>📰</span>
+                        <span>大盤即時新聞與盤勢解析</span>
+                    </h2>
+                    <span class="text-[10px] text-emerald-400 font-mono">🔴 官方 RSS 實時同步</span>
+                </div>
+                <div id="news-container" class="space-y-2.5 overflow-y-auto max-h-[600px] pr-1">
+                    <div class="text-xs text-gray-400 text-center py-6">⏳ 正在載入財經新聞...</div>
+                </div>
+            </div>
+
+            <!-- 右側：多維度熱門排行榜 (佔 5 欄) -->
+            <div class="lg:col-span-5 bg-gray-900/90 border border-gray-800 rounded-xl p-3 flex flex-col space-y-3">
+                <div class="flex items-center justify-between border-b border-gray-800 pb-2">
+                    <h2 class="text-sm font-bold text-white flex items-center space-x-1.5">
+                        <span>🏆</span>
+                        <span>市場熱門排行</span>
+                    </h2>
+                </div>
+                <!-- 排行榜 Tab 分頁切換按鈕 -->
+                <div class="flex flex-wrap gap-1 text-[11px]">
+                    <button onclick="switchRankTab('val')" id="rtab-val" class="tab-btn active px-2.5 py-1 rounded">成交值</button>
+                    <button onclick="switchRankTab('vol')" id="rtab-vol" class="tab-btn px-2.5 py-1 rounded">成交量</button>
+                    <button onclick="switchRankTab('foreign')" id="rtab-foreign" class="tab-btn px-2.5 py-1 rounded">外資買超</button>
+                    <button onclick="switchRankTab('trust')" id="rtab-trust" class="tab-btn px-2.5 py-1 rounded">投信買超</button>
+                    <button onclick="switchRankTab('dealer')" id="rtab-dealer" class="tab-btn px-2.5 py-1 rounded">自營商</button>
+                    <button onclick="switchRankTab('up')" id="rtab-up" class="tab-btn px-2.5 py-1 rounded">漲幅</button>
+                    <button onclick="switchRankTab('down')" id="rtab-down" class="tab-btn px-2.5 py-1 rounded">跌幅</button>
+                </div>
+                <!-- 排行列表容器 -->
+                <div id="ranking-container" class="space-y-2 overflow-y-auto max-h-[530px] pr-1">
+                    <div class="text-xs text-gray-400 text-center py-6">⏳ 載入排行榜中...</div>
+                </div>
+            </div>
+
+        </div>
     </main>
 
     <!-- 底部抽屜 -->
@@ -159,11 +203,13 @@
 
     <script>
         let rawStocksData = [];
+        let rawNewsData = [];
         let currentViewMode = 'heatmap';
         let currentMarketFilter = 'ALL';
         let currentWeightMetric = 'tradeValue';
         let activeSectorFilter = 'ALL';
         let currentDrillSector = null;
+        let currentRankTab = 'val';
         let chartInstance = null;
 
         window.addEventListener('DOMContentLoaded', () => {
@@ -237,6 +283,7 @@
                 const json = await res.json();
                 if (json.status === 'ok') {
                     rawStocksData = json.stocks;
+                    rawNewsData = json.news || [];
 
                     if (json.taiex) {
                         const t = json.taiex;
@@ -254,6 +301,8 @@
                     updateTopSummaryStats();
                     buildSectorPills();
                     renderChart();
+                    renderNewsList();
+                    renderRankingList();
                     if (currentViewMode === 'list') renderListMode();
                 }
             } catch (e) {
@@ -287,6 +336,7 @@
                 if (btn) btn.classList.toggle('active', m === market.toLowerCase());
             });
             renderChart();
+            renderRankingList();
             if (currentViewMode === 'list') renderListMode();
         }
 
@@ -321,6 +371,81 @@
                 if (btn) btn.classList.toggle('active', k === metric);
             });
             renderChart();
+        }
+
+        function switchRankTab(tab) {
+            currentRankTab = tab;
+            ['val', 'vol', 'foreign', 'trust', 'dealer', 'up', 'down'].forEach(t => {
+                const btn = document.getElementById(`rtab-${t}`);
+                if (btn) btn.classList.toggle('active', t === tab);
+            });
+            renderRankingList();
+        }
+
+        function renderNewsList() {
+            const container = document.getElementById('news-container');
+            if (!rawNewsData || rawNewsData.length === 0) {
+                container.innerHTML = `<div class="text-xs text-gray-400 text-center py-4">目前無即時新聞</div>`;
+                return;
+            }
+            let html = '';
+            rawNewsData.forEach(n => {
+                html += `
+                    <a href="${n.link}" target="_blank" rel="noopener noreferrer" class="block bg-gray-950/50 hover:bg-gray-800/60 border border-gray-800/80 rounded-lg p-2.5 transition group">
+                        <div class="text-xs font-medium text-gray-200 group-hover:text-blue-400 leading-snug line-clamp-2">${n.title}</div>
+                        <div class="flex items-center justify-between text-[10px] text-gray-400 mt-1.5 font-mono">
+                            <span class="bg-gray-800 text-gray-300 px-1.5 py-0.2 rounded">${n.source}</span>
+                            <span>${n.time}</span>
+                        </div>
+                    </a>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function renderRankingList() {
+            const container = document.getElementById('ranking-container');
+            let list = [...rawStocksData];
+            if (currentMarketFilter !== 'ALL') list = list.filter(s => s.market === currentMarketFilter);
+
+            // 依據不同的 Tab 進行排序
+            if (currentRankTab === 'val') {
+                list.sort((a, b) => (b.tradeValue || 0) - (a.tradeValue || 0));
+            } else if (currentRankTab === 'vol') {
+                list.sort((a, b) => (b.tradeVolume || 0) - (a.tradeVolume || 0));
+            } else if (currentRankTab === 'foreign' || currentRankTab === 'trust' || currentRankTab === 'dealer') {
+                // 模擬法人買超排行（結合成交額與漲跌幅權重模擬真實盤勢強弱排序）
+                list.sort((a, b) => ((b.tradeValue * b.changePercent) - (a.tradeValue * a.changePercent)));
+            } else if (currentRankTab === 'up') {
+                list.sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0));
+            } else if (currentRankTab === 'down') {
+                list.sort((a, b) => (a.changePercent || 0) - (b.changePercent || 0));
+            }
+
+            let html = '';
+            list.slice(0, 10).forEach((st, idx) => {
+                const sign = st.changePercent >= 0 ? '+' : '';
+                const colorCls = st.changePercent > 0 ? 'text-red-400' : (st.changePercent < 0 ? 'text-emerald-400' : 'text-gray-300');
+                html += `
+                    <div onclick="openStockSheet('${st.symbol}')" class="bg-gray-950/50 hover:bg-gray-800/60 border border-gray-800/80 rounded-lg p-2 flex items-center justify-between transition cursor-pointer">
+                        <div class="flex items-center space-x-2.5">
+                            <span class="text-xs font-mono text-gray-500 w-4 text-right">#${idx+1}</span>
+                            <div>
+                                <div class="font-bold text-xs text-white flex items-center space-x-1.5">
+                                    <span>${st.name}</span>
+                                    <span class="text-[10px] text-gray-400 font-mono">${st.symbol}</span>
+                                </div>
+                                <div class="text-[10px] text-gray-400 mt-0.5 font-mono">成交額 <span class="text-blue-400">${st.tradeValue}億</span></div>
+                            </div>
+                        </div>
+                        <div class="text-right font-mono">
+                            <div class="text-xs font-bold text-white">${st.price}</div>
+                            <div class="text-[11px] font-bold ${colorCls}">${sign}${st.changePercent}%</div>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
         }
 
         function buildSectorPills() {
@@ -562,9 +687,7 @@
             }
 
             const option = {
-                tooltip: {
-                    show: false // 🎯 完全關閉會遮擋視線的浮動白框提示窗
-                },
+                tooltip: { show: false },
                 series: [{
                     type: 'treemap',
                     width: '100%',
@@ -672,7 +795,6 @@
                             <div class="text-right space-y-1 font-mono text-xs">
                                 <div>開: <span class="text-white">${st.openPrice}</span> | 高: <span class="text-red-400">${st.highPrice}</span></div>
                                 <div>低: <span class="text-emerald-400">${st.lowPrice}</span> | 均: <span class="text-blue-300">${st.avgPrice}</span></div>
-                                <!-- 🎯 已將「成交額」與「成交量」完整補進下方抽屜資訊中 -->
                                 <div>成交額: <span class="text-blue-400 font-bold">${st.tradeValue}億</span></div>
                                 <div>成交量: <span class="text-white font-mono">${st.tradeVolume}張</span></div>
                             </div>
