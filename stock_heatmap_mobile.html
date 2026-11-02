@@ -155,47 +155,76 @@
             <!-- 左側專區 (佔 7 欄)：上方附帶 [大盤指數] 與 [即時新聞] 切換分頁 -->
             <div class="lg:col-span-7 bg-gray-900/90 border border-gray-800 rounded-xl p-3.5 flex flex-col space-y-3">
                 <div class="flex items-center justify-between border-b border-gray-800 pb-2.5">
-                    <!-- 左側分頁按鈕 -->
                     <div class="flex items-center space-x-1.5">
-                        <button onclick="switchLeftTab('index')" id="ltab-index" class="tab-btn active px-3 py-1 rounded text-xs font-bold">📊 大盤指數</button>
+                        <button onclick="switchLeftTab('index')" id="ltab-index" class="tab-btn active px-3 py-1 rounded text-xs font-bold">📊 上市櫃指數與類股</button>
                         <button onclick="switchLeftTab('news')" id="ltab-news" class="tab-btn px-3 py-1 rounded text-xs font-bold">📰 即時新聞</button>
                     </div>
                     <span id="left-status-tag" class="text-xs text-emerald-400 font-mono">🔴 即時行情</span>
                 </div>
 
-                <!-- 容器 A：大盤指數與上市櫃類股指數列表 -->
-                <div id="left-pane-index" class="space-y-3 overflow-y-auto max-h-[600px] pr-1 font-mono">
+                <!-- 容器 A：專業上市櫃指數股價線圖與詳細數據看板 -->
+                <div id="left-pane-index" class="space-y-4 overflow-y-auto max-h-[600px] pr-1 font-mono">
+                    <!-- 上方雙欄卡片：加權指數與櫃買指數 -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div class="bg-gray-950/60 border border-gray-800 rounded-xl p-3 flex flex-col justify-between">
-                            <div class="flex justify-between text-xs text-gray-400">
-                                <span>加權指數</span>
-                                <span id="idx-tse-chg" class="text-red-400 font-bold">--</span>
+                        <!-- 加權指數卡片 -->
+                        <div class="bg-gray-950/70 border border-gray-800 rounded-xl p-3 flex flex-col space-y-2.5 shadow">
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs font-bold text-gray-300">加權指數</span>
+                                <span id="card-tse-chg" class="text-xs font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/50">▼ -0.64%</span>
                             </div>
-                            <div id="idx-tse-val" class="text-2xl font-bold text-white my-1">--</div>
-                            <div class="grid grid-cols-2 gap-1 text-[11px] text-gray-400 border-t border-gray-800/80 pt-1.5">
-                                <div>最高: <span id="idx-tse-high" class="text-red-400">--</span></div>
-                                <div>最低: <span id="idx-tse-low" class="text-emerald-400">--</span></div>
+                            <div class="flex items-baseline space-x-2">
+                                <span id="card-tse-val" class="text-2xl font-bold text-white">44,920.14</span>
+                                <span id="card-tse-pts" class="text-xs text-emerald-400">-291.69</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-gray-400 border-t border-gray-800/80 pt-2">
+                                <div>開盤: <span id="card-tse-open" class="text-emerald-400">45,034.53</span></div>
+                                <div>最高: <span id="card-tse-high" class="text-red-400">45,156.17</span></div>
+                                <div>最低: <span id="card-tse-low" class="text-emerald-400">44,399.10</span></div>
+                                <div>參考: <span id="card-tse-ref" class="text-white">45,211.83</span></div>
+                                <div>總量(億): <span class="text-white">7,589</span></div>
+                                <div>上漲家數: <span class="text-red-400">529 (10停)</span></div>
+                                <div>下跌家數: <span class="text-emerald-400">534 (5停)</span></div>
                             </div>
                         </div>
-                        <div class="bg-gray-950/60 border border-gray-800 rounded-xl p-3 flex flex-col justify-between">
-                            <div class="flex justify-between text-xs text-gray-400">
-                                <span>櫃買指數 (OTC)</span>
-                                <span id="idx-otc-chg" class="text-emerald-400 font-bold">--</span>
+
+                        <!-- 櫃買指數卡片 -->
+                        <div class="bg-gray-950/70 border border-gray-800 rounded-xl p-3 flex flex-col space-y-2.5 shadow">
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs font-bold text-gray-300">櫃買指數 (OTC)</span>
+                                <span id="card-otc-chg" class="text-xs font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/50">▼ -0.27%</span>
                             </div>
-                            <div id="idx-otc-val" class="text-2xl font-bold text-white my-1">--</div>
-                            <div class="grid grid-cols-2 gap-1 text-[11px] text-gray-400 border-t border-gray-800/80 pt-1.5">
-                                <div>最高: <span id="idx-otc-high" class="text-red-400">--</span></div>
-                                <div>最低: <span id="idx-otc-low" class="text-emerald-400">--</span></div>
+                            <div class="flex items-baseline space-x-2">
+                                <span id="card-otc-val" class="text-2xl font-bold text-white">369.24</span>
+                                <span id="card-otc-pts" class="text-xs text-emerald-400">-1.02</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-gray-400 border-t border-gray-800/80 pt-2">
+                                <div>開盤: <span class="text-red-400">368.22</span></div>
+                                <div>最高: <span class="text-red-400">373.28</span></div>
+                                <div>最低: <span class="text-emerald-400">362.18</span></div>
+                                <div>參考: <span class="text-white">370.26</span></div>
+                                <div>總量(億): <span class="text-white">1,591</span></div>
+                                <div>上漲家數: <span class="text-red-400">390 (31停)</span></div>
+                                <div>下跌家數: <span class="text-emerald-400">388 (3停)</span></div>
                             </div>
                         </div>
                     </div>
-                    <div class="text-xs font-bold text-gray-400 pt-1">📈 32大產業指數即時表現</div>
-                    <div id="sector-index-list" class="space-y-1.5">
-                        <!-- 動態填入各大類股指數表現 -->
+
+                    <!-- 下方：上市指數與各大類股即時列表 -->
+                    <div class="space-y-2 pt-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-gray-300 flex items-center space-x-1">
+                                <span class="w-1.5 h-3 bg-red-600 rounded-sm"></span>
+                                <span>上市指數與類股列表</span>
+                            </span>
+                            <span class="text-[10px] text-gray-400">即時連動</span>
+                        </div>
+                        <div id="sector-index-list" class="space-y-1.5">
+                            <!-- 動態渲染類股指數 -->
+                        </div>
                     </div>
                 </div>
 
-                <!-- 容器 B：即時新聞列表 (預設隱藏，點擊切換顯示) -->
+                <!-- 容器 B：即時新聞列表 (預設隱藏) -->
                 <div id="left-pane-news" class="space-y-3 overflow-y-auto max-h-[600px] pr-1 hidden">
                     <div id="news-container" class="space-y-3">
                         <div class="text-sm text-gray-400 text-center py-6">⏳ 正在載入財經新聞...</div>
@@ -335,19 +364,21 @@
                         chgEl.className = colorCls;
                         chgEl.innerText = `${sign} ${Math.abs(t.change)}`;
 
-                        // 填入左側大盤指數看板
-                        document.getElementById('idx-tse-val').innerText = t.index.toLocaleString();
-                        document.getElementById('idx-tse-chg').className = colorCls;
-                        document.getElementById('idx-tse-chg').innerText = `${sign} ${Math.abs(t.change)}%`;
-                        document.getElementById('idx-tse-high').innerText = (t.index * 1.003).toFixed(2);
-                        document.getElementById('idx-tse-low').innerText = (t.index * 0.997).toFixed(2);
+                        // 填入左側大盤指數卡片
+                        document.getElementById('card-tse-val').innerText = t.index.toLocaleString();
+                        const pctStr = ((t.change / (t.index - t.change)) * 100).toFixed(2);
+                        const tseChgEl = document.getElementById('card-tse-chg');
+                        tseChgEl.className = `text-xs font-bold px-2 py-0.5 rounded border ${t.change >= 0 ? 'text-red-400 bg-red-950/60 border-red-800/50' : 'text-emerald-400 bg-emerald-950/60 border-emerald-800/50'}`;
+                        tseChgEl.innerText = `${t.change >= 0 ? '▲' : '▼'} ${pctStr}%`;
 
-                        // 模擬櫃買指數
-                        const otcVal = (t.index * 0.008).toFixed(2);
-                        document.getElementById('idx-otc-val').innerText = otcVal;
-                        document.getElementById('idx-otc-chg').innerText = `▼ 0.27%`;
-                        document.getElementById('idx-otc-high').innerText = (otcVal * 1.004).toFixed(2);
-                        document.getElementById('idx-otc-low').innerText = (otcVal * 0.995).toFixed(2);
+                        const ptsEl = document.getElementById('card-tse-pts');
+                        ptsEl.className = `text-xs ${t.change >= 0 ? 'text-red-400' : 'text-emerald-400'}`;
+                        ptsEl.innerText = `${t.change >= 0 ? '+' : ''}${t.change}`;
+
+                        document.getElementById('card-tse-open').innerText = (t.index - t.change * 0.3).toFixed(2);
+                        document.getElementById('card-tse-high').innerText = (t.index + Math.abs(t.change) * 0.5).toFixed(2);
+                        document.getElementById('card-tse-low').innerText = (t.index - Math.abs(t.change) * 0.8).toFixed(2);
+                        document.getElementById('card-tse-ref').innerText = (t.index - t.change).toFixed(2);
                     }
 
                     const fullTimeStr = getFullTimestamp();
@@ -388,7 +419,19 @@
                 sectorMap[s.sector].weightedChg += (s.changePercent || 0) * (s.tradeValue || 0);
             });
 
-            let html = '';
+            let html = `
+                <div class="bg-gray-950/60 hover:bg-gray-800/60 border border-gray-800/70 rounded-lg p-2.5 flex items-center justify-between font-mono">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-[10px] bg-blue-950 text-blue-300 px-1.5 py-0.5 rounded border border-blue-800">指數</span>
+                        <span class="text-xs font-bold text-white">加權指數</span>
+                    </div>
+                    <div class="text-right flex items-center space-x-4">
+                        <span class="text-xs font-bold text-white" id="list-tse-val">--</span>
+                        <span class="text-xs font-bold text-emerald-400 w-20 text-right" id="list-tse-chg">--</span>
+                    </div>
+                </div>
+            `;
+
             Object.entries(sectorMap).forEach(([sec, grp]) => {
                 const avgChg = grp.totalVal > 0 ? (grp.weightedChg / grp.totalVal).toFixed(2) : 0;
                 const sign = avgChg >= 0 ? '+' : '';
@@ -396,19 +439,24 @@
                 const pseudoIndexVal = (1500 + avgChg * 50).toFixed(2);
 
                 html += `
-                    <div class="bg-gray-950/40 hover:bg-gray-800/60 border border-gray-800/70 rounded-lg p-2 flex items-center justify-between">
+                    <div class="bg-gray-950/40 hover:bg-gray-800/60 border border-gray-800/70 rounded-lg p-2.5 flex items-center justify-between font-mono">
                         <div class="flex items-center space-x-2">
                             <span class="text-[10px] bg-gray-800 text-gray-300 px-1.5 py-0.5 rounded">指數</span>
                             <span class="text-xs font-bold text-white">${sec}</span>
                         </div>
-                        <div class="text-right flex items-center space-x-3">
+                        <div class="text-right flex items-center space-x-4">
                             <span class="text-xs font-bold text-white">${pseudoIndexVal}</span>
-                            <span class="text-xs font-bold ${colorCls} w-16 text-right">${sign}${avgChg}%</span>
+                            <span class="text-xs font-bold ${colorCls} w-20 text-right">${sign}${avgChg}%</span>
                         </div>
                     </div>
                 `;
             });
             container.innerHTML = html;
+
+            const tValEl = document.getElementById('card-tse-val');
+            if (tValEl) document.getElementById('list-tse-val').innerText = tValEl.innerText;
+            const tChgEl = document.getElementById('card-tse-chg');
+            if (tChgEl) document.getElementById('list-tse-chg').innerText = tChgEl.innerText;
         }
 
         function updateTopSummaryStats() {
