@@ -325,11 +325,13 @@
             otcChartInstance = echarts.init(document.getElementById('otc-chart'));
             renderMiniCharts();
 
-            // 🎯 點擊事件：點擊產業可下鑽，點擊個股則開啟下方抽屜顯示最佳五檔
+            // 點擊事件：點擊產業可下鑽，點擊個股則隱藏漂浮提示並開啟下方最佳五檔抽屜
             chartInstance.on('click', function (params) {
                 if (params.data && params.data.type === 'stock') {
+                    chartInstance.dispatchAction({ type: 'hideTip' });
                     openStockSheet(params.data.symbol);
                 } else if (params.data && params.data.type === 'sector' && currentViewMode === 'heatmap' && !currentDrillSector) {
+                    chartInstance.dispatchAction({ type: 'hideTip' });
                     currentDrillSector = params.data.sectorName;
                     activeSectorFilter = currentDrillSector;
                     document.getElementById('back-bar').classList.remove('hidden');
@@ -361,7 +363,7 @@
                 wrapper.addEventListener('mouseleave', () => isDown = false);
                 wrapper.addEventListener('mouseup', () => isDown = false);
                 wrapper.addEventListener('mousemove', (e) => {
-                    if(!isDown) return;
+                    if (!isDown) return;
                     e.preventDefault();
                     const x = e.pageX - wrapper.offsetLeft;
                     const walk = (x - startX) * 1.5;
@@ -759,17 +761,17 @@
             } else if (currentRankTab === 'vol') {
                 list.sort((a, b) => (b.tradeVolume || 0) - (a.tradeVolume || 0));
             } else if (currentRankTab === 'foreign_buy') {
-                list.sort((a, b) => ((b.tradeValue * Math.max(0, b.changePercent)) - (a.tradeValue * Math.max(0, a.changePercent))));
+                list.sort((a, b) => ((b.tradeValue || 0) * Math.max(0, b.changePercent || 0)) - ((a.tradeValue || 0) * Math.max(0, a.changePercent || 0)));
             } else if (currentRankTab === 'foreign_sell') {
-                list.sort((a, b) => ((Math.abs(Math.min(0, a.changePercent)) * a.tradeValue) - (Math.abs(Math.min(0, b.changePercent)) * b.tradeValue))));
+                list.sort((a, b) => (Math.abs(Math.min(0, a.changePercent || 0)) * (a.tradeValue || 0)) - (Math.abs(Math.min(0, b.changePercent || 0)) * (b.tradeValue || 0)));
             } else if (currentRankTab === 'trust_buy') {
-                list.sort((a, b) => ((b.changePercent * b.tradeValue) - (a.changePercent * a.tradeValue)));
+                list.sort((a, b) => ((b.changePercent || 0) * (b.tradeValue || 0)) - ((a.changePercent || 0) * (a.tradeValue || 0)));
             } else if (currentRankTab === 'trust_sell') {
-                list.sort((a, b) => (a.changePercent - b.changePercent));
+                list.sort((a, b) => (a.changePercent || 0) - (b.changePercent || 0));
             } else if (currentRankTab === 'dealer_buy') {
-                list.sort((a, b) => ((b.changePercent) - (a.changePercent)));
+                list.sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0));
             } else if (currentRankTab === 'dealer_sell') {
-                list.sort((a, b) => (a.changePercent - b.changePercent));
+                list.sort((a, b) => (a.changePercent || 0) - (b.changePercent || 0));
             } else if (currentRankTab === 'up') {
                 list.sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0));
             } else if (currentRankTab === 'down') {
@@ -1041,20 +1043,42 @@
             }
 
             const option = {
-                // 🎯 支援滑鼠懸停 (Hover) 時顯示漂浮提示視窗 (Tooltip)
+                // 滑鼠懸停 (Hover) 於產業或個股時顯示漂浮提示視窗 (Tooltip)
                 tooltip: {
                     trigger: 'item',
+                    confine: true,
                     backgroundColor: 'rgba(15, 23, 42, 0.95)',
                     borderColor: '#334155',
+                    borderWidth: 1,
+                    padding: [8, 12],
                     textStyle: { color: '#f3f4f6', fontSize: 12 },
                     formatter: function (params) {
+                        if (!params.data) return '';
                         if (params.data.type === 'sector') {
                             const g = params.data.rawGroup;
-                            return `<b>📁 產業：${params.data.sectorName}</b><br/>總成交額：${g ? g.totalVal.toFixed(1) : 0} 億`;
+                            const avgChg = (g && g.totalVal > 0) ? (g.weightedChg / g.totalVal).toFixed(2) : '0.00';
+                            const sign = avgChg >= 0 ? '+' : '';
+                            const colorHex = avgChg >= 0 ? '#f87171' : '#34d399';
+                            return `
+                                <div class="font-mono space-y-1">
+                                    <div class="font-bold text-white text-sm">📁 ${params.data.sectorName}</div>
+                                    <div class="text-xs text-gray-300">平均漲跌：<span style="color:${colorHex};font-weight:bold;">${sign}${avgChg}%</span></div>
+                                    <div class="text-xs text-gray-300">總成交額：<span class="text-blue-400 font-bold">${g ? g.totalVal.toFixed(1) : 0} 億</span></div>
+                                    <div class="text-[10px] text-amber-400 pt-0.5">💡 點擊方塊檢視該產業個股</div>
+                                </div>
+                            `;
                         } else if (params.data.type === 'stock' || params.data.raw) {
                             const st = params.data.raw;
                             const sign = st.changePercent >= 0 ? '+' : '';
-                            return `<b>📈 個股：${st.name} (${st.symbol})</b><br/>現價：${st.price} (${sign}${st.changePercent}%)<br/>成交額：${st.tradeValue} 億 | 量：${st.tradeVolume} 張`;
+                            const colorHex = st.changePercent >= 0 ? '#f87171' : '#34d399';
+                            return `
+                                <div class="font-mono space-y-1">
+                                    <div class="font-bold text-white text-sm">📈 ${st.name} (${st.symbol})</div>
+                                    <div class="text-xs text-gray-300">現價：<span style="color:${colorHex};font-weight:bold;">${st.price} (${sign}${st.changePercent}%)</span></div>
+                                    <div class="text-xs text-gray-300">成交額：<span class="text-blue-400 font-bold">${st.tradeValue} 億</span> | 量：${st.tradeVolume} 張</div>
+                                    <div class="text-[10px] text-emerald-400 pt-0.5">💡 點擊開啟下方最佳五檔抽屜</div>
+                                </div>
+                            `;
                         }
                         return params.name;
                     }
@@ -1127,6 +1151,11 @@
         }
 
         async function openStockSheet(symbol) {
+            // 開啟最佳五檔抽屜時，強制隱藏熱力圖上的懸停漂浮視窗
+            if (chartInstance) {
+                chartInstance.dispatchAction({ type: 'hideTip' });
+            }
+
             const sheet = document.getElementById('stock-sheet');
             const backdrop = document.getElementById('backdrop');
             const content = document.getElementById('sheet-content');
@@ -1141,7 +1170,7 @@
                 if (json.status === 'ok') {
                     const st = json.stock;
                     const sign = st.changePercent >= 0 ? '+' : '';
-                    const colorStyle = st.changePercent > 0 ? 'text-red-400' : (st.changePercent < 0 ? 'text-emerald-400' : 'text-gray-350');
+                    const colorStyle = st.changePercent > 0 ? 'text-red-400' : (st.changePercent < 0 ? 'text-emerald-400' : 'text-gray-300');
                     const totalVol = (st.bidVol || 1) + (st.askVol || 1);
                     const bidPct = Math.round((st.bidVol / totalVol) * 100);
                     const askPct = 100 - bidPct;
