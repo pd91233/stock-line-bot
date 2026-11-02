@@ -149,10 +149,10 @@
             </div>
         </div>
 
-        <!-- 下方雙欄區塊：左側 (大盤指數 / 即時新聞 Tab 切換)、右側多維度排行榜 -->
+        <!-- 下方雙欄區塊 -->
         <div class="p-3 grid grid-cols-1 lg:grid-cols-12 gap-4 bg-[#07090e]">
             
-            <!-- 左側專區 (佔 7 欄)：上方附帶 [大盤指數] 與 [即時新聞] 切換分頁 -->
+            <!-- 左側專區 (佔 7 欄) -->
             <div class="lg:col-span-7 bg-gray-900/90 border border-gray-800 rounded-xl p-3.5 flex flex-col space-y-3">
                 <div class="flex items-center justify-between border-b border-gray-800 pb-2.5">
                     <div class="flex items-center space-x-1.5">
@@ -162,10 +162,9 @@
                     <span id="left-status-tag" class="text-xs text-emerald-400 font-mono">🔴 即時行情</span>
                 </div>
 
-                <!-- 容器 A：專業上市櫃指數股價線圖與詳細數據看板 -->
+                <!-- 容器 A：指數看板與線圖 -->
                 <div id="left-pane-index" class="space-y-4 overflow-y-auto max-h-[600px] pr-1 font-mono">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <!-- 加權指數卡片含線圖 -->
                         <div class="bg-gray-950/70 border border-gray-800 rounded-xl p-3 flex flex-col space-y-2 shadow">
                             <div class="flex justify-between items-center">
                                 <span class="text-xs font-bold text-gray-300">加權指數</span>
@@ -175,7 +174,6 @@
                                 <span id="card-tse-val" class="text-2xl font-bold text-white">44,920.14</span>
                                 <span id="card-tse-pts" class="text-xs text-emerald-400">-291.69</span>
                             </div>
-                            <!-- 分時線圖容器 -->
                             <div id="tse-chart" class="w-full h-32 my-1"></div>
                             <div class="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-gray-400 border-t border-gray-800/80 pt-2">
                                 <div>開盤: <span id="card-tse-open" class="text-emerald-400">45,034.53</span></div>
@@ -188,7 +186,6 @@
                             </div>
                         </div>
 
-                        <!-- 櫃買指數卡片含線圖 -->
                         <div class="bg-gray-950/70 border border-gray-800 rounded-xl p-3 flex flex-col space-y-2 shadow">
                             <div class="flex justify-between items-center">
                                 <span class="text-xs font-bold text-gray-300">櫃買指數 (OTC)</span>
@@ -198,7 +195,6 @@
                                 <span id="card-otc-val" class="text-2xl font-bold text-white">369.24</span>
                                 <span id="card-otc-pts" class="text-xs text-emerald-400">-1.02</span>
                             </div>
-                            <!-- 分時線圖容器 -->
                             <div id="otc-chart" class="w-full h-32 my-1"></div>
                             <div class="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-gray-400 border-t border-gray-800/80 pt-2">
                                 <div>開盤: <span class="text-red-400">368.22</span></div>
@@ -240,7 +236,6 @@
                         <span class="text-sm font-bold text-white tracking-wide">市場熱門排行</span>
                     </h2>
                 </div>
-                <!-- 排行榜 Tab 分頁切換按鈕 -->
                 <div class="flex flex-wrap gap-1.5 text-xs">
                     <button onclick="switchRankTab('val')" id="rtab-val" class="tab-btn active px-2.5 py-1.5 rounded font-medium">成交值</button>
                     <button onclick="switchRankTab('vol')" id="rtab-vol" class="tab-btn px-2.5 py-1.5 rounded font-medium">成交量</button>
@@ -253,7 +248,6 @@
                     <button onclick="switchRankTab('up')" id="rtab-up" class="tab-btn px-2.5 py-1.5 rounded font-medium">漲幅</button>
                     <button onclick="switchRankTab('down')" id="rtab-down" class="tab-btn px-2.5 py-1.5 rounded font-medium">跌幅</button>
                 </div>
-                <!-- 排行列表容器 -->
                 <div id="ranking-container" class="space-y-2.5 overflow-y-auto max-h-[530px] pr-1">
                     <div class="text-sm text-gray-400 text-center py-6">⏳ 載入排行榜中...</div>
                 </div>
@@ -339,7 +333,6 @@
         });
 
         function renderMiniCharts() {
-            // 模擬分時走勢資料點
             const times = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30'];
             const tseVals = [45034, 44800, 44400, 44650, 44900, 45156, 45000, 44920];
             const otcVals = [368.2, 366.5, 362.1, 364.0, 367.5, 373.2, 370.0, 369.2];
@@ -604,7 +597,7 @@
             } else if (currentRankTab === 'foreign_buy') {
                 list.sort((a, b) => ((b.tradeValue * Math.max(0, b.changePercent)) - (a.tradeValue * Math.max(0, a.changePercent))));
             } else if (currentRankTab === 'foreign_sell') {
-                list.sort((a, b) => ((Math.abs(Math.min(0, a.changePercent)) * a.tradeValue) - (Math.abs(Math.min(0, b.changePercent)) * b.tradeValue))));
+                list.sort((a, b) => ((Math.abs(Math.min(0, a.changePercent)) * a.tradeValue) - (Math.abs(Math.min(0, b.changePercent)) * b.tradeValue)));
             } else if (currentRankTab === 'trust_buy') {
                 list.sort((a, b) => ((b.changePercent * b.tradeValue) - (a.changePercent * a.tradeValue)));
             } else if (currentRankTab === 'trust_sell') {
