@@ -113,7 +113,7 @@
         </div>
     </div>
 
-    <!-- 主內容區 (支援上下捲動與下方雙欄佈局) -->
+    <!-- 主內容區 -->
     <main class="flex-1 relative w-full bg-[#07090e] overflow-y-auto flex flex-col">
         
         <!-- 返回列 -->
@@ -126,7 +126,7 @@
             </button>
         </div>
 
-        <!-- 上方熱力圖核心容器 (固定高度確保圖表完美展開) -->
+        <!-- 上方熱力圖核心容器 -->
         <div id="treemap-container" class="w-full h-[650px] shrink-0"></div>
         <div id="list-container" class="w-full min-h-[500px] p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 content-start hidden"></div>
 
@@ -174,15 +174,18 @@
                         <span>市場熱門排行</span>
                     </h2>
                 </div>
-                <!-- 排行榜 Tab 分頁切換按鈕 -->
+                <!-- 排行榜 Tab 分頁切換按鈕 (擴充買進與賣出分頁) -->
                 <div class="flex flex-wrap gap-1 text-[11px]">
-                    <button onclick="switchRankTab('val')" id="rtab-val" class="tab-btn active px-2.5 py-1 rounded">成交值</button>
-                    <button onclick="switchRankTab('vol')" id="rtab-vol" class="tab-btn px-2.5 py-1 rounded">成交量</button>
-                    <button onclick="switchRankTab('foreign')" id="rtab-foreign" class="tab-btn px-2.5 py-1 rounded">外資買超</button>
-                    <button onclick="switchRankTab('trust')" id="rtab-trust" class="tab-btn px-2.5 py-1 rounded">投信買超</button>
-                    <button onclick="switchRankTab('dealer')" id="rtab-dealer" class="tab-btn px-2.5 py-1 rounded">自營商</button>
-                    <button onclick="switchRankTab('up')" id="rtab-up" class="tab-btn px-2.5 py-1 rounded">漲幅</button>
-                    <button onclick="switchRankTab('down')" id="rtab-down" class="tab-btn px-2.5 py-1 rounded">跌幅</button>
+                    <button onclick="switchRankTab('val')" id="rtab-val" class="tab-btn active px-2 py-1 rounded">成交值</button>
+                    <button onclick="switchRankTab('vol')" id="rtab-vol" class="tab-btn px-2 py-1 rounded">成交量</button>
+                    <button onclick="switchRankTab('foreign_buy')" id="rtab-foreign_buy" class="tab-btn px-2 py-1 rounded">外資買超</button>
+                    <button onclick="switchRankTab('foreign_sell')" id="rtab-foreign_sell" class="tab-btn px-2 py-1 rounded">外資賣超</button>
+                    <button onclick="switchRankTab('trust_buy')" id="rtab-trust_buy" class="tab-btn px-2 py-1 rounded">投信買超</button>
+                    <button onclick="switchRankTab('trust_sell')" id="rtab-trust_sell" class="tab-btn px-2 py-1 rounded">投信賣超</button>
+                    <button onclick="switchRankTab('dealer_buy')" id="rtab-dealer_buy" class="tab-btn px-2 py-1 rounded">自營買超</button>
+                    <button onclick="switchRankTab('dealer_sell')" id="rtab-dealer_sell" class="tab-btn px-2 py-1 rounded">自營賣超</button>
+                    <button onclick="switchRankTab('up')" id="rtab-up" class="tab-btn px-2 py-1 rounded">漲幅</button>
+                    <button onclick="switchRankTab('down')" id="rtab-down" class="tab-btn px-2 py-1 rounded">跌幅</button>
                 </div>
                 <!-- 排行列表容器 -->
                 <div id="ranking-container" class="space-y-2 overflow-y-auto max-h-[530px] pr-1">
@@ -375,7 +378,7 @@
 
         function switchRankTab(tab) {
             currentRankTab = tab;
-            ['val', 'vol', 'foreign', 'trust', 'dealer', 'up', 'down'].forEach(t => {
+            ['val', 'vol', 'foreign_buy', 'foreign_sell', 'trust_buy', 'trust_sell', 'dealer_buy', 'dealer_sell', 'up', 'down'].forEach(t => {
                 const btn = document.getElementById(`rtab-${t}`);
                 if (btn) btn.classList.toggle('active', t === tab);
             });
@@ -408,14 +411,29 @@
             let list = [...rawStocksData];
             if (currentMarketFilter !== 'ALL') list = list.filter(s => s.market === currentMarketFilter);
 
-            // 依據不同的 Tab 進行排序
+            // 🎯 修正：為每一個分頁籤設定獨立且正確的排序邏輯（區分買超與賣超）
             if (currentRankTab === 'val') {
                 list.sort((a, b) => (b.tradeValue || 0) - (a.tradeValue || 0));
             } else if (currentRankTab === 'vol') {
                 list.sort((a, b) => (b.tradeVolume || 0) - (a.tradeVolume || 0));
-            } else if (currentRankTab === 'foreign' || currentRankTab === 'trust' || currentRankTab === 'dealer') {
-                // 模擬法人買超排行（結合成交額與漲跌幅權重模擬真實盤勢強弱排序）
-                list.sort((a, b) => ((b.tradeValue * b.changePercent) - (a.tradeValue * a.changePercent)));
+            } else if (currentRankTab === 'foreign_buy') {
+                // 外資買超模擬：以成交額大且漲幅強者優先
+                list.sort((a, b) => ((b.tradeValue * Math.max(0, b.changePercent)) - (a.tradeValue * Math.max(0, a.changePercent))));
+            } else if (currentRankTab === 'foreign_sell') {
+                // 外資賣超模擬：以成交額大且跌幅深者優先
+                list.sort((a, b) => ((Math.abs(Math.min(0, a.changePercent)) * a.tradeValue) - (Math.abs(Math.min(0, b.changePercent)) * b.tradeValue)));
+            } else if (currentRankTab === 'trust_buy') {
+                // 投信買超模擬：中小型強勢高成交額
+                list.sort((a, b) => ((b.changePercent * b.tradeValue) - (a.changePercent * a.tradeValue)));
+            } else if (currentRankTab === 'trust_sell') {
+                // 投信賣超模擬：轉弱修正標的
+                list.sort((a, b) => (a.changePercent - b.changePercent));
+            } else if (currentRankTab === 'dealer_buy') {
+                // 自營買超模擬：當日波動大且收紅
+                list.sort((a, b) => ((b.changePercent) - (a.changePercent)));
+            } else if (currentRankTab === 'dealer_sell') {
+                // 自營賣超模擬：當日急跌標的
+                list.sort((a, b) => (a.changePercent - b.changePercent));
             } else if (currentRankTab === 'up') {
                 list.sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0));
             } else if (currentRankTab === 'down') {
