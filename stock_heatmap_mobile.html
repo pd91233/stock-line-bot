@@ -57,19 +57,31 @@
         </div>
     </header>
 
-    <!-- 控制面板 -->
+    <!-- 控制面板 (電腦版完美單行，手機版兩行彈性) -->
     <div class="bg-gray-900/95 border-b border-gray-800 px-3 py-2 space-y-1.5 shrink-0 shadow-md z-20">
         
-        <!-- 第一排：市場與模式 -->
-        <div class="flex items-center justify-between text-xs">
-            <div class="flex items-center space-x-1">
-                <span class="text-[11px] text-gray-400 mr-0.5">市場:</span>
-                <button onclick="setMarketFilter('ALL')" id="market-all" class="tab-btn active text-[11px] px-2.5 py-0.5 rounded">全部</button>
-                <button onclick="setMarketFilter('TSE')" id="market-tse" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">上市</button>
-                <button onclick="setMarketFilter('OTC')" id="market-otc" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">上櫃</button>
+        <!-- 第一排 (電腦版合併市場、視角與權重，手機版分開) -->
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between text-xs space-y-1.5 md:space-y-0">
+            <div class="flex items-center justify-between md:justify-start space-x-4">
+                <!-- 市場篩選 -->
+                <div class="flex items-center space-x-1">
+                    <span class="text-[11px] text-gray-400 mr-0.5">市場:</span>
+                    <button onclick="setMarketFilter('ALL')" id="market-all" class="tab-btn active text-[11px] px-2.5 py-0.5 rounded">全部</button>
+                    <button onclick="setMarketFilter('TSE')" id="market-tse" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">上市</button>
+                    <button onclick="setMarketFilter('OTC')" id="market-otc" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">上櫃</button>
+                </div>
+
+                <!-- 權重切換 (電腦版移至此處排成同一行) -->
+                <div class="flex items-center space-x-1">
+                    <span class="text-[11px] text-gray-400 mr-0.5">權重:</span>
+                    <button onclick="setWeightMetric('tradeValue')" id="weight-val" class="tab-btn active text-[11px] px-2.5 py-0.5 rounded">成交額</button>
+                    <button onclick="setWeightMetric('tradeVolume')" id="weight-vol" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">量</button>
+                    <button onclick="setWeightMetric('mcap')" id="weight-mcap" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">市值</button>
+                </div>
             </div>
 
-            <div class="flex items-center space-x-1">
+            <!-- 視角切換 -->
+            <div class="flex items-center justify-end space-x-1">
                 <span class="text-[11px] text-gray-400 mr-0.5">視角:</span>
                 <button onclick="switchViewMode('heatmap')" id="btn-mode-heatmap" class="tab-btn active text-[11px] px-2.5 py-0.5 rounded">產業</button>
                 <button onclick="switchViewMode('stock_heatmap')" id="btn-mode-stock-heatmap" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">個股</button>
@@ -77,15 +89,7 @@
             </div>
         </div>
 
-        <!-- 第二排：權重 -->
-        <div class="flex items-center space-x-1 pt-1 border-t border-gray-800/60 text-xs">
-            <span class="text-[11px] text-gray-400 mr-1">權重:</span>
-            <button onclick="setWeightMetric('tradeValue')" id="weight-val" class="tab-btn active text-[11px] px-2.5 py-0.5 rounded">成交額</button>
-            <button onclick="setWeightMetric('tradeVolume')" id="weight-vol" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">量</button>
-            <button onclick="setWeightMetric('mcap')" id="weight-mcap" class="tab-btn text-[11px] px-2.5 py-0.5 rounded">市值</button>
-        </div>
-
-        <!-- 第三與第四排：動態成交額排行對齊佈局 -->
+        <!-- 第二排：動態成交額排行導覽列 -->
         <div class="pt-1 border-t border-gray-800/60 space-y-1">
             <div class="flex items-center space-x-2">
                 <div id="all-sector-container" class="shrink-0"></div>
@@ -121,7 +125,9 @@
         </div>
 
         <div id="treemap-container" class="w-full flex-1 min-h-0"></div>
-        <div id="list-container" class="absolute inset-0 overflow-y-auto p-3 space-y-2 hidden"></div>
+        
+        {/* 排行視角：改成多欄網格 (手機 1 欄、平板 2 欄、電腦 3~4 欄) */}
+        <div id="list-container" class="absolute inset-0 overflow-y-auto p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 content-start hidden"></div>
 
         <!-- 底部專業漲跌幅色階圖例列 -->
         <div class="bg-gray-900 border-t border-gray-800 px-3 py-2 shrink-0 flex flex-col space-y-1 z-10">
@@ -143,8 +149,8 @@
         </div>
     </main>
 
-    <!-- 底部抽屜 -->
-    <div id="stock-sheet" class="fixed inset-x-0 bottom-0 z-50 transform translate-y-full transition-transform duration-300 ease-out bg-gray-900 border-t border-gray-700 rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col">
+    <!-- 底部抽屜 (電腦版自動置中並限制最大寬度，手機版滿版) -->
+    <div id="stock-sheet" class="fixed inset-x-0 bottom-0 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-lg z-50 transform translate-y-full transition-transform duration-300 ease-out bg-gray-900 border border-gray-700 md:rounded-2xl rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col">
         <div class="w-12 h-1.5 bg-gray-700 rounded-full mx-auto my-2 shrink-0"></div>
         <div id="sheet-content" class="p-4 overflow-y-auto space-y-4"></div>
     </div>
@@ -169,7 +175,9 @@
                     openStockSheet(params.data.symbol);
                 } else if (params.data && params.data.type === 'sector' && currentViewMode === 'heatmap' && !currentDrillSector) {
                     currentDrillSector = params.data.sectorName;
+                    activeSectorFilter = currentDrillSector; // 🎯 點擊方塊時同步更新上方膠囊狀態
                     document.getElementById('back-bar').classList.remove('hidden');
+                    buildSectorPills();
                     renderChart();
                 }
             });
@@ -431,14 +439,17 @@
                 let children = dataFiltered.map(st => {
                     let val = st[currentWeightMetric] || st.tradeValue || 1;
                     if (val <= 0) val = 0.5;
-                    let ratio = val / maxVal;
-                    let dynamicFontSize = Math.round(10 + ratio * 22);
+                    let ratio = Math.sqrt(val / maxVal); // 🎯 使用開根號平滑演算法，避免小股票字體過小
+                    let dynamicFontSize = Math.round(11 + ratio * 16);
 
                     return {
                         name: `${st.name}\n${st.price} (${st.changePercent >= 0 ? '+' : ''}${st.changePercent}%)`,
                         value: val,
                         itemStyle: { color: getColorByChange(st.changePercent) },
-                        label: { fontSize: dynamicFontSize },
+                        label: { 
+                            fontSize: dynamicFontSize,
+                            color: st.changePercent === 0 ? '#111827' : '#ffffff' // 🎯 平盤時自動切換深色字體以確保清晰
+                        },
                         symbol: st.symbol,
                         type: 'stock',
                         raw: st
@@ -479,14 +490,18 @@
                     if (currentWeightMetric === 'mcap') weightVal = grp.totalMcap;
                     if (weightVal <= 0) weightVal = 1;
 
-                    let ratio = weightVal / maxSecVal;
-                    let dynamicFontSize = Math.round(11 + ratio * 21);
+                    let ratio = Math.sqrt(weightVal / maxSecVal);
+                    let dynamicFontSize = Math.round(12 + ratio * 16);
+                    let numAvgChg = parseFloat(avgChg);
 
                     return {
                         name: `${sec}\n${sign}${avgChg}%`,
                         value: weightVal,
-                        itemStyle: { color: getColorByChange(parseFloat(avgChg)) },
-                        label: { fontSize: dynamicFontSize },
+                        itemStyle: { color: getColorByChange(numAvgChg) },
+                        label: { 
+                            fontSize: dynamicFontSize,
+                            color: numAvgChg === 0 ? '#111827' : '#ffffff'
+                        },
                         type: 'sector',
                         sectorName: sec,
                         rawGroup: grp
@@ -518,14 +533,17 @@
                     let children = sectorStocks.map(st => {
                         let val = st[currentWeightMetric] || st.tradeValue || 1;
                         if (val <= 0) val = 0.5;
-                        let ratio = val / maxStockVal;
-                        let dynamicFontSize = Math.round(10 + ratio * 20);
+                        let ratio = Math.sqrt(val / maxStockVal);
+                        let dynamicFontSize = Math.round(11 + ratio * 15);
 
                         return {
                             name: `${st.name}\n${st.price} (${st.changePercent >= 0 ? '+' : ''}${st.changePercent}%)`,
                             value: val,
                             itemStyle: { color: getColorByChange(st.changePercent) },
-                            label: { fontSize: dynamicFontSize },
+                            label: { 
+                                fontSize: dynamicFontSize,
+                                color: st.changePercent === 0 ? '#111827' : '#ffffff'
+                            },
                             symbol: st.symbol,
                             type: 'stock',
                             raw: st
@@ -577,7 +595,6 @@
                         show: true,
                         formatter: '{b}',
                         fontWeight: 'bold',
-                        color: '#fff',
                         overflow: 'truncate'
                     },
                     upperLabel: {
