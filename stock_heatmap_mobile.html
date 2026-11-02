@@ -17,6 +17,17 @@
         .sector-pill.active { background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff; border-color: #f59e0b; font-weight: bold; box-shadow: 0 0 10px rgba(245,158,11,0.4); }
         .sector-scroll { scroll-behavior: smooth; cursor: grab; }
         .sector-scroll:active { cursor: grabbing; }
+
+        /* 骨架屏專屬流光動畫 */
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .skeleton-box {
+            background: linear-gradient(90deg, #111827 25%, #1f2937 50%, #111827 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.8s infinite linear;
+        }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden select-none bg-[#07090e]">
@@ -29,20 +40,23 @@
                 <div>
                     <div class="flex items-center space-x-1.5">
                         <h1 class="text-xs font-bold tracking-wider text-white">股價漲跌即時熱力圖</h1>
-                        <span class="bg-emerald-900/60 text-emerald-300 text-[9px] px-1 py-0.2 rounded border border-emerald-700/50">實盤</span>
+                        <span id="market-status-badge" class="bg-emerald-900/60 text-emerald-300 text-[9px] px-1.5 py-0.2 rounded border border-emerald-700/50 flex items-center space-x-1">
+                            <span id="live-dot" class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                            <span id="live-text">實盤</span>
+                        </span>
                     </div>
                     <div class="flex flex-wrap items-center gap-x-2 text-[10px] text-gray-400 mt-0.5 font-mono">
                         <span>總額: <strong id="stat-total-val" class="text-white">-- 億</strong></span>
                         <span>•</span>
                         <span>平均: <strong id="stat-avg-chg" class="text-red-400">--%</strong></span>
                         <span class="hidden sm:inline">•</span>
-                        <span id="update-time" class="text-emerald-400">載入中</span>
+                        <span id="update-time" class="text-emerald-400">載入中...</span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 右側：加權指數看板與重新整理 -->
+        <!-- 右側：加權指數看板、自動更新開關與重新整理 -->
         <div class="flex items-center justify-between md:justify-end space-x-2">
             <div id="taiex-badge" class="bg-gray-800/90 border border-gray-700 px-2.5 py-1 rounded-md text-right font-mono shadow flex-1 md:flex-none">
                 <div class="text-[9px] text-gray-400 tracking-wider">加權指數</div>
@@ -51,6 +65,13 @@
                     <span id="taiex-chg" class="text-red-400">--</span>
                 </div>
             </div>
+
+            <!-- 盤中自動定時更新控制鈕 -->
+            <button onclick="toggleAutoRefresh()" id="auto-refresh-btn" class="bg-gray-800 hover:bg-gray-700 text-emerald-400 border border-gray-700 text-[11px] px-2.5 py-1.5 rounded-md font-mono font-medium transition shadow cursor-pointer shrink-0 flex items-center space-x-1" title="點擊切換自動更新開關">
+                <span id="auto-refresh-icon">⏱️</span>
+                <span id="auto-refresh-label">自動: 10s</span>
+            </button>
+
             <button onclick="triggerRefresh()" id="refresh-btn" class="bg-blue-600 hover:bg-blue-500 text-white text-[11px] px-3 py-1.5 rounded-md font-medium transition shadow cursor-pointer shrink-0">
                 <span>⚡ 重新整理</span>
             </button>
@@ -87,14 +108,23 @@
             </div>
         </div>
 
-        <!-- 第二排：動態成交額排行導覽列 -->
+        <!-- 第二排：動態成交額排行導覽列 (初始附帶骨架屏膠囊) -->
         <div class="pt-1 border-t border-gray-800/60 space-y-1">
             <div class="flex items-center space-x-2">
-                <div id="all-sector-container" class="shrink-0"></div>
+                <div id="all-sector-container" class="shrink-0">
+                    <div class="skeleton-box w-22 h-6 rounded-lg border border-gray-800"></div>
+                </div>
                 <div class="flex items-center space-x-1 flex-1 overflow-hidden bg-gray-950/40 px-1.5 py-0.5 rounded-lg border border-gray-800/80">
                     <button onclick="scrollBar('row1-wrapper', -250)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">◀</button>
                     <div id="row1-wrapper" class="sector-scroll flex space-x-1.5 overflow-x-auto hide-scroll flex-1 py-0.5">
-                        <div id="row1-container" class="flex space-x-1.5 shrink-0"></div>
+                        <div id="row1-container" class="flex space-x-1.5 shrink-0">
+                            <!-- 骨架屏膠囊 -->
+                            <div class="skeleton-box w-36 h-6 rounded-md"></div>
+                            <div class="skeleton-box w-36 h-6 rounded-md"></div>
+                            <div class="skeleton-box w-36 h-6 rounded-md"></div>
+                            <div class="skeleton-box w-36 h-6 rounded-md"></div>
+                            <div class="skeleton-box w-36 h-6 rounded-md"></div>
+                        </div>
                     </div>
                     <button onclick="scrollBar('row1-wrapper', 250)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">▶</button>
                 </div>
@@ -105,7 +135,14 @@
                 <div class="flex items-center space-x-1 flex-1 overflow-hidden bg-gray-950/40 px-1.5 py-0.5 rounded-lg border border-gray-800/80">
                     <button onclick="scrollBar('row2-wrapper', -250)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">◀</button>
                     <div id="row2-wrapper" class="sector-scroll flex space-x-1.5 overflow-x-auto hide-scroll flex-1 py-0.5">
-                        <div id="row2-container" class="flex space-x-1.5 shrink-0"></div>
+                        <div id="row2-container" class="flex space-x-1.5 shrink-0">
+                            <!-- 骨架屏膠囊 -->
+                            <div class="skeleton-box w-36 h-6 rounded-md"></div>
+                            <div class="skeleton-box w-36 h-6 rounded-md"></div>
+                            <div class="skeleton-box w-36 h-6 rounded-md"></div>
+                            <div class="skeleton-box w-36 h-6 rounded-md"></div>
+                            <div class="skeleton-box w-36 h-6 rounded-md"></div>
+                        </div>
                     </div>
                     <button onclick="scrollBar('row2-wrapper', 250)" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs shrink-0 cursor-pointer shadow font-bold transition">▶</button>
                 </div>
@@ -126,8 +163,27 @@
             </button>
         </div>
 
-        <!-- 上方熱力圖核心容器 -->
-        <div id="treemap-container" class="w-full h-[650px] shrink-0"></div>
+        <!-- 上方熱力圖核心容器與專屬骨架屏遮罩 -->
+        <div class="relative w-full h-[650px] shrink-0">
+            <div id="treemap-container" class="w-full h-full"></div>
+            
+            <!-- 熱力圖骨架屏 (首次載入時顯示，載入完畢自動隱藏) -->
+            <div id="treemap-skeleton" class="absolute inset-0 p-2 grid grid-cols-12 grid-rows-6 gap-2 bg-[#07090e] z-10 transition-opacity duration-300">
+                <div class="col-span-5 row-span-4 skeleton-box rounded-lg border border-gray-800/80 p-4 flex flex-col justify-between">
+                    <div class="w-24 h-5 bg-gray-700/50 rounded"></div>
+                    <div class="w-16 h-8 bg-gray-700/50 rounded self-end"></div>
+                </div>
+                <div class="col-span-4 row-span-3 skeleton-box rounded-lg border border-gray-800/80 p-3">
+                    <div class="w-20 h-4 bg-gray-700/50 rounded"></div>
+                </div>
+                <div class="col-span-3 row-span-2 skeleton-box rounded-lg border border-gray-800/80 p-3"></div>
+                <div class="col-span-3 row-span-2 skeleton-box rounded-lg border border-gray-800/80 p-3"></div>
+                <div class="col-span-4 row-span-3 skeleton-box rounded-lg border border-gray-800/80 p-3"></div>
+                <div class="col-span-5 row-span-2 skeleton-box rounded-lg border border-gray-800/80 p-3"></div>
+                <div class="col-span-3 row-span-2 skeleton-box rounded-lg border border-gray-800/80 p-3"></div>
+            </div>
+        </div>
+
         <div id="list-container" class="w-full min-h-[500px] p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 content-start hidden"></div>
 
         <!-- 專業漲跌幅色階圖例列 -->
@@ -222,9 +278,7 @@
 
                 <!-- 容器 B：即時新聞列表 -->
                 <div id="left-pane-news" class="space-y-3 overflow-y-auto max-h-[600px] pr-1 hidden">
-                    <div id="news-container" class="space-y-3">
-                        <div class="text-sm text-gray-400 text-center py-6">⏳ 正在載入財經新聞...</div>
-                    </div>
+                    <div id="news-container" class="space-y-3"></div>
                 </div>
             </div>
 
@@ -248,9 +302,7 @@
                     <button onclick="switchRankTab('up')" id="rtab-up" class="tab-btn px-2.5 py-1.5 rounded font-medium">漲幅</button>
                     <button onclick="switchRankTab('down')" id="rtab-down" class="tab-btn px-2.5 py-1.5 rounded font-medium">跌幅</button>
                 </div>
-                <div id="ranking-container" class="space-y-2.5 overflow-y-auto max-h-[530px] pr-1">
-                    <div class="text-sm text-gray-400 text-center py-6">⏳ 載入排行榜中...</div>
-                </div>
+                <div id="ranking-container" class="space-y-2.5 overflow-y-auto max-h-[530px] pr-1"></div>
             </div>
 
         </div>
@@ -278,7 +330,18 @@
         let tseChartInstance = null;
         let otcChartInstance = null;
 
+        // 自動定時更新設定
+        const AUTO_REFRESH_SECONDS = 10;
+        let isAutoRefreshEnabled = true;
+        let countdownSeconds = AUTO_REFRESH_SECONDS;
+        let autoRefreshTimer = null;
+        let isFetchingData = false;
+        let isInitialLoaded = false;
+
         window.addEventListener('DOMContentLoaded', () => {
+            // 1. 立即渲染骨架屏，消除白屏等待感
+            renderInitialSkeletons();
+
             const chartDom = document.getElementById('treemap-container');
             chartInstance = echarts.init(chartDom);
             
@@ -329,8 +392,126 @@
                 });
             });
 
-            loadMarketData();
+            // 2. 載入市場資料並啟動盤中智慧定時器
+            loadMarketData(false, false);
+            initAutoRefreshScheduler();
         });
+
+        // 渲染各區塊初始骨架屏
+        function renderInitialSkeletons() {
+            // 排行榜骨架屏 (產生 8 筆微光條目)
+            const rankContainer = document.getElementById('ranking-container');
+            let rankSkel = '';
+            for (let i = 0; i < 8; i++) {
+                rankSkel += `
+                    <div class="skeleton-box border border-gray-800/80 rounded-lg p-3 flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-4 h-4 bg-gray-700/50 rounded"></div>
+                            <div class="space-y-1.5">
+                                <div class="w-24 h-4 bg-gray-700/50 rounded"></div>
+                                <div class="w-16 h-3 bg-gray-700/40 rounded"></div>
+                            </div>
+                        </div>
+                        <div class="space-y-1.5 text-right">
+                            <div class="w-14 h-4 bg-gray-700/50 rounded ml-auto"></div>
+                            <div class="w-10 h-3 bg-gray-700/40 rounded ml-auto"></div>
+                        </div>
+                    </div>
+                `;
+            }
+            rankContainer.innerHTML = rankSkel;
+
+            // 類股指數列表骨架屏
+            const secIdxContainer = document.getElementById('sector-index-list');
+            let secSkel = '';
+            for (let i = 0; i < 6; i++) {
+                secSkel += `
+                    <div class="skeleton-box border border-gray-800/60 rounded-lg p-2.5 flex items-center justify-between">
+                        <div class="w-28 h-4 bg-gray-700/50 rounded"></div>
+                        <div class="w-20 h-4 bg-gray-700/50 rounded"></div>
+                    </div>
+                `;
+            }
+            secIdxContainer.innerHTML = secSkel;
+
+            // 新聞列表骨架屏
+            const newsContainer = document.getElementById('news-container');
+            let newsSkel = '';
+            for (let i = 0; i < 5; i++) {
+                newsSkel += `
+                    <div class="skeleton-box border border-gray-800/80 rounded-lg p-3 space-y-2">
+                        <div class="w-full h-4 bg-gray-700/50 rounded"></div>
+                        <div class="w-2/3 h-4 bg-gray-700/50 rounded"></div>
+                        <div class="flex justify-between pt-1">
+                            <div class="w-16 h-3 bg-gray-700/40 rounded"></div>
+                            <div class="w-12 h-3 bg-gray-700/40 rounded"></div>
+                        </div>
+                    </div>
+                `;
+            }
+            newsContainer.innerHTML = newsSkel;
+        }
+
+        // 判斷目前是否為台股開盤時間 (週一至週五 09:00 ~ 13:35)
+        function isTaiwanMarketOpen() {
+            const now = new Date();
+            const day = now.getDay();
+            if (day === 0 || day === 6) return false; // 週末休市
+            const hhmm = now.getHours() * 100 + now.getMinutes();
+            return hhmm >= 900 && hhmm <= 1335;
+        }
+
+        // 初始化盤中自動更新排程器
+        function initAutoRefreshScheduler() {
+            // 若載入時非盤中時間，預設自動暫停以節省資源（使用者仍可手動點擊開啟）
+            if (!isTaiwanMarketOpen()) {
+                isAutoRefreshEnabled = false;
+            }
+            updateAutoRefreshUI();
+
+            if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+            autoRefreshTimer = setInterval(() => {
+                if (!isAutoRefreshEnabled || isFetchingData) return;
+
+                countdownSeconds--;
+                if (countdownSeconds <= 0) {
+                    countdownSeconds = AUTO_REFRESH_SECONDS;
+                    // 背景靜默拉取最新資料，不顯示骨架屏避免閃爍
+                    loadMarketData(true, true);
+                }
+                updateAutoRefreshUI();
+            }, 1000);
+        }
+
+        // 切換自動更新開關
+        function toggleAutoRefresh() {
+            isAutoRefreshEnabled = !isAutoRefreshEnabled;
+            if (isAutoRefreshEnabled) {
+                countdownSeconds = AUTO_REFRESH_SECONDS;
+            }
+            updateAutoRefreshUI();
+        }
+
+        // 更新頂部自動更新按鈕與實盤燈號狀態
+        function updateAutoRefreshUI() {
+            const btn = document.getElementById('auto-refresh-btn');
+            const label = document.getElementById('auto-refresh-label');
+            const dot = document.getElementById('live-dot');
+            const liveText = document.getElementById('live-text');
+            const marketOpen = isTaiwanMarketOpen();
+
+            if (isAutoRefreshEnabled) {
+                btn.className = "bg-emerald-950/60 hover:bg-emerald-900/70 text-emerald-300 border border-emerald-700/60 text-[11px] px-2.5 py-1.5 rounded-md font-mono font-medium transition shadow cursor-pointer shrink-0 flex items-center space-x-1";
+                label.innerText = `自動: ${countdownSeconds}s`;
+                dot.className = "w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping";
+                liveText.innerText = marketOpen ? "盤中即時" : "自動輪詢";
+            } else {
+                btn.className = "bg-gray-800 hover:bg-gray-700 text-gray-400 border border-gray-700 text-[11px] px-2.5 py-1.5 rounded-md font-mono font-medium transition shadow cursor-pointer shrink-0 flex items-center space-x-1";
+                label.innerText = marketOpen ? "自動: 暫停" : "盤後暫停";
+                dot.className = "w-1.5 h-1.5 rounded-full bg-gray-400";
+                liveText.innerText = marketOpen ? "實盤" : "盤後";
+            }
+        }
 
         function renderMiniCharts() {
             const times = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30'];
@@ -376,9 +557,15 @@
             return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
         }
 
-        async function loadMarketData(force = false) {
+        async function loadMarketData(force = false, silent = false) {
+            if (isFetchingData) return;
+            isFetchingData = true;
+
             const btn = document.getElementById('refresh-btn');
-            btn.innerHTML = '<span>⏳...</span>';
+            if (!silent) {
+                btn.innerHTML = '<span>⏳ 同步中</span>';
+            }
+
             try {
                 const url = force ? '/api/heatmap/snapshot?force=1' : '/api/heatmap/snapshot';
                 const res = await fetch(url);
@@ -386,6 +573,13 @@
                 if (json.status === 'ok') {
                     rawStocksData = json.stocks;
                     rawNewsData = json.news || [];
+
+                    // 隱藏熱力圖骨架屏遮罩
+                    if (!isInitialLoaded) {
+                        const skel = document.getElementById('treemap-skeleton');
+                        if (skel) skel.classList.add('hidden');
+                        isInitialLoaded = true;
+                    }
 
                     if (json.taiex) {
                         const t = json.taiex;
@@ -426,11 +620,16 @@
             } catch (e) {
                 console.error("載入行情失敗:", e);
             } finally {
+                isFetchingData = false;
+                countdownSeconds = AUTO_REFRESH_SECONDS;
                 btn.innerHTML = '<span>⚡ 重新整理</span>';
             }
         }
 
-        function triggerRefresh() { loadMarketData(true); }
+        function triggerRefresh() {
+            countdownSeconds = AUTO_REFRESH_SECONDS;
+            loadMarketData(true, false);
+        }
 
         function switchLeftTab(tab) {
             currentLeftTab = tab;
@@ -530,7 +729,7 @@
                 if (btn) btn.classList.toggle('active', m === mode);
             });
 
-            const hmContainer = document.getElementById('treemap-container');
+            const hmContainer = document.getElementById('treemap-container').parentElement;
             const listContainer = document.getElementById('list-container');
 
             if (mode === 'list') {
