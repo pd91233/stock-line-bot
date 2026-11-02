@@ -156,18 +156,17 @@
             <div class="lg:col-span-7 bg-gray-900/90 border border-gray-800 rounded-xl p-3.5 flex flex-col space-y-3">
                 <div class="flex items-center justify-between border-b border-gray-800 pb-2.5">
                     <div class="flex items-center space-x-1.5">
-                        <button onclick="switchLeftTab('index')" id="ltab-index" class="tab-btn active px-3 py-1 rounded text-xs font-bold">📊 上市櫃指數與類股</button>
-                        <button onclick="switchLeftTab('news')" id="ltab-news" class="tab-btn px-3 py-1 rounded text-xs font-bold">📰 即時新聞</button>
+                        <button onclick="switchLeftTab('index')" id="ltab-index" class="tab-btn active px-3 py-1.5 rounded text-xs font-bold">📊 上市櫃指數與線圖</button>
+                        <button onclick="switchLeftTab('news')" id="ltab-news" class="tab-btn px-3 py-1.5 rounded text-xs font-bold">📰 即時新聞</button>
                     </div>
                     <span id="left-status-tag" class="text-xs text-emerald-400 font-mono">🔴 即時行情</span>
                 </div>
 
                 <!-- 容器 A：專業上市櫃指數股價線圖與詳細數據看板 -->
                 <div id="left-pane-index" class="space-y-4 overflow-y-auto max-h-[600px] pr-1 font-mono">
-                    <!-- 上方雙欄卡片：加權指數與櫃買指數 -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <!-- 加權指數卡片 -->
-                        <div class="bg-gray-950/70 border border-gray-800 rounded-xl p-3 flex flex-col space-y-2.5 shadow">
+                        <!-- 加權指數卡片含線圖 -->
+                        <div class="bg-gray-950/70 border border-gray-800 rounded-xl p-3 flex flex-col space-y-2 shadow">
                             <div class="flex justify-between items-center">
                                 <span class="text-xs font-bold text-gray-300">加權指數</span>
                                 <span id="card-tse-chg" class="text-xs font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/50">▼ -0.64%</span>
@@ -176,6 +175,8 @@
                                 <span id="card-tse-val" class="text-2xl font-bold text-white">44,920.14</span>
                                 <span id="card-tse-pts" class="text-xs text-emerald-400">-291.69</span>
                             </div>
+                            <!-- 分時線圖容器 -->
+                            <div id="tse-chart" class="w-full h-32 my-1"></div>
                             <div class="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-gray-400 border-t border-gray-800/80 pt-2">
                                 <div>開盤: <span id="card-tse-open" class="text-emerald-400">45,034.53</span></div>
                                 <div>最高: <span id="card-tse-high" class="text-red-400">45,156.17</span></div>
@@ -187,8 +188,8 @@
                             </div>
                         </div>
 
-                        <!-- 櫃買指數卡片 -->
-                        <div class="bg-gray-950/70 border border-gray-800 rounded-xl p-3 flex flex-col space-y-2.5 shadow">
+                        <!-- 櫃買指數卡片含線圖 -->
+                        <div class="bg-gray-950/70 border border-gray-800 rounded-xl p-3 flex flex-col space-y-2 shadow">
                             <div class="flex justify-between items-center">
                                 <span class="text-xs font-bold text-gray-300">櫃買指數 (OTC)</span>
                                 <span id="card-otc-chg" class="text-xs font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/50">▼ -0.27%</span>
@@ -197,6 +198,8 @@
                                 <span id="card-otc-val" class="text-2xl font-bold text-white">369.24</span>
                                 <span id="card-otc-pts" class="text-xs text-emerald-400">-1.02</span>
                             </div>
+                            <!-- 分時線圖容器 -->
+                            <div id="otc-chart" class="w-full h-32 my-1"></div>
                             <div class="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-gray-400 border-t border-gray-800/80 pt-2">
                                 <div>開盤: <span class="text-red-400">368.22</span></div>
                                 <div>最高: <span class="text-red-400">373.28</span></div>
@@ -209,7 +212,6 @@
                         </div>
                     </div>
 
-                    <!-- 下方：上市指數與各大類股即時列表 -->
                     <div class="space-y-2 pt-2">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-bold text-gray-300 flex items-center space-x-1">
@@ -218,13 +220,11 @@
                             </span>
                             <span class="text-[10px] text-gray-400">即時連動</span>
                         </div>
-                        <div id="sector-index-list" class="space-y-1.5">
-                            <!-- 動態渲染類股指數 -->
-                        </div>
+                        <div id="sector-index-list" class="space-y-1.5"></div>
                     </div>
                 </div>
 
-                <!-- 容器 B：即時新聞列表 (預設隱藏) -->
+                <!-- 容器 B：即時新聞列表 -->
                 <div id="left-pane-news" class="space-y-3 overflow-y-auto max-h-[600px] pr-1 hidden">
                     <div id="news-container" class="space-y-3">
                         <div class="text-sm text-gray-400 text-center py-6">⏳ 正在載入財經新聞...</div>
@@ -281,11 +281,17 @@
         let currentRankTab = 'val';
         let currentLeftTab = 'index';
         let chartInstance = null;
+        let tseChartInstance = null;
+        let otcChartInstance = null;
 
         window.addEventListener('DOMContentLoaded', () => {
             const chartDom = document.getElementById('treemap-container');
             chartInstance = echarts.init(chartDom);
             
+            tseChartInstance = echarts.init(document.getElementById('tse-chart'));
+            otcChartInstance = echarts.init(document.getElementById('otc-chart'));
+            renderMiniCharts();
+
             chartInstance.on('click', function (params) {
                 if (params.data && params.data.type === 'stock') {
                     openStockSheet(params.data.symbol);
@@ -299,7 +305,11 @@
                 }
             });
 
-            window.addEventListener('resize', () => chartInstance.resize());
+            window.addEventListener('resize', () => {
+                chartInstance.resize();
+                tseChartInstance.resize();
+                otcChartInstance.resize();
+            });
 
             ['row1-wrapper', 'row2-wrapper'].forEach(id => {
                 const wrapper = document.getElementById(id);
@@ -327,6 +337,35 @@
 
             loadMarketData();
         });
+
+        function renderMiniCharts() {
+            // 模擬分時走勢資料點
+            const times = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30'];
+            const tseVals = [45034, 44800, 44400, 44650, 44900, 45156, 45000, 44920];
+            const otcVals = [368.2, 366.5, 362.1, 364.0, 367.5, 373.2, 370.0, 369.2];
+
+            const getMiniOption = (data, colorHex) => ({
+                grid: { top: 5, bottom: 5, left: 5, right: 5 },
+                xAxis: { type: 'category', show: false, data: times.slice(0, data.length) },
+                yAxis: { type: 'value', show: false, scale: true },
+                series: [{
+                    data: data,
+                    type: 'line',
+                    smooth: true,
+                    symbol: 'none',
+                    lineStyle: { color: colorHex, width: 2 },
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: colorHex === '#f23645' ? 'rgba(242,54,69,0.4)' : 'rgba(5,153,79,0.4)' },
+                            { offset: 1, color: 'rgba(0,0,0,0)' }
+                        ])
+                    }
+                }]
+            });
+
+            tseChartInstance.setOption(getMiniOption(tseVals, '#05994f'));
+            otcChartInstance.setOption(getMiniOption(otcVals, '#05994f'));
+        }
 
         function scrollBar(wrapperId, offset) {
             const wrapper = document.getElementById(wrapperId);
@@ -364,7 +403,6 @@
                         chgEl.className = colorCls;
                         chgEl.innerText = `${sign} ${Math.abs(t.change)}`;
 
-                        // 填入左側大盤指數卡片
                         document.getElementById('card-tse-val').innerText = t.index.toLocaleString();
                         const pctStr = ((t.change / (t.index - t.change)) * 100).toFixed(2);
                         const tseChgEl = document.getElementById('card-tse-chg');
@@ -408,6 +446,12 @@
             document.getElementById('left-pane-index').classList.toggle('hidden', tab !== 'index');
             document.getElementById('left-pane-news').classList.toggle('hidden', tab !== 'news');
             document.getElementById('left-status-tag').innerText = tab === 'index' ? '🔴 大盤指數' : '🔴 官方 RSS';
+            if (tab === 'index') {
+                setTimeout(() => {
+                    tseChartInstance.resize();
+                    otcChartInstance.resize();
+                }, 50);
+            }
         }
 
         function renderSectorIndexList() {
@@ -560,7 +604,7 @@
             } else if (currentRankTab === 'foreign_buy') {
                 list.sort((a, b) => ((b.tradeValue * Math.max(0, b.changePercent)) - (a.tradeValue * Math.max(0, a.changePercent))));
             } else if (currentRankTab === 'foreign_sell') {
-                list.sort((a, b) => ((Math.abs(Math.min(0, a.changePercent)) * a.tradeValue) - (Math.abs(Math.min(0, b.changePercent)) * b.tradeValue)));
+                list.sort((a, b) => ((Math.abs(Math.min(0, a.changePercent)) * a.tradeValue) - (Math.abs(Math.min(0, b.changePercent)) * b.tradeValue))));
             } else if (currentRankTab === 'trust_buy') {
                 list.sort((a, b) => ((b.changePercent * b.tradeValue) - (a.changePercent * a.tradeValue)));
             } else if (currentRankTab === 'trust_sell') {
