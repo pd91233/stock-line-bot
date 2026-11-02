@@ -116,7 +116,7 @@
     <!-- 主內容區 -->
     <main class="flex-1 relative w-full bg-[#07090e] overflow-hidden flex flex-col">
         
-        <!-- 🎯 整合式返回列：當進入單一產業時顯示在頂部，絕不遮擋圖表數據 -->
+        <!-- 整合式返回列 -->
         <div id="back-bar" class="bg-gray-900/90 border-b border-gray-800 px-3 py-1.5 hidden flex items-center justify-between shrink-0">
             <div class="text-xs text-amber-400 font-bold flex items-center space-x-2">
                 <span>📂 正在檢視產業細節</span>
@@ -179,7 +179,7 @@
                     document.getElementById('back-bar').classList.remove('hidden');
                     buildSectorPills();
                     renderChart();
-                    chartInstance.resize(); // 🎯 重新計算圖表尺寸以適應返回列
+                    chartInstance.resize();
                 }
             });
 
@@ -392,7 +392,7 @@
             }
             buildSectorPills();
             renderChart();
-            setTimeout(() => chartInstance.resize(), 50); // 🎯 觸發重新排版
+            setTimeout(() => chartInstance.resize(), 50);
             if (currentViewMode === 'list') renderListMode();
         }
 
@@ -402,7 +402,7 @@
             document.getElementById('back-bar').classList.add('hidden');
             buildSectorPills();
             renderChart();
-            setTimeout(() => chartInstance.resize(), 50); // 🎯 觸發重新排版
+            setTimeout(() => chartInstance.resize(), 50);
             if (currentViewMode === 'list') renderListMode();
         }
 
@@ -563,29 +563,7 @@
 
             const option = {
                 tooltip: {
-                    formatter: function (info) {
-                        if (info.data.type === 'stock') {
-                            const st = info.data.raw;
-                            const sign = st.changePercent >= 0 ? '+' : '';
-                            return `<div class="p-2 text-xs">
-                                <div class="font-bold text-sm">${st.name} (${st.symbol})</div>
-                                <div>現價: <span class="font-mono font-bold">${st.price}</span> (${sign}${st.changePercent}%)</div>
-                                <div>成交額: <span class="font-mono text-blue-400">${st.tradeValue}億</span></div>
-                                <div>成交量: <span class="font-mono">${st.tradeVolume}張</span></div>
-                                <div class="text-[10px] text-gray-400 mt-1">👆 點擊查看最佳五檔明細</div>
-                            </div>`;
-                        } else if (info.data.type === 'sector') {
-                            const grp = info.data.rawGroup;
-                            const avgChg = grp.totalVal > 0 ? (grp.weightedChg / grp.totalVal).toFixed(2) : 0;
-                            return `<div class="p-2 text-xs">
-                                <div class="font-bold text-sm text-amber-400">${info.data.sectorName} 產業板塊</div>
-                                <div>平均漲跌: <span class="font-mono font-bold">${avgChg}%</span></div>
-                                <div>總成交額: <span class="font-mono text-blue-400">${grp.totalVal.toFixed(1)}億</span></div>
-                                <div class="text-[10px] text-gray-400 mt-1">👆 點擊方塊可進入該產業個股明細</div>
-                            </div>`;
-                        }
-                        return `<b>${info.name}</b>`;
-                    }
+                    show: false // 🎯 完全關閉會遮擋視線的浮動白框提示窗
                 },
                 series: [{
                     type: 'treemap',
@@ -694,7 +672,9 @@
                             <div class="text-right space-y-1 font-mono text-xs">
                                 <div>開: <span class="text-white">${st.openPrice}</span> | 高: <span class="text-red-400">${st.highPrice}</span></div>
                                 <div>低: <span class="text-emerald-400">${st.lowPrice}</span> | 均: <span class="text-blue-300">${st.avgPrice}</span></div>
+                                <!-- 🎯 已將「成交額」與「成交量」完整補進下方抽屜資訊中 -->
                                 <div>成交額: <span class="text-blue-400 font-bold">${st.tradeValue}億</span></div>
+                                <div>成交量: <span class="text-white font-mono">${st.tradeVolume}張</span></div>
                             </div>
                         </div>
                         <div>
