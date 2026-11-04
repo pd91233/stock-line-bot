@@ -4143,12 +4143,8 @@ def market_patrol_loop():
 
 
 # ==========================================================
-
 # ⚡ 8. 專屬當沖連續掃描引擎 (全市場 2000 檔批次陣列雷達)
-
 # ==========================================================
-
-
 
 # 🛡️ 戰情室防禦黑盒子：記錄被攔截的主力陷阱
 intercepted_traps_log = []
@@ -4156,19 +4152,19 @@ intercepted_traps_log = []
 stock_tick_memory = {}
 intraday_alerted_codes = set()
 
-# 💥 新增：用來記錄「盤中真實被系統攔截過濾」的股票集合
+# 💥 用來記錄「盤中真實被系統攔截過濾」的股票集合
 filtered_funds_codes = set()
 filtered_overheated_codes = set()
 last_clear_date = ""
 
 def process_tick_data(data, meta_info, top_ind):
-    import time, datetime, requests
+    import time, datetime
     global stock_tick_memory, intraday_alerted_codes, intercepted_traps_log
     global filtered_funds_codes, filtered_overheated_codes, last_clear_date
     
     code = data.get('c')
     
-    # 換日自動清空昨天的過濾紀錄
+    # 🕒 換日自動清空昨天的過濾紀錄與已發報記憶
     tz = datetime.timezone(datetime.timedelta(hours=8))
     now_dt = datetime.datetime.now(tz)
     now_date_str = now_dt.strftime("%Y-%m-%d")
@@ -4176,200 +4172,210 @@ def process_tick_data(data, meta_info, top_ind):
         filtered_funds_codes.clear()
         filtered_overheated_codes.clear()
         intercepted_traps_log.clear()
+        intraday_alerted_codes.clear()
+        stock_tick_memory.clear()
         last_clear_date = now_date_str
 
-    if not code or code in intraday_alerted_codes: return None
+    if not code or code in intraday_alerted_codes:
+        return None
     
     try:
         name = meta_info.get('name', code)
         ind = meta_info.get('ind', '未知')
-        ma20 = float(meta_info.get('ma20', 0) if meta_info.get('ma20', '-') != '-' else 0)
+        ma20 = float(meta_info.get('ma20', 0) if meta_info.get('ma20', '-') not in ['-', ''] else 0)
         
         z = float(data.get('z', 0) if data.get('z', '-') != '-' else data.get('y', 0))
         o = float(data.get('o', 0) if data.get('o', '-') != '-' else z)
-        h = float(data.get('h', 0) if data.get('h', '-') != '-' else 0)
+        h = float(data.get('h', 0) if data.get('h', '-') != '-' else z)
         l = float(data.get('l', 0) if data.get('l', '-') != '-' else z)
         y = float(data.get('y', 0))
         v = float(data.get('v', 0) if data.get('v', '-') != '-' else 0)
         
-        if z <= 0 or y <= 0: return None
-        if v < 0.5: return None
-        
-        chg_pct = round(((z - y) / y) * 100, 2)
-        
-        # 🛡️ 【統帥加裝】如果漲幅已經逼近漲停（例如 >= 8.5%），直接過濾不發送！
-        # 避免發報時已經快漲停或買不到，淪為追高風險。
-        if chg_pct >= 8.0:
-            filtered_overheated_codes.add(code)  # 自動歸類到過熱/追高防護網中
+        if z <= 0 or y <= 0 or o <= 0:
             return None
-        
-        try:
-            vwap_est = round((o + h + l + (z * v / (v if v > 0 else 1))) / 4, 2) if v > 0 else round((o + h + l + z * 2) / 5, 2)
-            if abs(vwap_est - z) / z > 0.07: vwap_est = round((o + h + l + z * 2) / 5, 2)
-        except:
-            vwap_est = round((o + h + l + z * 2) / 5, 2)
+        if v < 100:  # 總成交量連 100 張都不到的小型冷門股直接忽略
+            return None
 
         now_ts = time.time()
         time_str = now_dt.strftime("%H:%M:%S")
         current_time_num = now_dt.hour * 100 + now_dt.minute
 
-        if 900 <= current_time_num < 1000: time_status = "golden"
-        elif 1000 <= current_time_num < 1100: time_status = "cooling"
-        else: time_status = "dead_water"
-
-        if code not in stock_tick_memory: stock_tick_memory[code] = []
+        # 先將最新 Tick 存入記憶體（讓 09:00~09:05 期間也能累積基準量價）
+        if code not in stock_tick_memory:
+            stock_tick_memory[code] = []
         stock_tick_memory[code].append((now_ts, z, v, h, l))
-        
-        if len(stock_tick_memory[code]) > 30: stock_tick_memory[code].pop(0)
+        if len(stock_tick_memory[code]) > 30:
+            stock_tick_memory[code].pop(0)
 
-        ticks = stock_tick_memory[code]
-        if len(ticks) >= 6:
-            current_ts, current_z, current_v = ticks[-1][0], ticks[-1][1], ticks[-1][2]
-            
-            past_tick = ticks[0] 
-            for t in reversed(ticks):
-                if current_ts - t[0] >= 50: 
-                    past_tick = t
-                    break
-            
-            if current_ts - ticks[0][0] < 40:
-                return None
+        # =========================================================================
+        # 🛡️ 【第一道防線：黃金作戰時段鎖定 (09:06 ~ 11:30)】
+        # 避開 09:00~09:05 開盤隔日沖倒貨亂流，以及 11:30 後尾盤死水假突破（如13:23中華電/健策）
+        # =========================================================================
+        if current_time_num < 906 or current_time_num > 1130:
+            return None
 
-            z_1m_ago, v_1m_ago = past_tick[1], past_tick[2]
-            vol_1m = current_v - v_1m_ago
-            ignite_value = vol_1m * current_z * 1000
+        if 906 <= current_time_num < 1000:
+            time_status = "golden"
+        elif 1000 <= current_time_num < 1100:
+            time_status = "cooling"
+        else:
+            time_status = "dead_water"
 
-            is_real_attack = current_z >= z_1m_ago
-            is_volume_surge = False
+        # =========================================================================
+        # 🛡️ 【第二道防線：最佳發動漲幅甜區 (1.5% ~ 6.5%)】
+        # < 1.5% 多為牛皮股無當沖空間；>= 6.5% 逼近漲停肉少且追高極易被倒貨修理
+        # =========================================================================
+        chg_pct = round(((z - y) / y) * 100, 2)
+        if chg_pct >= 6.5:
+            filtered_overheated_codes.add(code)
+            return None
+        if chg_pct < 1.5:
+            return None
 
-            # 💥 [統帥校準] 嚴格把關主力真實點火資金
-            if time_status == "golden":
-                if vol_1m >= 50 and ignite_value >= 50000000: is_volume_surge = True
-            elif time_status == "cooling":
-                if vol_1m >= 100 and ignite_value >= 80000000: is_volume_surge = True
-            elif time_status == "dead_water":
-                if vol_1m >= 150 and ignite_value >= 100000000: is_volume_surge = True
+        # =========================================================================
+        # 🛡️ 【第三道防線：強勢紅 K 實體與極短上影線把關】
+        # 1. 現價必須大於開盤價至少 0.3% (確保日K為實質紅K，拒買開高走低黑K)
+        # 2. 上影線不得超過 0.8% (確保買在創高攻擊瞬間，拒買沖高回落留長上影線的倒貨股)
+        # 3. 當日振幅須 >= 1.8% (過濾死魚牛皮股)
+        # =========================================================================
+        if z < o * 1.003:
+            return None
+        if h > 0 and ((h - z) / z) > 0.008:
+            return None
+        if l > 0 and ((h - l) / y) < 0.018:
+            return None
 
-            # 🛡️ 數據採集 1：資金不足過濾 (有一分鐘爆量>50張，但資金/張數未達嚴格標準)
-            if vol_1m >= 50 and current_z >= z_1m_ago and not is_volume_surge:
-                filtered_funds_codes.add(code)
-                return None
+        # 精準估算盤中均價線 (VWAP)：典型價格加權
+        try:
+            vwap_est = round((o + h * 1.2 + l * 0.8 + z * 2.0) / 5.0, 2)
+        except:
+            vwap_est = round((o + h + l + z) / 4.0, 2)
 
-            if not (is_volume_surge and is_real_attack): return None
+        # 現價必須穩站在均價線 (VWAP) 與月線 (20MA) 之上
+        if z <= vwap_est:
+            return None
+        if ma20 > 0 and z < ma20:
+            return None
 
-
-
-            ma5_now = sum([t[1] for t in ticks[-5:]]) / 5
-
-            ma5_prev = sum([t[1] for t in ticks[-6:-1]]) / 5
-
-            
-
-            is_ma_up = ma5_now > ma5_prev
-
-            is_cross_vwap = (z_1m_ago < vwap_est and current_z >= vwap_est)
-
-            
-
-            if not is_ma_up and not is_cross_vwap: return None
-
-
-
-            is_below_20ma = (ma20 > 0 and current_z < ma20)
-
-            if is_below_20ma: return None
-
-            
-
-            alert_type = ""
-
-            action_guide = ""
-
-            
-
-            if not is_ma_up and is_cross_vwap:
-
-                alert_type = "💥 【破底翻突襲】爆量貫穿均價線！"
-
-                action_guide = f"🎯 【實戰戰術：低檔 V 轉搶短】\n👉 戰況解讀：主力瞬間爆量強攻站上均價線！\n🛡️ 生死防線：以均價線 {vwap_est} 為絕對防禦，跌破立刻撤退！"
-
-            elif is_ma_up and current_z >= vwap_est:
-
-                alert_type = "🚀 【主升段點火】均線多頭強勢推升！"
-
-                action_guide = f"🎯 【實戰戰術：右側順勢加碼】\n👉 戰況解讀：短均線上揚，趨勢極度健康！\n🛡️ 移動防線：沿著上揚走勢操作，爆量跌破 {vwap_est} 則拔檔！"
-
-            else:
-
-                return None 
-
-
-
-            bias = ((current_z - vwap_est) / vwap_est) * 100 if vwap_est > 0 else 0
-            if bias >= 2.5:
-                # 🛡️ 數據採集 2：將過熱標的記錄進真實數據庫
+        # =========================================================================
+        # 🛡️ 【第四道防線：嚴格封殺正乖離過熱 (Bias >= 2.2% 立刻攔截不發送！)】
+        # 徹底修復先前「標記過熱卻照常發送」導致強新(-12.4%)、大量(-1.6%)暴賠的致命漏洞
+        # =========================================================================
+        bias = ((z - vwap_est) / vwap_est) * 100 if vwap_est > 0 else 0.0
+        if bias >= 2.2 or bias < 0.2:
+            if bias >= 2.2:
                 filtered_overheated_codes.add(code)
-                
-                alert_type = "⚠️ 【高檔爆量・極端過熱】"
+            return None
 
-                action_guide = f"🎯 【操盤手強制指令：嚴禁追高】\n👉 戰況解讀：正乖離達 {bias:+.1f}%，瞬間漲幅過大！\n🔪 動作：切勿市價追高！靜待量縮拉回測試。"
+        # =========================================================================
+        # 🛡️ 【第五道防線：1分鐘點火資金門檻與連續階梯推升確認】
+        # =========================================================================
+        ticks = stock_tick_memory[code]
+        if len(ticks) < 6:
+            return None
 
+        current_ts, current_z, current_v = ticks[-1][0], ticks[-1][1], ticks[-1][2]
+        
+        past_tick = ticks[0]
+        for t in reversed(ticks):
+            if current_ts - t[0] >= 50:
+                past_tick = t
+                break
+        
+        if current_ts - ticks[0][0] < 40:
+            return None
 
+        z_1m_ago, v_1m_ago = past_tick[1], past_tick[2]
+        vol_1m = current_v - v_1m_ago
+        ignite_value = vol_1m * current_z * 1000
 
+        # 價格必須比 1 分鐘前實質推升至少 0.4%，且最近 3 次採樣不倒退 (防單筆大單騙線)
+        is_real_attack = (current_z >= z_1m_ago * 1.004) and (ticks[-1][1] >= ticks[-2][1] >= ticks[-3][1])
+        is_volume_surge = False
 
+        if time_status == "golden":
+            if vol_1m >= 60 and ignite_value >= 50000000:
+                is_volume_surge = True
+        elif time_status == "cooling":
+            if vol_1m >= 100 and ignite_value >= 80000000:
+                is_volume_surge = True
+        elif time_status == "dead_water":
+            if vol_1m >= 150 and ignite_value >= 100000000:
+                is_volume_surge = True
 
+        # 數據採集：有一分鐘爆量 > 50 張但點火資金未達標 -> 記錄至資金不足攔截池
+        if vol_1m >= 50 and current_z > z_1m_ago and not is_volume_surge:
+            filtered_funds_codes.add(code)
+            return None
 
+        if not (is_volume_surge and is_real_attack):
+            return None
 
+        # 均線動能確認：短均線向上 且 貼近當日高點強勢突破
+        ma5_now = sum([t[1] for t in ticks[-5:]]) / 5.0
+        ma5_prev = sum([t[1] for t in ticks[-6:-1]]) / 5.0
+        is_ma_up = ma5_now > ma5_prev
+        is_cross_vwap = (z_1m_ago <= vwap_est * 1.003 and current_z > vwap_est)
 
+        if not is_ma_up:
+            return None
 
-
-
-            is_resonance = (top_ind != "" and top_ind in ind)
-
-            hot_tag = f"🌟 [主流資金共振：{ind}]" if is_resonance else f"🏷️ [{ind}]"
-
-            resonance_text = " (🔥主攻部隊)" if is_resonance else ""
-
-            intraday_alerted_codes.add(code)
-                
-            # 🎯 [統帥加裝] 計算無腦進場價 (+2檔) 並寫入 CSV 資料庫
-            tick_size = 0.05 if current_z < 50 else (0.1 if current_z < 100 else (0.5 if current_z < 500 else 1.0))
-            suggested_entry = round(current_z + (tick_size * 2), 2)
-            
-            csv_payload = {
-                "time": time_str,
-                "id": code,
-                "name": name,
-                "zone": "早盤" if time_status == "golden" else ("盤中" if time_status == "cooling" else "尾盤"),
-                "funds": int(ignite_value / 10000), # 萬元
-                "change_pct": f"{chg_pct:+.2f}%",
-                "deviation": f"{bias:+.1f}%",
-                "decision": "強勢達標_發送 🔔",
-                "entry": suggested_entry,
-                "stop_loss": vwap_est
-            }
-            log_event(csv_payload)
-            
-            
-            # 註冊進入盤中即時風控監控網格
-            intraday_live_monitors[code] = {
-                "name": name,
-                "entry": suggested_entry,
-                "vwap": vwap_est,
-                "alerted_mfe3": False,
-                "alerted_break": False
-            }
-            
-
-            # 💡 請保留您原本這段完整、豐富的回傳字串，一絲一毫都不少！
-            return (
-                f"[{time_str}] ⚡ {name}({code}) {alert_type}\n"
-                f"{hot_tag} | 現價：{current_z} (均價線:{vwap_est})\n"
-                f"漲幅：{chg_pct:+.2f}% | 均價乖離：{bias:+.1f}%\n"
-                f"🔥 絕對爆量：{int(vol_1m)} 張 (點火資金 {int(ignite_value/10000)}萬){resonance_text}\n"
-                f"----------------------\n"
-                f"{action_guide}"
+        if is_cross_vwap:
+            alert_type = "💥 【剛過均價・起漲點火】帶量突破均價線！"
+            action_guide = (
+                f"🎯 【實戰戰術：起漲第一根狙擊】\n"
+                f"👉 戰況解讀：主力大單點火剛突破均價線，乖離極小（{bias:+.1f}%），位階安全！\n"
+                f"🛡️ 生死防線：以均價線 {vwap_est} 為絕對停損，獲利達 +2%～+3% 建議分批落袋！"
             )
+        else:
+            alert_type = "🚀 【主升段創高】量價齊揚強勢推升！"
+            action_guide = (
+                f"🎯 【實戰戰術：右側順勢狙擊】\n"
+                f"👉 戰況解讀：紅K創高無上影線、短均線陡峭上揚，多頭動能健康！\n"
+                f"🛡️ 移動防線：嚴守均價線 {vwap_est} 防線，衝高見 +2.5% 以上分批停利鎖住戰果！"
+            )
+
+        is_resonance = (top_ind != "" and top_ind in ind)
+        hot_tag = f"🌟 [主流資金共振：{ind}]" if is_resonance else f"🏷️ [{ind}]"
+        resonance_text = " (🔥主攻部隊)" if is_resonance else ""
+
+        intraday_alerted_codes.add(code)
+            
+        # 計算建議進場價 (+2檔) 並寫入 CSV 資料庫
+        tick_size = 0.05 if current_z < 50 else (0.1 if current_z < 100 else (0.5 if current_z < 500 else 1.0))
+        suggested_entry = round(current_z + (tick_size * 2), 2)
+        
+        csv_payload = {
+            "time": time_str,
+            "id": code,
+            "name": name,
+            "zone": "早盤" if time_status == "golden" else ("盤中" if time_status == "cooling" else "尾盤"),
+            "funds": int(ignite_value / 10000), # 萬元
+            "change_pct": f"{chg_pct:+.2f}%",
+            "deviation": f"{bias:+.1f}%",
+            "decision": "強勢達標_發送 🔔",
+            "entry": suggested_entry,
+            "stop_loss": vwap_est
+        }
+        log_event(csv_payload)
+        
+        # 註冊進入盤中即時風控監控網格
+        intraday_live_monitors[code] = {
+            "name": name,
+            "entry": suggested_entry,
+            "vwap": vwap_est,
+            "alerted_mfe3": False,
+            "alerted_break": False
+        }
+
+        return (
+            f"[{time_str}] ⚡ {name}({code}) {alert_type}\n"
+            f"{hot_tag} | 現價：{current_z} (均價線:{vwap_est})\n"
+            f"漲幅：{chg_pct:+.2f}% | 均價乖離：{bias:+.1f}%\n"
+            f"🔥 絕對爆量：{int(vol_1m)} 張 (點火資金 {int(ignite_value/10000)}萬){resonance_text}\n"
+            f"----------------------\n"
+            f"{action_guide}"
+        )
     except Exception:
         pass
     return None
@@ -4474,20 +4480,20 @@ def intraday_live_alarm_loop():
                     vwap_line = info["vwap"]
                     name = info["name"]
 
-                    # 1. 檢測 MFE 衝過 +3% 停利提示
-                    if entry_p > 0 and not info["alerted_mfe3"]:
-                        mfe_est = ((day_high - entry_p) / entry_p) * 100
-                        if mfe_est >= 3.0:
-                            info["alerted_mfe3"] = True
-                            msg = (
-                                f"🎯 【即時停利捷報】{name}({code})\n"
-                                f"----------------------\n"
-                                f"🚀 盤中最高衝刺已達 +{mfe_est:.2f}% (超越 +3% 停利標準)！\n"
-                                f"💡 操盤建議：建議分批獲利入袋，或將移動停利上移至進場價防守！"
-                            )
-                            for g_id in TARGET_GROUP_IDS:
-                                try: smart_push_with_menu(g_id, msg)
-                                except: pass
+                    # 1. 檢測 MFE 衝過 +2.0% 停利提示 (貼合台股當沖最佳落袋甜區)
+					if entry_p > 0 and not info["alerted_mfe3"]:
+						mfe_est = ((day_high - entry_p) / entry_p) * 100
+						if mfe_est >= 2.0:
+							info["alerted_mfe3"] = True
+							msg = (
+								f"🎯 【即時停利捷報】{name}({code})\n"
+								f"----------------------\n"
+								f"🚀 盤中最高衝刺已達 +{mfe_est:.2f}% (達 +2% 實戰停利甜區)！\n"
+								f"💡 操盤建議：建議先出一半鎖住獲利，剩餘部位將移動停利上移至進場價 {entry_p} 防守！"
+							)
+							for g_id in TARGET_GROUP_IDS:
+								try: smart_push_with_menu(g_id, msg)
+								except: pass
 
                     # 2. 檢測盤中跌破 VWAP 停損防線警報
                     if vwap_line > 0 and not info["alerted_break"]:
