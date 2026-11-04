@@ -4431,9 +4431,9 @@ def instant_dispatcher_loop():
 
 
 # ==========================================================
-# 🚨 盤中即時停利與破線警報巡邏手 (監控 MFE >= +3% 或 跌破 VWAP)
+# 🚨 盤中即時停利與破線警報巡邏手 (監控 MFE >= +2% 或 跌破 VWAP)
 # ==========================================================
-intraday_live_monitors = {}  # 格式: { code: { "name": name, "entry": entry, "vwap": vwap, "alerted_mfe3": False, "alerted_break": False } }
+intraday_live_monitors = {}  # 格式: { code: { "name": name, "entry": entry, "vwap": vwap, "alerted_mfe2": False, "alerted_break": False } }
 
 def intraday_live_alarm_loop():
     import time, datetime, requests
@@ -4480,23 +4480,23 @@ def intraday_live_alarm_loop():
                     vwap_line = info["vwap"]
                     name = info["name"]
 
-                    # 1. 檢測 MFE 衝過 +2.0% 停利提示 (貼合台股當沖最佳落袋甜區)
-					if entry_p > 0 and not info["alerted_mfe3"]:
-						mfe_est = ((day_high - entry_p) / entry_p) * 100
-						if mfe_est >= 2.0:
-							info["alerted_mfe3"] = True
-							msg = (
-								f"🎯 【即時停利捷報】{name}({code})\n"
-								f"----------------------\n"
-								f"🚀 盤中最高衝刺已達 +{mfe_est:.2f}% (達 +2% 實戰停利甜區)！\n"
-								f"💡 操盤建議：建議先出一半鎖住獲利，剩餘部位將移動停利上移至進場價 {entry_p} 防守！"
-							)
-							for g_id in TARGET_GROUP_IDS:
-								try: smart_push_with_menu(g_id, msg)
-								except: pass
+                    # 1. 檢測 MFE 衝過 +2% 停利提示 (調整為最貼合台股當沖實戰的甜區)
+                    if entry_p > 0 and not info.get("alerted_mfe2", False):
+                        mfe_est = ((day_high - entry_p) / entry_p) * 100
+                        if mfe_est >= 2.0:
+                            info["alerted_mfe2"] = True
+                            msg = (
+                                f"🎯 【即時停利捷報】{name}({code})\n"
+                                f"----------------------\n"
+                                f"🚀 盤中最高衝刺已達 +{mfe_est:.2f}% (達 +2% 實戰停利甜區)！\n"
+                                f"💡 操盤建議：建議先出一半鎖住獲利，剩餘部位將移動停利上移至進場價 {entry_p} 防守！"
+                            )
+                            for g_id in TARGET_GROUP_IDS:
+                                try: smart_push_with_menu(g_id, msg)
+                                except: pass
 
                     # 2. 檢測盤中跌破 VWAP 停損防線警報
-                    if vwap_line > 0 and not info["alerted_break"]:
+                    if vwap_line > 0 and not info.get("alerted_break", False):
                         if curr_z < vwap_line * 0.995:
                             info["alerted_break"] = True
                             msg = (
