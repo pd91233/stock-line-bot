@@ -5491,7 +5491,7 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
             <div class="stat-desc">全數抱至收盤之實質平均損益</div>
         </div>
         <div class="stat-card">
-            <div class="stat-title">4. 平均最高衝刺 (MFE) / 回撤 (MAE)</div>
+            <div class="stat-title">4. 📈 買後最高曾賺 (MFE) ／ 📉 買後最慘曾跌 (MAE)</div>
             <div class="stat-value purple"><span style="color:var(--color-red); font-weight:800; font-size:1.5rem;">+{avg_mfe:.2f}%</span> <span>／</span> <span style="color:var(--color-green); font-weight:800; font-size:1.5rem;">{avg_mae:.2f}%</span></div>
             <div class="stat-desc">診斷抱單潛力與盤中洗盤容忍度</div>
         </div>
@@ -5520,7 +5520,7 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
     <div class="analytics-grid">
         <div class="panel-card">
             <div class="panel-title">
-                <span>📊 觸發標的極值歸因對比圖 (MFE 最高衝刺 vs 收盤損益 vs MAE 最大回撤)</span>
+                <span>📊 標的表現對比圖 (📈 買後最高曾賺 vs 收盤實質損益 vs 📉 買後最慘曾跌)</span>
                 <span style="font-size:0.8rem; color:var(--text-muted);">單位：%</span>
             </div>
             <div id="mfe_mae_chart" style="width: 100%; height: 280px;"></div>
@@ -5544,8 +5544,8 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
                     <th>主力點火資金 (乖離)</th>
                     <th>觸發價 ➔ 建議進場價</th>
                     <th>VWAP 停損線</th>
-                    <th>📈 MFE (最高衝刺)</th>
-                    <th>📉 MAE (最大回撤)</th>
+                    <th>📈 買後最高曾賺 (MFE)</th>
+                    <th>📉 買後最慘曾跌 (MAE)</th>
                     <th>收盤價 (淨損益)</th>
                     <th>🩺 策略病理診斷</th>
                 </tr>
