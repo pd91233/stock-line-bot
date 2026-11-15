@@ -5295,10 +5295,14 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
     try:
         res_mon = requests.get(f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/monitor_list.json?t={int(time.time())}", timeout=6).json()
         strat_groups = {
+            "🔥 平整起漲雷達": [],
+            "🏹 明日攻擊箭頭": [],
             "🎯 MTS 完美共振區": [],
             "🎖️ S級肥羊特戰區": [],
             "👑 S級核心波段區": [],
-            "⚡ 當沖/隔日游擊區": []
+            "🛡️ 價量財報因子": [],
+            "⚡ 當沖/隔日游擊區": [],
+            "🥷 A級底部埋伏": []
         }
         items_to_process = []
         if isinstance(res_mon, dict):
@@ -5311,10 +5315,10 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
 
         for info in items_to_process:
             try:
-                scode = str(info.get("代碼", info.get("code", ""))).strip()
+                scode = str(info.get("代碼", info.get("code", info.get("id", "")))).strip()
                 sname = info.get("name", info.get("商品", scode))
-                stype = str(info.get("type", "general")).lower()
-                if not scode: continue
+                if not scode:
+                    continue
 
                 u_s = f"https://query1.finance.yahoo.com/v8/finance/chart/{scode}.TW?range=5d&interval=1d"
                 r_s = requests.get(u_s, headers={"User-Agent": "Mozilla/5.0"}, timeout=3).json()
@@ -5336,10 +5340,34 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
                 if cp_s > 0 and prev_s > 0:
                     chg_s = round(((cp_s - prev_s) / prev_s) * 100, 2)
                     item_d = {"name": sname, "code": scode, "close": round(cp_s, 2), "chg": chg_s}
-                    if stype == "mts": strat_groups["🎯 MTS 完美共振區"].append(item_d)
-                    elif stype == "b": strat_groups["🎖️ S級肥羊特戰區"].append(item_d)
-                    elif stype == "s": strat_groups["👑 S級核心波段區"].append(item_d)
-                    else: strat_groups["⚡ 當沖/隔日游擊區"].append(item_d)
+
+                    # 🎯 拆解多重軍牌 (支援 zones 陣列與 type 的 | 串接字串)
+                    z_set = set()
+                    if isinstance(info.get("zones"), list):
+                        for z in info["zones"]:
+                            z_set.add(str(z).lower().strip())
+                    stype_raw = str(info.get("type", "")).lower().strip()
+                    if stype_raw:
+                        for p in stype_raw.split('|'):
+                            z_set.add(p.strip())
+
+                    # 依八大戰區各自獨立入列 (一檔股票可同時出現在多個達標戰區)
+                    if ("v4" in z_set) or (scode in FLAT_WATCHLIST_CACHE):
+                        strat_groups["🔥 平整起漲雷達"].append(item_d)
+                    if "arrow" in z_set:
+                        strat_groups["🏹 明日攻擊箭頭"].append(item_d)
+                    if "mts" in z_set:
+                        strat_groups["🎯 MTS 完美共振區"].append(item_d)
+                    if ("sheep" in z_set) or ("b" in z_set):
+                        strat_groups["🎖️ S級肥羊特戰區"].append(item_d)
+                    if ("s" in z_set) or ("core" in z_set):
+                        strat_groups["👑 S級核心波段區"].append(item_d)
+                    if "elite" in z_set:
+                        strat_groups["🛡️ 價量財報因子"].append(item_d)
+                    if "day" in z_set:
+                        strat_groups["⚡ 當沖/隔日游擊區"].append(item_d)
+                    if "al" in z_set:
+                        strat_groups["🥷 A級底部埋伏"].append(item_d)
             except:
                 pass
 
@@ -5366,7 +5394,7 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
             strat_groups_html += f"""
             <div class="strat-box">
                 <div class="strat-head">
-                    <span>{g_title}</span>
+                    <span>{g_title} ({g_cnt}檔)</span>
                     <span style="font-size:0.85rem;">勝率 <b style="color:#fff;">{g_wr}%</b> ｜ 均漲跌 <b class="val {avg_cls}">{g_avg:+.2f}%</b></span>
                 </div>
                 <div class="chip-container">{chips_html}</div>
@@ -5598,7 +5626,7 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
     <div class="section-title">🔥 逐筆微觀覆盤卡片 (點擊可切換「當日 5 分 K + 進場防線」與「近 2 月日 K」)</div>
     {sniper_cards_html if sniper_cards_html else '<div style="color:var(--text-muted); padding:25px; text-align:center; border:1px dashed var(--border-color); border-radius:10px;">該交易日無符合條件標的</div>'}
 
-    <div class="section-title">👑 戰略選股四大分頁・收盤表現獨立驗證</div>
+    <div class="section-title">👑 戰略選股八大分頁・收盤表現獨立驗證</div>
     <div class="strat-grid">
         {strat_groups_html if strat_groups_html else '<div style="color:var(--text-muted);">目前無選股分頁資料</div>'}
     </div>
