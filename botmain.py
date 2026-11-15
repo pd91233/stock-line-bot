@@ -4334,6 +4334,12 @@ def process_tick_data(data, meta_info, top_ind):
         if not (is_volume_surge and is_real_attack):
             return None
 
+        # 均線動能確認：短均線向上 且 貼近當日高點強勢突破 (💥 補回這 4 行關鍵計算)
+        ma5_now = sum([t[1] for t in ticks[-5:]]) / 5.0
+        ma5_prev = sum([t[1] for t in ticks[-6:-1]]) / 5.0
+        is_ma_up = ma5_now > ma5_prev
+        is_cross_vwap = (z_1m_ago <= vwap_est * 1.003 and current_z > vwap_est)
+
         if not is_ma_up:
             return None
 
@@ -4367,21 +4373,6 @@ def process_tick_data(data, meta_info, top_ind):
                     f"👉 戰況解讀：紅K創高無上影線、短均線陡峭上揚，多頭動能健康！\n"
                     f"🛡️ 移動防線：嚴守均價線 {vwap_est} 防線，衝高見 +2.5% 以上分批停利鎖住戰果！"
                 )
-
-        if is_cross_vwap:
-            alert_type = "💥 【剛過均價・起漲點火】帶量突破均價線！"
-            action_guide = (
-                f"🎯 【實戰戰術：起漲第一根狙擊】\n"
-                f"👉 戰況解讀：主力大單點火剛突破均價線，乖離極小（{bias:+.1f}%），位階安全！\n"
-                f"🛡️ 生死防線：以均價線 {vwap_est} 為絕對停損，獲利達 +2%～+3% 建議分批落袋！"
-            )
-        else:
-            alert_type = "🚀 【主升段創高】量價齊揚強勢推升！"
-            action_guide = (
-                f"🎯 【實戰戰術：右側順勢狙擊】\n"
-                f"👉 戰況解讀：紅K創高無上影線、短均線陡峭上揚，多頭動能健康！\n"
-                f"🛡️ 移動防線：嚴守均價線 {vwap_est} 防線，衝高見 +2.5% 以上分批停利鎖住戰果！"
-            )
 
         is_resonance = (top_ind != "" and top_ind in ind)
         hot_tag = f"🌟 [主流資金共振：{ind}]" if is_resonance else f"🏷️ [{ind}]"
@@ -5199,7 +5190,7 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
                         <td><span style="color:var(--color-yellow); font-weight:bold;">{t_time}</span> <span class="zone-tag" style="margin-left:4px;">{t_zone}</span></td>
                         <td><strong style="color:#fff; font-size:1rem;">{stock_n}</strong> <span style="color:var(--text-muted);">({stock_c})</span></td>
                         <td style="color:var(--color-yellow); font-weight:bold;">{funds_str} 萬 <span style="color:var(--text-muted); font-size:0.8rem;">(乖離 {dev_str})</span></td>
-                        <td>{trig_val} ➔ <strong style="color:var(--color-blue);">{entry_val}</strong> <span style="color:var(--text-muted); font-size:0.8rem;">(滑價 {slip_pct:.2f}%)</span></td>
+                        <td>{trig_val} ➔ <strong style="color:var(--color-blue);">{entry_val}</strong> <span style="color:var(--text-muted); font-size:0.8rem;">(追高買貴成本/滑價 {slip_pct:.2f}%)</span></td>
                         <td style="color:var(--color-red); font-weight:bold;">{stop_val}</td>
                         <td style="color:var(--color-red); font-weight:bold;">+{mfe_pct:.2f}%</td>
                         <td style="color:var(--color-green); font-weight:bold;">{mae_pct:.2f}%</td>
@@ -5222,7 +5213,7 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
                                     <span class="status-badge {badge_class}">{pathology_tag}</span>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 14px;">
-                                    <span style="font-size: 0.9rem; color: var(--text-muted);">最高衝刺 <b style="color:var(--color-red);">+{mfe_pct:.2f}%</b> ｜ 最大回撤 <b style="color:var(--color-green);">{mae_pct:.2f}%</b></span>
+                                    <span style="font-size: 0.9rem; color: var(--text-muted);">📈 買後最高曾賺 (MFE) <b style="color:var(--color-red);">+{mfe_pct:.2f}%</b> ｜ 📉 買後最慘曾跌 (MAE) <b style="color:var(--color-green);">{mae_pct:.2f}%</b></span>
                                     <span class="val {val_color}" style="font-size: 1.15rem;">{trade_res_str}</span>
                                     <span style="color: var(--text-muted); font-size: 0.8rem;">▼ 展開詳情</span>
                                 </div>
@@ -5248,15 +5239,15 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
 
                             <div class="detail-metrics-grid">
                                 <div class="metric-box">
-                                    <div class="m-label">⚡ 訊號觸發價 ➔ 建議進場價 (+2檔)</div>
-                                    <div class="m-val">{trig_val} 元 ➔ <span style="color:var(--color-blue);">{entry_val} 元</span> <small>(滑價 {slip_pct:.2f}%)</small></div>
+                                    <div class="m-label">⚡ 訊號觸發價 ➔ 建議進場價 (含+2檔追高買貴成本)</div>
+									<div class="m-val">{trig_val} 元 ➔ <span style="color:var(--color-blue);">{entry_val} 元</span> <small>(追高買貴/滑價 {slip_pct:.2f}%)</small></div>
                                 </div>
                                 <div class="metric-box">
                                     <div class="m-label">🛡️ VWAP 嚴格停損防線</div>
                                     <div class="m-val" style="color:var(--color-red);">{stop_val} 元 <small>({'⚠️ 盤中曾觸及' if hit_stop else '✅ 盤中未跌破'})</small></div>
                                 </div>
                                 <div class="metric-box">
-                                    <div class="m-label">📈 最大有利極值 (MFE) / 📉 最大不利極值 (MAE)</div>
+                                    <div class="m-label">📈 買後最高曾賺 (MFE) ／ 📉 買後最慘曾跌 (MAE)</div>
                                     <div class="m-val"><span style="color:var(--color-red);">+{mfe_pct:.2f}%</span> ／ <span style="color:var(--color-green);">{mae_pct:.2f}%</span></div>
                                 </div>
                                 <div class="metric-box">
@@ -5406,7 +5397,7 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
         f"🎯 動能事件掃描：{total_scans} 次 ｜ 嚴選發報：{sent_count} 檔",
         f"🏆 收盤實戰勝率：{win_rate_pct} ({win_count}勝 {lose_count}敗)",
         f"💰 平均當沖淨損益：{avg_net_ret:+.2f}%",
-        f"📈 平均最高衝刺 (MFE)：+{avg_mfe:.2f}% ｜ 平均最大回撤 (MAE)：{avg_mae:.2f}%",
+        f"📈 平均買後最高曾賺 (MFE)：+{avg_mfe:.2f}% ｜ 📉 平均買後最慘曾跌 (MAE)：{avg_mae:.2f}%",
         f"⏰ 最佳作戰時段：{best_zone_str}",
         f"🛡️ 防禦攔截：{real_funds_filtered} 檔資金不足 / {real_overheated_filtered} 檔高檔過熱",
         "----------------------",
@@ -5531,7 +5522,7 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
         <div class="stat-card">
             <div class="stat-title">2. 收盤實戰真實勝率</div>
             <div class="stat-value {'red' if win_rate_num >= 50 else 'green'}">{win_rate_pct} <span>({win_count}勝 {lose_count}敗)</span></div>
-            <div class="stat-desc">以建議進場價 (+2檔滑價) 對比收盤價</div>
+            <div class="stat-desc">以建議進場價 (+2檔追高買貴成本/滑價) 對比收盤價</div>
         </div>
         <div class="stat-card">
             <div class="stat-title">3. 當沖平均淨報酬率</div>
@@ -5551,7 +5542,7 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
         <div class="stat-card">
             <div class="stat-title">6. 衝高回吐警示 (曾漲>2%未鎖住)</div>
             <div class="stat-value yellow">{giveback_count} <span>檔 ⚠️</span></div>
-            <div class="stat-desc">若比例偏高，建議於 MFE +2.5% 分批停利</div>
+            <div class="stat-desc">若比例偏高，建議於買後最高曾賺 (MFE) +2.5% 分批停利</div>
         </div>
         <div class="stat-card">
             <div class="stat-title">7. 點火資金不足攔截</div>
@@ -5568,7 +5559,7 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
     <div class="analytics-grid">
         <div class="panel-card">
             <div class="panel-title">
-                <span>📊 標的表現對比圖 (📈 買後最高曾賺 vs 收盤實質損益 vs 📉 買後最慘曾跌)</span>
+                <span>📊 標的表現對比圖 (📈 買後最高曾賺 (MFE) vs 收盤實質損益 vs 📉 買後最慘曾跌 (MAE))</span>
                 <span style="font-size:0.8rem; color:var(--text-muted);">單位：%</span>
             </div>
             <div id="mfe_mae_chart" style="width: 100%; height: 280px;"></div>
@@ -5590,7 +5581,7 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
                     <th>觸發時間 (時段)</th>
                     <th>標的名稱 (代號)</th>
                     <th>主力點火資金 (乖離)</th>
-                    <th>觸發價 ➔ 建議進場價</th>
+                    <th>觸發價 ➔ 建議進場價 (追高買貴/滑價)</th>
                     <th>VWAP 停損線</th>
                     <th>📈 買後最高曾賺 (MFE)</th>
                     <th>📉 買後最慘曾跌 (MAE)</th>
@@ -5667,15 +5658,15 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
             const chartMfe = echarts.init(domMfe);
             chartMfe.setOption({{
                 tooltip: {{ trigger: 'axis', axisPointer: {{ type: 'shadow' }}, backgroundColor: 'rgba(15,23,42,0.95)', borderColor: '#334155', textStyle: {{ color: '#fff' }} }},
-                legend: {{ data: ['MFE 最高衝刺(%)', '收盤實質損益(%)', 'MAE 最大回撤(%)'], textStyle: {{ color: '#cbd5e1', fontSize: 11 }}, top: 0 }},
-                grid: {{ left: '6%', right: '3%', top: '16%', bottom: '18%' }},
-                xAxis: {{ type: 'category', data: CHART_NAMES.length ? CHART_NAMES : ['無觸發標的'], axisLabel: {{ color: '#94a3b8', fontSize: 11, rotate: CHART_NAMES.length > 6 ? 20 : 0 }} }},
-                yAxis: {{ type: 'value', splitLine: {{ lineStyle: {{ color: '#1e293b', type: 'dashed' }} }}, axisLabel: {{ color: '#94a3b8', formatter: '{{value}}%' }} }},
-                series: [
-                    {{ name: 'MFE 最高衝刺(%)', type: 'bar', data: CHART_MFE, itemStyle: {{ color: '#ef4444' }} }},
-                    {{ name: '收盤實質損益(%)', type: 'bar', data: CHART_NET, itemStyle: {{ color: '#38bdf8' }} }},
-                    {{ name: 'MAE 最大回撤(%)', type: 'bar', data: CHART_MAE, itemStyle: {{ color: '#10b981' }} }}
-                ]
+                legend: {{ data: ['📈 買後最高曾賺 (MFE)', '收盤實質損益(%)', '📉 買後最慘曾跌 (MAE)'], textStyle: {{ color: '#cbd5e1', fontSize: 11 }}, top: 0 }},
+				grid: {{ left: '6%', right: '3%', top: '16%', bottom: '18%' }},
+				xAxis: {{ type: 'category', data: CHART_NAMES.length ? CHART_NAMES : ['無觸發標的'], axisLabel: {{ color: '#94a3b8', fontSize: 11, rotate: CHART_NAMES.length > 6 ? 20 : 0 }} }},
+				yAxis: {{ type: 'value', splitLine: {{ lineStyle: {{ color: '#1e293b', type: 'dashed' }} }}, axisLabel: {{ color: '#94a3b8', formatter: '{{value}}%' }} }},
+				series: [
+				  {{ name: '📈 買後最高曾賺 (MFE)', type: 'bar', data: CHART_MFE, itemStyle: {{ color: '#ef4444' }} }},
+				  {{ name: '收盤實質損益(%)', type: 'bar', data: CHART_NET, itemStyle: {{ color: '#38bdf8' }} }},
+				  {{ name: '📉 買後最慘曾跌 (MAE)', type: 'bar', data: CHART_MAE, itemStyle: {{ color: '#10b981' }} }}
+				]
             }});
             chartsStore['global_mfe'] = chartMfe;
         }}
