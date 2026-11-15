@@ -544,6 +544,29 @@ def read_intraday_cache():
 intraday_breakout_cache = read_intraday_cache()
 
 
+# 💥 新增：用來存放雲端下載的 XQ 平整潛伏名單
+FLAT_WATCHLIST_CACHE = set()
+
+def fetch_flat_watchlist_from_cloud():
+    """讓雲端母艦定期從 pCloud 下載 main.py 產出的平整潛伏名單"""
+    global FLAT_WATCHLIST_CACHE
+    while True:
+        try:
+            url = f"https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/flat_watchlist.json?t={int(time.time())}"
+            res = requests.get(url, timeout=5)
+            if res.status_code == 200:
+                data = res.json()
+                codes = {str(item.get('code', '')).strip() for item in data if item.get('code')}
+                if codes:
+                    FLAT_WATCHLIST_CACHE = codes
+                    print(f"✅ [雲端雷達] 成功同步 XQ 平整起漲狙擊名單共 {len(codes)} 檔！", flush=True)
+        except Exception as e:
+            print(f"⚠️ 雲端讀取平整名單提醒: {e}", flush=True)
+        time.sleep(1800) # 每 30 分鐘去雲端巡邏更新一次
+
+# 啟動背景獨立執行緒去抓取名單
+threading.Thread(target=fetch_flat_watchlist_from_cloud, daemon=True).start()
+
 
 # ==========================================================
 
@@ -4311,14 +4334,39 @@ def process_tick_data(data, meta_info, top_ind):
         if not (is_volume_surge and is_real_attack):
             return None
 
-        # 均線動能確認：短均線向上 且 貼近當日高點強勢突破
-        ma5_now = sum([t[1] for t in ticks[-5:]]) / 5.0
-        ma5_prev = sum([t[1] for t in ticks[-6:-1]]) / 5.0
-        is_ma_up = ma5_now > ma5_prev
-        is_cross_vwap = (z_1m_ago <= vwap_est * 1.003 and current_z > vwap_est)
-
         if not is_ma_up:
             return None
+
+        # =========================================================================
+        # 🎯 【XQ平整身分點燈升級】檢查這檔爆量股票是否在我們的平整潛伏名單中
+        # =========================================================================
+        global FLAT_WATCHLIST_CACHE
+        is_xq_flat_stock = code in FLAT_WATCHLIST_CACHE
+        
+        if is_xq_flat_stock:
+            # 🌟 命中 XQ 平整起漲雷達！將急報內容與標題尊榮升級
+            alert_type = "🌟 【XQ平整起漲雷達・蹲點後首根爆量突破】"
+            action_guide = (
+                f"🎯 【實戰戰術：計畫中之完美起漲點】\n"
+                f"👉 戰況解讀：此標的為 XQ 長期追蹤之平整潛伏股，今日於盤中第一時間帶量表態！\n"
+                f"🛡️ 生死防線：以均價線 {vwap_est} 為絕對防守點。"
+            )
+        else:
+            # 如果是一般突發黑馬，就跑原本的突破判斷
+            if is_cross_vwap:
+                alert_type = "💥 【剛過均價・起漲點火】帶量突破均價線！"
+                action_guide = (
+                    f"🎯 【實戰戰術：起漲第一根狙擊】\n"
+                    f"👉 戰況解讀：主力大單點火剛突破均價線，乖離極小（{bias:+.1f}%），位階安全！\n"
+                    f"🛡️ 生死防線：以均價線 {vwap_est} 為絕對停損，獲利達 +2%～+3% 建議分批落袋！"
+                )
+            else:
+                alert_type = "🚀 【主升段創高】量價齊揚強勢推升！"
+                action_guide = (
+                    f"🎯 【實戰戰術：右側順勢狙擊】\n"
+                    f"👉 戰況解讀：紅K創高無上影線、短均線陡峭上揚，多頭動能健康！\n"
+                    f"🛡️ 移動防線：嚴守均價線 {vwap_est} 防線，衝高見 +2.5% 以上分批停利鎖住戰果！"
+                )
 
         if is_cross_vwap:
             alert_type = "💥 【剛過均價・起漲點火】帶量突破均價線！"
