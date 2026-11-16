@@ -353,18 +353,13 @@ def update_vips(data):
     except: pass
 
 
-
-
-
-
-
 # ==========================================================
 # 🌐 全球跨國動態資金矩陣：24小時全景完全體爬蟲引擎 (含時間與戰報標籤)
 # ==========================================================
 MATRIX_CACHE_FILE = "global_matrix_cache.json"
 
 def fetch_global_matrix_data():
-    """ 24小時全天候抓取美股四大指數、ADR與十二大戰區龍頭即時數據 """
+    """ 24小時全天候抓取美股四大指數、ADR與十三大戰區龍頭即時數據 """
     tickers = {
         # 🌐 頂級天候儀表板
         "SOX": "^SOX", "IXIC": "^IXIC", "DJI": "^DJI", "INX": "^GSPC",
@@ -393,20 +388,23 @@ def fetch_global_matrix_data():
         "AAPL": "AAPL", "GOOG": "GOOG", "META": "META", "AMZN": "AMZN",
         "MSFT": "MSFT", "NFLX": "NFLX", "ORCL": "ORCL", "CRM": "CRM", "PLTR": "PLTR",
 
-        # ⚡ 戰區八：重電與能源
+        # 🔮 戰區八：次世代封裝與玻璃基板 (補齊康寧與 Onto)
+        "GLW": "GLW", "ONTO": "ONTO",
+
+        # ⚡ 戰區九：重電與能源
         "GE": "GE", "CAT": "CAT", "NEE": "NEE", "DOW": "DOW", "ETN": "ETN", "PWR": "PWR",
 
-        # 🚗 戰區九：汽車與消費
+        # 🚗 戰區十：汽車與消費
         "TSLA": "TSLA", "GM": "GM", "F": "F", "NIKE": "NKE", "RIVN": "RIVN", "TM": "TM",
 
-        # 🚢 戰區十：航運與原物料
+        # 🚢 戰區十一：航運與原物料
         "ZIM": "ZIM", "XOM": "XOM", "CVX": "CVX", "BA": "BA", "UPS": "UPS", "FDX": "FDX",
 
-        # 🏦 戰區十一：金融與支付
+        # 🏦 戰區十二：金融與支付
         "BRK-B": "BRK-B", "GS": "GS", "JPM": "JPM", "BAC": "BAC",
         "C": "C", "AXP": "AXP", "WFC": "WFC", "V": "V", "MA": "MA", "MS": "MS", "XLF": "XLF",
 
-        # 🏥 戰區十二：生技與民生防禦
+        # 🏥 戰區十三：生技與民生防禦
         "NBI": "^NBI", "JNJ": "JNJ", "MRK": "MRK", "PFE": "PFE",
         "UNH": "UNH", "PG": "PG", "WMT": "WMT", "HD": "HD",
         "KO": "KO", "MCD": "MCD", "DIS": "DIS", "MMM": "MMM", "LLY": "LLY", "COST": "COST",
