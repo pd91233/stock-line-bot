@@ -29,7 +29,7 @@
         }
     </style>
 </head>
-<body class="flex flex-col h-screen overflow-hidden select-none bg-[#07090e]">
+<body class="flex flex-col min-h-screen overflow-x-hidden select-none bg-[#07090e]">
 
     <!-- 頂部總覽列 -->
     <header class="bg-gray-900 border-b border-gray-800 px-3 py-2 flex flex-col md:flex-row md:items-center md:justify-between shrink-0 space-y-2 md:space-y-0">
@@ -138,7 +138,7 @@
     </div>
 
     <!-- 主內容區 -->
-    <main class="flex-1 relative w-full bg-[#07090e] overflow-y-auto flex flex-col">
+    <main class="relative w-full bg-[#07090e] flex flex-col">
         
         <div id="back-bar" class="bg-gray-900/90 border-b border-gray-800 px-3 py-1.5 hidden flex items-center justify-between shrink-0">
             <div class="text-xs text-amber-400 font-bold flex items-center space-x-2">
@@ -199,7 +199,7 @@
                     <span id="left-status-tag" class="text-xs text-emerald-400 font-mono">🔴 即時行情</span>
                 </div>
 
-                <div id="left-pane-index" class="space-y-4 overflow-y-auto max-h-[600px] pr-1 font-mono">
+                <div id="left-pane-index" class="space-y-4 font-mono">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div class="bg-gray-950/70 border border-gray-800 rounded-xl p-3 flex flex-col space-y-2 shadow">
                             <div class="flex justify-between items-center">
@@ -256,7 +256,7 @@
                     </div>
                 </div>
 
-                <div id="left-pane-news" class="space-y-3 overflow-y-auto max-h-[600px] pr-1 hidden">
+                <div id="left-pane-news" class="space-y-3 hidden">
                     <div id="news-container" class="space-y-3"></div>
                 </div>
             </div>
@@ -280,7 +280,7 @@
                     <button onclick="switchRankTab('up')" id="rtab-up" class="tab-btn px-2.5 py-1.5 rounded font-medium">漲幅</button>
                     <button onclick="switchRankTab('down')" id="rtab-down" class="tab-btn px-2.5 py-1.5 rounded font-medium">跌幅</button>
                 </div>
-                <div id="ranking-container" class="space-y-2.5 overflow-y-auto max-h-[530px] pr-1"></div>
+                <div id="ranking-container" class="space-y-2.5"></div>
             </div>
 
         </div>
@@ -1236,6 +1236,16 @@
             setTimeout(() => {
                 if (chartInstance) chartInstance.resize();
             }, 250);
+        }
+
+        // 📡 主動回報完整高度給外層戰情室母頁（攤開後自動撐高不切底）
+        if (window.parent !== window) {
+            const reportHeatmapH = () => {
+                const h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+                window.parent.postMessage({ type: 'resize-heatmap', height: h }, '*');
+            };
+            window.addEventListener('load', () => setTimeout(reportHeatmapH, 400));
+            new ResizeObserver(reportHeatmapH).observe(document.body);
         }
     </script>
 </body>
