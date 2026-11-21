@@ -5867,6 +5867,13 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
     window.addEventListener('resize', () => {{
         Object.values(chartsStore).forEach(c => c && c.resize());
     }});
+
+    // 主動將最新高度回報給外層戰情室母頁
+    if (window.parent !== window) {{
+        const reportH = () => window.parent.postMessage({{ type: 'resize-review1340', height: document.documentElement.scrollHeight }}, '*');
+        window.addEventListener('load', () => setTimeout(reportH, 300));
+        new ResizeObserver(reportH).observe(document.body);
+    }}
 </script>
 </body>
 </html>
