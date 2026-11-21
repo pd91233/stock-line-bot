@@ -29,7 +29,7 @@
         }
     </style>
 </head>
-<body class="flex flex-col min-h-screen overflow-x-hidden select-none bg-[#07090e]">
+<body class="flex flex-col overflow-x-hidden select-none bg-[#07090e]">
 
     <!-- 頂部總覽列 -->
     <header class="bg-gray-900 border-b border-gray-800 px-3 py-2 flex flex-col md:flex-row md:items-center md:justify-between shrink-0 space-y-2 md:space-y-0">
@@ -1238,11 +1238,15 @@
             }, 250);
         }
 
-        // 📡 主動回報完整高度給外層戰情室母頁（攤開後自動撐高不切底）
+        // 📡 主動回報實際內容高度給外層戰情室母頁（防無限增高迴圈）
         if (window.parent !== window) {
+            let lastReportedH = 0;
             const reportHeatmapH = () => {
-                const h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-                window.parent.postMessage({ type: 'resize-heatmap', height: h }, '*');
+                const h = document.body.offsetHeight;
+                if (h > 400 && Math.abs(h - lastReportedH) > 5) {
+                    lastReportedH = h;
+                    window.parent.postMessage({ type: 'resize-heatmap', height: h }, '*');
+                }
             };
             window.addEventListener('load', () => setTimeout(reportHeatmapH, 400));
             new ResizeObserver(reportHeatmapH).observe(document.body);
