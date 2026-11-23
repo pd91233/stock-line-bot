@@ -682,6 +682,11 @@ def fetch_cloud_tokens():
 
 def smart_push_with_menu(group_id, message_text):
 
+# ✈️ 若目標 ID 為 Telegram (純數字或負號開頭)，直接走 Telegram 通道
+    if str(group_id).lstrip('-').isdigit():
+        send_tg_message(group_id, message_text, with_menu=True)
+        return
+
     menu_quick_reply = QuickReply(
 
         items=[
@@ -791,6 +796,121 @@ def smart_push_with_menu(group_id, message_text):
     if not success_sent:
 
         print(f"❌ [發射崩潰] 群組 {group_id} 查無可用的機器人，或所有駐紮機器人彈藥皆已耗盡！", flush=True)
+		
+		
+		
+# ==========================================================
+# ✈️ Telegram 雲端動態設定讀取器 & 雙平台統一廣播總機
+# ==========================================================
+PCLOUD_TG_CONFIG_URL = "https://filedn.com/lMJ0lWu9PSUV5Vv6Ks3W6bJ/money/tg_config.json"
+_tg_cfg_cache = {"ts": 0, "data": {}}
+
+def fetch_tg_config():
+    """從 pCloud 讀取本機同步上去的 tg_config.json (內建 60 秒快取)"""
+    now_ts = time.time()
+    if now_ts - _tg_cfg_cache["ts"] < 60 and _tg_cfg_cache["data"]:
+        return _tg_cfg_cache["data"]
+    try:
+        res = requests.get(f"{PCLOUD_TG_CONFIG_URL}?t={int(now_ts)}", timeout=5)
+        if res.status_code == 200:
+            cfg = res.json()
+            if isinstance(cfg, dict) and cfg.get("token"):
+                _tg_cfg_cache["ts"] = now_ts
+                _tg_cfg_cache["data"] = cfg
+                return cfg
+    except Exception as e:
+        print(f"⚠️ [TG 設定讀取提醒] {e}", flush=True)
+    return {
+        "token": os.environ.get("TG_BOT_TOKEN", ""),
+        "chat_ids": os.environ.get("TG_CHAT_IDS", ""),
+        "enabled": True
+    }
+
+def build_tg_menu_markup():
+    """產生與 LINE Flex 完全對等的 3 排 6 顆快捷按鈕"""
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "🌍 國際夜盤", "callback_data": "夜盤"},
+                {"text": "🎯 尋找買點", "callback_data": "尋找買點"}
+            ],
+            [
+                {"text": "🧠 AI 盤勢講評", "callback_data": "今日盤勢"},
+                {"text": "📊 盤後選股", "callback_data": "盤後選股"}
+            ],
+            [
+                {"text": "🛡️ 盤後覆盤", "callback_data": "盤後覆盤"},
+                {"text": "📖 全部指令", "callback_data": "指令"}
+            ]
+        ]
+    }
+
+def send_tg_message(chat_id, text, with_menu=True, reply_markup=None):
+    """發送文字訊息至指定 Telegram 群組或個人"""
+    cfg = fetch_tg_config()
+    token = cfg.get("token", "").strip()
+    if not token or not chat_id:
+        return False
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {
+        "chat_id": str(chat_id).strip(),
+        "text": str(text)[:4000]
+    }
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
+    elif with_menu:
+        payload["reply_markup"] = build_tg_menu_markup()
+    try:
+        res = requests.post(url, json=payload, timeout=10)
+        return res.status_code == 200 and res.json().get("ok", False)
+    except Exception as e:
+        print(f"⚠️ [TG 發送異常] {chat_id}: {e}", flush=True)
+        return False
+
+def send_tg_photo(chat_id, photo_url, caption, button_url=None, button_text=None):
+    """發送圖片訊息至 Telegram (產業熱力圖專用)"""
+    cfg = fetch_tg_config()
+    token = cfg.get("token", "").strip()
+    if not token or not chat_id:
+        return False
+    url = f"https://api.telegram.org/bot{token}/sendPhoto"
+    payload = {
+        "chat_id": str(chat_id).strip(),
+        "photo": photo_url,
+        "caption": str(caption)[:1000]
+    }
+    if button_url and button_text:
+        payload["reply_markup"] = {
+            "inline_keyboard": [[{"text": button_text, "url": button_url}]]
+        }
+    try:
+        res = requests.post(url, json=payload, timeout=12)
+        return res.status_code == 200 and res.json().get("ok", False)
+    except Exception as e:
+        print(f"⚠️ [TG 圖片發送異常] {chat_id}: {e}", flush=True)
+        return False
+
+def broadcast_to_all_groups(message_text):
+    """🎯 雲端雙平台統一廣播總機：一次呼叫，LINE + Telegram 全部同步發射"""
+    # 1. LINE 群組 (100% 保留原邏輯)
+    TARGET_GROUP_IDS = [
+        "C0481b44935888bb1dc20dfd52a675e8a",
+        "C47bfa8e16a7216bd54dceb3b5e90cfa0"
+    ]
+    for group_id in TARGET_GROUP_IDS:
+        try:
+            smart_push_with_menu(group_id, str(message_text)[:4500])
+        except Exception:
+            pass
+
+    # 2. Telegram 群組 (自動從 pCloud tg_config.json 讀取)
+    cfg = fetch_tg_config()
+    if cfg.get("enabled", True) and cfg.get("token") and cfg.get("chat_ids"):
+        tg_ids = [cid.strip() for cid in str(cfg.get("chat_ids", "")).split(",") if cid.strip()]
+        for cid in tg_ids:
+            send_tg_message(cid, message_text, with_menu=True)
+
+
 
 # ==========================================================
 
@@ -882,27 +1002,41 @@ def create_flex_menu_message(message_text):
 from flask import g
 
 def smart_reply_with_menu(event, message_text):
+    # ✈️ 若本次請求來自 Telegram Webhook，直接透過 Telegram 回覆
+    tg_chat_id = getattr(g, 'tg_chat_id', None)
+    if tg_chat_id:
+        if isinstance(message_text, list):
+            parts = []
+            for item in message_text:
+                if hasattr(item, 'text') and item.text:
+                    parts.append(item.text)
+                elif hasattr(item, 'alt_text') and item.alt_text:
+                    parts.append(item.alt_text)
+            send_tg_message(tg_chat_id, "\n\n".join(parts), with_menu=True)
+        elif isinstance(message_text, str):
+            send_tg_message(tg_chat_id, message_text, with_menu=True)
+        elif hasattr(message_text, 'text') and message_text.text:
+            send_tg_message(tg_chat_id, message_text.text, with_menu=True)
+        else:
+            # 熱力圖等 Flex 卡片自動轉成圖片或文字連結
+            summary_text = get_top_sectors_summary()
+            heatmap_url = "https://stock-line-bot-c8em.onrender.com/heatmap"
+            heatmap_img_url = f"https://stock-line-bot-c8em.onrender.com/heatmap-image.png?t={int(time.time())}"
+            send_tg_photo(tg_chat_id, heatmap_img_url, summary_text, button_url=heatmap_url, button_text="📱 開啟手機互動熱力圖")
+        return
+
+    # 🟢 LINE 原本邏輯 (100% 不動)
     if isinstance(message_text, str):
         flex_msg = create_flex_menu_message(message_text)
     else:
         flex_msg = message_text 
     try:
-        # 瞬間從記憶庫抽出本次對話專屬的槍管
         active_token = getattr(g, 'active_token', LINE_CHANNEL_ACCESS_TOKEN)
         dynamic_api = LineBotApi(active_token)
-        
-        # 使用對應的槍管開火！
         dynamic_api.reply_message(event.reply_token, flex_msg)
     except Exception as e:
         print(f"⚠️ 回覆發送受阻: {e}", flush=True)
-
-        
-
-        
-
-
-
-
+		
 
 gemini_keys = []
 
@@ -2523,6 +2657,74 @@ from linebot import WebhookHandler
 handler = WebhookHandler('dummy_secret_for_init')
 
 @app.route("/callback", methods=['POST'])
+
+# ==========================================================
+# ✈️ Telegram Webhook 接收站 (共用同一顆指令大腦)
+# ==========================================================
+class _TGMockSource:
+    def __init__(self, chat_id, user_id):
+        self.group_id = str(chat_id)
+        self.user_id = str(user_id)
+
+class _TGMockMessage:
+    def __init__(self, text):
+        self.text = text
+
+class _TGMockEvent:
+    def __init__(self, chat_id, user_id, text):
+        self.source = _TGMockSource(chat_id, user_id)
+        self.message = _TGMockMessage(text)
+        self.reply_token = "tg_dummy_token"
+
+@app.route("/tg_callback", methods=['POST'])
+def tg_callback():
+    data = request.get_json(silent=True) or {}
+
+    # 1. 處理點擊 3 排快捷按鈕 (CallbackQuery)
+    if "callback_query" in data:
+        cb = data["callback_query"]
+        cb_id = cb.get("id")
+        chat_id = cb.get("message", {}).get("chat", {}).get("id")
+        user_id = cb.get("from", {}).get("id", "tg_user")
+        text = (cb.get("data") or "").strip()
+
+        # 消除按鈕轉圈圈動畫
+        cfg = fetch_tg_config()
+        if cfg.get("token") and cb_id:
+            try:
+                requests.post(f"https://api.telegram.org/bot{cfg['token']}/answerCallbackQuery", json={"callback_query_id": cb_id}, timeout=3)
+            except Exception:
+                pass
+
+        if chat_id and text:
+            g.tg_chat_id = str(chat_id)
+            handle_message(_TGMockEvent(chat_id, user_id, text))
+        return "OK", 200
+
+    # 2. 處理群組或私訊文字訊息
+    msg = data.get("message") or data.get("edited_message")
+    if msg:
+        chat_id = msg.get("chat", {}).get("id")
+        user_id = msg.get("from", {}).get("id", "tg_user")
+        text = (msg.get("text") or "").strip()
+
+        # 機器人剛被拉進新群組時，自動回報 Chat ID
+        if msg.get("new_chat_members") and chat_id:
+            for member in msg["new_chat_members"]:
+                if member.get("is_bot"):
+                    send_tg_message(chat_id, f"🫡 報告統帥！股海觀浪 Telegram 雷達已進駐本群組！\n🎯 本群組 Chat ID：\n{chat_id}", with_menu=True)
+                    return "OK", 200
+
+        if chat_id and text:
+            # 去掉 /start 或 /大盤 前面的斜線
+            if text.startswith("/"):
+                text = text.lstrip("/").split("@")[0].strip()
+            g.tg_chat_id = str(chat_id)
+            handle_message(_TGMockEvent(chat_id, user_id, text))
+
+    return "OK", 200
+
+
 def callback():
     signature = request.headers['X-Line-Signature']
     body = request.get_data(as_text=True)
@@ -4071,16 +4273,37 @@ def create_flex_menu_message(message_text):
 from flask import g
 
 def smart_reply_with_menu(event, message_text):
+    # ✈️ 若本次請求來自 Telegram Webhook，直接透過 Telegram 回覆
+    tg_chat_id = getattr(g, 'tg_chat_id', None)
+    if tg_chat_id:
+        if isinstance(message_text, list):
+            parts = []
+            for item in message_text:
+                if hasattr(item, 'text') and item.text:
+                    parts.append(item.text)
+                elif hasattr(item, 'alt_text') and item.alt_text:
+                    parts.append(item.alt_text)
+            send_tg_message(tg_chat_id, "\n\n".join(parts), with_menu=True)
+        elif isinstance(message_text, str):
+            send_tg_message(tg_chat_id, message_text, with_menu=True)
+        elif hasattr(message_text, 'text') and message_text.text:
+            send_tg_message(tg_chat_id, message_text.text, with_menu=True)
+        else:
+            # 熱力圖等 Flex 卡片自動轉成圖片或文字連結
+            summary_text = get_top_sectors_summary()
+            heatmap_url = "https://stock-line-bot-c8em.onrender.com/heatmap"
+            heatmap_img_url = f"https://stock-line-bot-c8em.onrender.com/heatmap-image.png?t={int(time.time())}"
+            send_tg_photo(tg_chat_id, heatmap_img_url, summary_text, button_url=heatmap_url, button_text="📱 開啟手機互動熱力圖")
+        return
+
+    # 🟢 LINE 原本邏輯 (100% 不動)
     if isinstance(message_text, str):
         flex_msg = create_flex_menu_message(message_text)
     else:
         flex_msg = message_text 
     try:
-        # 瞬間從記憶庫抽出本次對話專屬的槍管
         active_token = getattr(g, 'active_token', LINE_CHANNEL_ACCESS_TOKEN)
         dynamic_api = LineBotApi(active_token)
-        
-        # 使用對應的槍管開火！
         dynamic_api.reply_message(event.reply_token, flex_msg)
     except Exception as e:
         print(f"⚠️ 回覆發送受阻: {e}", flush=True)
@@ -4447,21 +4670,7 @@ def instant_dispatcher_loop():
 
             single_msg = f"🚨 【實戰飆股即時急報】\n\n{bullet}"
 
-            TARGET_GROUP_IDS = [
-
-                "C0481b44935888bb1dc20dfd52a675e8a", 
-
-                "C47bfa8e16a7216bd54dceb3b5e90cfa0"  
-
-            ]
-
-            for group_id in TARGET_GROUP_IDS:
-
-                try:
-
-                    smart_push_with_menu(group_id, single_msg[:4500])
-
-                except: pass
+            broadcast_to_all_groups(single_msg[:4500])
 
             print(f"🚀 [即時直發手] 已單獨空投 1 檔飆股至前線！", flush=True)
 
@@ -4528,9 +4737,7 @@ def intraday_live_alarm_loop():
                                 f"🚀 盤中最高衝刺已達 +{mfe_est:.2f}% (達 +2% 實戰停利甜區)！\n"
                                 f"💡 操盤建議：建議先出一半鎖住獲利，剩餘部位將移動停利上移至進場價 {entry_p} 防守！"
                             )
-                            for g_id in TARGET_GROUP_IDS:
-                                try: smart_push_with_menu(g_id, msg)
-                                except: pass
+                            broadcast_to_all_groups(msg)
 
                     # 2. 檢測盤中跌破 VWAP 停損防線警報
                     if vwap_line > 0 and not info.get("alerted_break", False):
@@ -4542,9 +4749,7 @@ def intraday_live_alarm_loop():
                                 f"⚠️ 注意！現價 {curr_z} 已跌破絕對防禦 VWAP 線 ({vwap_line})\n"
                                 f"🔪 操盤建議：多方動能暫失，請依紀律執行風險控制或停損出場！"
                             )
-                            for g_id in TARGET_GROUP_IDS:
-                                try: smart_push_with_menu(g_id, msg)
-                                except: pass
+                            broadcast_to_all_groups(msg)
                 except:
                     pass
         except Exception as e_alarm:
@@ -5902,15 +6107,7 @@ def build_war_room_report(target_date_str=None, push_to_groups=False):
         pass
 
     if push_to_groups:
-        TARGET_GROUP_IDS = [
-            "C0481b44935888bb1dc20dfd52a675e8a",
-            "C47bfa8e16a7216bd54dceb3b5e90cfa0"
-        ]
-        for group_id in TARGET_GROUP_IDS:
-            try:
-                smart_push_with_menu(group_id, final_report)
-            except:
-                pass
+		broadcast_to_all_groups(final_report)
 
     return html_content, final_report
 
@@ -6226,4 +6423,5 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
 
     socketio.run(app, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True) 
+
 
