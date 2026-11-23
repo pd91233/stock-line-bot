@@ -1003,7 +1003,7 @@ from flask import g
 
 def smart_reply_with_menu(event, message_text):
     # ✈️ 若本次請求來自 Telegram Webhook，直接透過 Telegram 回覆
-    tg_chat_id = getattr(g, 'tg_chat_id', None)
+    tg_chat_id = getattr(event, 'tg_chat_id', None)
     if tg_chat_id:
         if isinstance(message_text, list):
             parts = []
@@ -1018,11 +1018,17 @@ def smart_reply_with_menu(event, message_text):
         elif hasattr(message_text, 'text') and message_text.text:
             send_tg_message(tg_chat_id, message_text.text, with_menu=True)
         else:
-            # 熱力圖等 Flex 卡片自動轉成圖片或文字連結
+            # 熱力圖：先嘗試送圖片，若 Render 忙碌導致抓圖失敗，立刻改送文字＋按鈕備援
             summary_text = get_top_sectors_summary()
             heatmap_url = "https://stock-line-bot-c8em.onrender.com/heatmap"
             heatmap_img_url = f"https://stock-line-bot-c8em.onrender.com/heatmap-image.png?t={int(time.time())}"
-            send_tg_photo(tg_chat_id, heatmap_img_url, summary_text, button_url=heatmap_url, button_text="📱 開啟手機互動熱力圖")
+            ok = send_tg_photo(tg_chat_id, heatmap_img_url, summary_text, button_url=heatmap_url, button_text="📱 開啟手機互動熱力圖")
+            if not ok:
+                send_tg_message(
+                    tg_chat_id,
+                    f"🔥 【盤中即時資金熱力圖】\n{summary_text}\n\n🔗 互動熱力圖：\n{heatmap_url}",
+                    reply_markup={"inline_keyboard": [[{"text": "📱 開啟手機互動熱力圖", "url": heatmap_url}]]}
+                )
         return
 
     # 🟢 LINE 原本邏輯 (100% 不動)
@@ -2675,6 +2681,7 @@ class _TGMockEvent:
         self.source = _TGMockSource(chat_id, user_id)
         self.message = _TGMockMessage(text)
         self.reply_token = "tg_dummy_token"
+        self.tg_chat_id = str(chat_id)
 
 @app.route("/tg_callback", methods=['POST'])
 def tg_callback():
@@ -2688,17 +2695,17 @@ def tg_callback():
         user_id = cb.get("from", {}).get("id", "tg_user")
         text = (cb.get("data") or "").strip()
 
-        # 消除按鈕轉圈圈動畫
-        cfg = fetch_tg_config()
-        if cfg.get("token") and cb_id:
-            try:
-                requests.post(f"https://api.telegram.org/bot{cfg['token']}/answerCallbackQuery", json={"callback_query_id": cb_id}, timeout=3)
-            except Exception:
-                pass
+        def _run_cb():
+            cfg = fetch_tg_config()
+            if cfg.get("token") and cb_id:
+                try:
+                    requests.post(f"https://api.telegram.org/bot{cfg['token']}/answerCallbackQuery", json={"callback_query_id": cb_id}, timeout=3)
+                except Exception:
+                    pass
+            if chat_id and text:
+                handle_message(_TGMockEvent(chat_id, user_id, text))
 
-        if chat_id and text:
-            g.tg_chat_id = str(chat_id)
-            handle_message(_TGMockEvent(chat_id, user_id, text))
+        eventlet.spawn(_run_cb)
         return "OK", 200
 
     # 2. 處理群組或私訊文字訊息
@@ -2708,19 +2715,16 @@ def tg_callback():
         user_id = msg.get("from", {}).get("id", "tg_user")
         text = (msg.get("text") or "").strip()
 
-        # 機器人剛被拉進新群組時，自動回報 Chat ID
         if msg.get("new_chat_members") and chat_id:
             for member in msg["new_chat_members"]:
                 if member.get("is_bot"):
-                    send_tg_message(chat_id, f"🫡 報告統帥！股海觀浪 Telegram 雷達已進駐本群組！\n🎯 本群組 Chat ID：\n{chat_id}", with_menu=True)
+                    eventlet.spawn(send_tg_message, chat_id, f"🫡 報告統帥！股海觀浪 Telegram 雷達已進駐本群組！\n🎯 本群組 Chat ID：\n{chat_id}", True)
                     return "OK", 200
 
         if chat_id and text:
-            # 去掉 /start 或 /大盤 前面的斜線
             if text.startswith("/"):
                 text = text.lstrip("/").split("@")[0].strip()
-            g.tg_chat_id = str(chat_id)
-            handle_message(_TGMockEvent(chat_id, user_id, text))
+            eventlet.spawn(handle_message, _TGMockEvent(chat_id, user_id, text))
 
     return "OK", 200
 
